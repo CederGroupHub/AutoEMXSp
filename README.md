@@ -1,4 +1,10 @@
 # AutoXSp  
+
+[![PyPI version](https://badge.fury.io/py/autoxsp.svg)](https://pypi.org/project/autoxsp/)
+[![Python Version](https://img.shields.io/pypi/pyversions/autoxsp.svg)](https://pypi.org/project/autoxsp/)
+[![License](https://img.shields.io/github/license/<your-github-username>/AutoXSp.svg)](LICENSE)
+[![Downloads](https://pepy.tech/badge/autoxsp)](https://pepy.tech/project/autoxsp)
+
 **Automated Compositional Characterization via X-Ray Spectroscopy at Electron Microscopes**
 
 AutoXSp is a **fully automated framework** for SEM-EDS workflows — from spectral acquisition and quantification to data filtering and compositional analysis — all in **one click**.
@@ -39,17 +45,6 @@ pip install autoxsp
 
 ### Or directly from GitHub:
 pip install git+https://github.com/CederGroupHub/AutoXSp
-
-# AutoXSp
-
-[![PyPI version](https://badge.fury.io/py/autoxsp.svg)](https://pypi.org/project/autoxsp/)
-[![Python Version](https://img.shields.io/pypi/pyversions/autoxsp.svg)](https://pypi.org/project/autoxsp/)
-[![License](https://img.shields.io/github/license/<your-github-username>/AutoXSp.svg)](LICENSE)
-[![Downloads](https://pepy.tech/badge/autoxsp)](https://pepy.tech/project/autoxsp)
-
-**AutoXSp** — Automated Compositional Characterization via X-Ray Spectroscopy at an Electron Microscope.  
-A fast, flexible, and easy-to-use Python package for processing and analyzing X-ray spectral data.  
-Designed for scientists, engineers, and researchers who want quick, reproducible results.
 
 ---
 
