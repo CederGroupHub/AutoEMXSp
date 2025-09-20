@@ -1,0 +1,9 @@
+# Include important documentation
+include README.md
+include LICENSE
+
+# Include scripts folder
+recursive-include scripts *
+
+# Include all Python files in the package
+recursive-include autoxsp *

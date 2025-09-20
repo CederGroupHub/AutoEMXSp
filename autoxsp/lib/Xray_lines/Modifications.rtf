@@ -1,0 +1,45 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2821
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww12420\viewh9300\viewkind0
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 Added energies for M5-O3 peaks (column BT) from Z=83 (Bi) to Z = 96.\
+They were set to 0, but clearly visible for Bi in the spectrum, so we added it.\
+\
+Added energies for M1-N3, M3-O1, M3-O4, M3-O5 for La, because clearly present\
+\
+Added weights of 0.0005 to M2_N1 line of Rb,Sr,Y, Zr, because present in Kr and Nb. Peak is clearly visible in Y\
+\
+Li, Be: Modified line-weight of Ka1 from 0 to 1 and that of Ka2 viceversa for simplicity of compatibility with code, as it expects Ka1 line present for all elements\
+\
+Mn: red-shifted energy of Kb1 peak by 8.1 eV to match measured spectra\
+\
+Recalibrated weights of Si, Bi, Pb, V, In plus:\
+21) Sc_La (calibrated by NIST, but not corresponding to signal)\
+22) Ti_La (calibrated by NIST, but not corresponding to signal)\
+25) Mn_Kb (calibrated by NIST, but not corresponding to signal)\
+26) Fe_La (calibrated by NIST, but not corresponding to signal)\
+28) Ni_La (calibrated by NIST, but slightly overestimated)\
+34) Se_La  (calibrated by NIST, but slightly underestimated)\
+56) Ba_Mz (previously calibrated, but half of actual signal)\
+57) La_Mz (previously calibrated, but 60% of actual signal)\
+72) Hf_Ma + N (mostly uncalibrated from NIST)\
+72) Hf_La (some uncalibrated by NIST)\
+73) Ta_Ma + N (mostly uncalibrated from NIST)\
+73) Ta_La (some uncalibrated by NIST)\
+74) W_La (some uncalibrated by NIST)\
+\
+\
+The Ll and Ln lines were missing from the following elements, and their values were added from the xraydb database: Mg, Al, Si, P. Weight of Ll was set to 1, and that of Ln was kept at 0 to be consistent with NIST. In any case it does not matter because their energies are practically the same\
+\
+Multiplied by two the weights of Mz1, Mz2 lines for Z = 75-83 because they were uncalibrated. More precise calibration would be needed\
+\
+Changed the weight of Y_Ll line because it was off, despite being calibrated. Not done with rigorous testing\
+Changed the weight of Nb_Lb1 line because it was off, despite being calibrated. Not done with rigorous testing\
+\
+Added weights of Ca_La1 and Ca_La2 lines, setting them equal to Sc, which works perfectly.\
+\
+Mg weights quickly modified for (not calibrated by NIST at all): Nb, Mo, Ag, Cd, In\
+}
