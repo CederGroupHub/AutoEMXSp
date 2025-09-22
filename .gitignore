@@ -89,3 +89,6 @@ temp/
 *.tmp
 *.bak
 *.swp
+
+# Other
+detector_response_convolution_matrices.json

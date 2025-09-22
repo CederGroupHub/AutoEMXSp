@@ -40,35 +40,16 @@ AutoXSp is a **fully automated framework** for SEM-EDS workflows — from spectr
 
 ---
 
-## 🚀 Installation
-
-You can install **AutoXSp** in just one command.
-
-### Using pip (Python Package Index)
-pip install autoxsp
-
-### Or directly from GitHub:
-pip install git+https://github.com/CederGroupHub/AutoXSp
-
----
-
 ## 📑 Table of Contents
-- [✨ Features](#-features)
 - [🎥 Demo](#-demo)
-- [🆕 Coming Soon](#-coming-soon)
 - [🚀 Installation](#-installation)
 - [🖥 Quick Start](#-quick-start)
 - [📦 Requirements](#-requirements)
+- [🆕 Coming Soon](#-coming-soon)
 - [📂 Project Structure](#-project-structure)
 - [🤝 Contributing](#-contributing)
 - [📄 License](#-license)
 - [📬 Contact](#-contact)
-
----
-
-## ✨ Features
-- Automatic processing of X-ray spectral data
-- Open-source and customizable for non-commercial-use
 
 ---
 
@@ -77,26 +58,24 @@ pip install git+https://github.com/CederGroupHub/AutoXSp
 
 ---
 
-## 🆕 Coming Soon
-Here’s what’s planned for future releases of **AutoXSp**:
-- ⚡ GPU acceleration for faster data processing
-- 🐍 Upgrade to **Python 3.12** for improved performance, modern syntax features, and better compatibility with the latest scientific libraries
-- 🚀 Integration of a **forked `lmfit`** version accepting `Model.fit(data, fit_kws={'full_output': False})` to avoid covariance computations and speed up computations
-
----
-
 ## 🚀 Installation
 
 You can install **AutoXSp** in just one command.
 
 ### Using pip
+```bash
 pip install autoxsp
+```
 
 ### Or directly from GitHub:
+```bash
 pip install git+https://github.com/CederGroupHub/AutoXSp
+```
 
 ### Using conda
+```bash
 conda install -c conda-forge autoxsp
+```
 
 ---
 
@@ -114,12 +93,12 @@ AutoXSp supports two main automated workflows:
 ```python
 from autoxsp.runners import batch_acquire_experimental_stds
 
-Define standards(s) to analyse (additional options available):
-- 'ID': unique standard identifier
-- 'formula': standard composition
-- 'pos': stage position (x, y) in mm
-- 'sample_type': bulk or powder
-- 'is_manual_meas': Manually select spots if standard is not bulk, nor powder
+# Define standards(s) to analyse (additional options available):
+# - 'ID': unique standard identifier
+# - 'formula': standard composition
+# - 'pos': stage position (x, y) in mm
+# - 'sample_type': bulk or powder
+# - 'is_manual_meas': Manually select spots if standard is not bulk, nor powder
 
 std_list = [
     {
@@ -159,7 +138,6 @@ samples = [
 batch_acquire_and_analyze(samples)
 ```
 
-
 ---
 
 ## 📦 Requirements
@@ -171,6 +149,14 @@ Electron Microscope driver developed for the Thermofisher Phenom Desktop SEMs. W
 
 ---
 
+## 🆕 Coming Soon
+Here’s what’s planned for future releases of **AutoXSp**:
+- ⚡ GPU acceleration for faster data processing
+- 🐍 Upgrade to **Python 3.12** for improved performance, modern syntax features, and better compatibility with the latest scientific libraries
+- 🚀 Integration of a **forked `lmfit`** version accepting `Model.fit(data, fit_kws={'full_output': False})` to avoid covariance computations and speed up computations
+
+---
+
 ## 📂 Project Structure
 
 ```text
@@ -178,6 +164,9 @@ AutoXSp/
 ├── autoxsp/           # Main package source code
 ├── scripts/           # Helper scripts
 ├── tests/             # Unit tests
+├── Results/                            # Default output directory
+    ├── example_dataset/             # Two examples of acquired data, copied within pacakge
+    ├── all_other_paper_data/        # All other data from paper
 ├── LICENSE.txt
 ├── README.md
 └── pyproject.toml

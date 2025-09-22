@@ -22,7 +22,7 @@ from autoxsp.runners import fit_and_quantify_spectrum
 # =============================================================================
 # Sample and spectrum to process
 # =============================================================================
-sample_ID = 'Wulfenite_mineral'
+sample_ID = 'Wulfenite_example'
 
 spectrum_ID = 5  # Value reported in 'Spectrum #' column in Data.csv
 

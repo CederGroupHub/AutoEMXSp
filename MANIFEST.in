@@ -7,3 +7,6 @@ recursive-include scripts *
 
 # Include all Python files in the package
 recursive-include autoxsp *
+
+# Exclude paper_data folder and all its contents
+recursive-exclude paper_data *

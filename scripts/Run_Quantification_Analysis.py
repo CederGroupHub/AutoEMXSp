@@ -22,9 +22,18 @@ Created on Tue Jul 29 13:18:16 2025
 from autoxsp.runners import batch_quantify_and_analyze
 
 # =============================================================================
-# Sample list
-# =============================================================================  
+# Examples
+# =============================================================================
 sample_IDs = [
+    'Wulfenite_example',
+    'K-412_NISTstd_example'
+    ]
+
+# =============================================================================
+# Paper data (Download data from github repository:
+#       https://github.com/CederGroupHub/AutoXSp/tree/main/paper_data)   
+# =============================================================================
+# sample_IDs = [
     # Minerals
     # 'Alamosite_mineral',
     # 'Albite_mineral',
@@ -47,50 +56,7 @@ sample_IDs = [
     # 'Wulfenite_mineral',
     # 'YIG_mineral',
     # 'YPO4_mineral',
-
-    # Commercial precursors
-    # 'Al2O3_precursor',
-    # 'AlPO4_prec',
-    # 'Ba3(PO4)2_prec',
-    # 'Co3O4_precursor',
-    # 'Cr2O3_precursor',
-    # 'CuO_precursor',
-    # 'Fe2O3_precursor',
-    # 'Ga2O3_precursor',
-    # 'GeO2_precursor',
-    # 'HfO2_precursor',
-    # 'In2O3_precursor',
-    # 'KCl_precursor',
-    'Li2WO4_prec',
-    'LiCoPO4_prec',
-    'LiNiCoMnO2_prec',
-    'MgF2_precursor',
-    # 'MgO_precursor',
-    # 'MnO_precursor',
-    # 'MnO2_precursor',
-    # 'Mn2O3_precursor',
-    'MoO2_precursor',
-    'Na2MoO4_prec',
-    'Na4P2O7_precursor',
-    'NaNO3_prec',
-    'Ni(OH)2_precursor',
-    'NiO_precursor',
-    'PbO_precursor',
-    'Sb2O3_precursor',
-    'SiO2_precursor',
-    'SnO2_precursor',
-    'Ta2O5_precursor',
-    'TiN_precursor',
-    'TiO2_precursor',
-    'WO3_precursor',
-    'ZnF2_precursor',
-    'ZnO_precursor',
-    'ZrO2_precursor',
-
-    # # Mixes
-    # 'MnO-Mn2O3-Fe2O3_mix'
-]
-
+    # ]
 
 results_path = None # Looks in default Results folder if left unspecified
 # =============================================================================

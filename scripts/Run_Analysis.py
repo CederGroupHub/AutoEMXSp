@@ -30,10 +30,18 @@ clustering_features = None
 k_finding_method = None
 
 # =============================================================================
-# Sample Definitions
+# Examples
+# =============================================================================
+# sample_ID = 'Wulfenite_example'
+sample_ID = 'K-412_NISTstd_example'
+# sample_ID = 'known_powder_mixture_example'
+
+# =============================================================================
+# Paper data (Download data from github repository:
+#       https://github.com/CederGroupHub/AutoXSp/tree/main/paper_data)   
 # =============================================================================
 # --- Minerals
-sample_ID = 'Alamosite_mineral'
+# sample_ID = 'Alamosite_mineral'
 # sample_ID = 'Albite_mineral'
 # sample_ID = 'Anhydrite_mineral'
 # sample_ID = 'Anorthite_mineral'

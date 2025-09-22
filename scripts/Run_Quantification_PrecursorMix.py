@@ -22,7 +22,7 @@ from autoxsp.runners import batch_quantify_and_analyze
 # =============================================================================
 # Samples
 # =============================================================================  
-sample_IDs = ['12T']
+sample_IDs = ['known_powder_mixture_example']
 
 results_path = None # Looks in default Results folder if left unspecified
 
