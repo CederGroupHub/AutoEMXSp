@@ -1,11 +1,15 @@
+<div align="center">
+
 # AutoXSp  
 
 [![PyPI version](https://badge.fury.io/py/autoxsp.svg)](https://pypi.org/project/autoxsp/)
 [![Python Version](https://img.shields.io/pypi/pyversions/autoxsp.svg)](https://pypi.org/project/autoxsp/)
-[![License](https://img.shields.io/github/license/<your-github-username>/AutoXSp.svg)](LICENSE)
+[![License](https://img.shields.io/github/license/CederGroupHub/AutoXSp.svg?style=flat-square)](LICENSE.txt)
 [![Downloads](https://pepy.tech/badge/autoxsp)](https://pepy.tech/project/autoxsp)
 
 **Automated Compositional Characterization via X-Ray Spectroscopy at Electron Microscopes**
+
+</div>
 
 AutoXSp is a **fully automated framework** for SEM-EDS workflows — from spectral acquisition and quantification to data filtering and compositional analysis — all in **one click**.
 
@@ -106,14 +110,16 @@ AutoXSp supports two main automated workflows:
 ---
 
 ### 1️⃣ Acquire Experimental Standards
+
+```python
 from autoxsp.runners import batch_acquire_experimental_stds
 
-# Define standards(s) to analyse (additional options available):
-# - 'ID': unique standard identifier
-# - 'formula': standard composition
-# - 'pos': stage position (x, y) in mm
-# - 'sample_type': bulk or powder
-# - 'is_manual_meas': Manually select spots if standard is not bulk, nor powder
+Define standards(s) to analyse (additional options available):
+- 'ID': unique standard identifier
+- 'formula': standard composition
+- 'pos': stage position (x, y) in mm
+- 'sample_type': bulk or powder
+- 'is_manual_meas': Manually select spots if standard is not bulk, nor powder
 
 std_list = [
     {
@@ -127,13 +133,15 @@ std_list = [
 
 # Run experimental standard acquisition at the microscope computer
 batch_acquire_experimental_stds(stds=std_list)
-
+```
 
 ### 2️⃣ Acquire & Analyse Samples
+
+```python
 from autoxsp.runners import batch_acquire_and_analyze
 
 # Define sample(s) to analyse (additional options available):
-# - 'ID': unique sample identifier
+# - 'id': unique sample identifier
 # - 'els': list of possible elements in the sample
 # - 'pos': stage position (x, y) in mm
 # - 'cnd' (optional): list of candidate phases/formulas
@@ -149,6 +157,7 @@ samples = [
 
 # Run acquisition and analysis at the microscope computer
 batch_acquire_and_analyze(samples)
+```
 
 
 ---
@@ -164,15 +173,15 @@ Electron Microscope driver developed for the Thermofisher Phenom Desktop SEMs. W
 
 ## 📂 Project Structure
 
-python
-Copy code
+```text
 AutoXSp/
 ├── autoxsp/           # Main package source code
 ├── scripts/           # Helper scripts
 ├── tests/             # Unit tests
-├── LICENSE
+├── LICENSE.txt
 ├── README.md
 └── pyproject.toml
+```
 
 ---
 
