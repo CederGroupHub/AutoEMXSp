@@ -10,7 +10,7 @@
 AutoXSp is a **fully automated framework** for SEM-EDS workflows — from spectral acquisition and quantification to data filtering and compositional analysis — all in **one click**.
 
 ### ✨ Key Features
-- **Automated acquisition & quantification** of X-ray spectra. Single spectrum quantification script available as well
+- **Automated acquisition & quantification** of X-ray spectra. Single spectrum quantification script available
 - **Rule-based filtering** to automatically discard poorly quantified spectra from the analysis
 - **Machine learning–based compositional analysis** to identify the compositions of individual phases in the sample  
 - **Automated experimental standard collection** scripts included
@@ -53,7 +53,7 @@ pip install git+https://github.com/CederGroupHub/AutoXSp
 - [🎥 Demo](#-demo)
 - [🆕 Coming Soon](#-coming-soon)
 - [🚀 Installation](#-installation)
-- [🖥 Use](#-use)
+- [🖥 Quick Start](#-quick-start)
 - [📦 Requirements](#-requirements)
 - [📂 Project Structure](#-project-structure)
 - [🤝 Contributing](#-contributing)

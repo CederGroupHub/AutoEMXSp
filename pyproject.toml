@@ -7,7 +7,7 @@ name = "autoxsp"
 version = “0.1.0”
 description = "AutoXSp - Automated Compositional Characterization via X-Ray Spectroscopy at an Electron Microscope”
 readme = "README.md"
-license = { file = "LICENSE" }
+license = { file = "LICENSE.txt" }
 authors = [
     { name = "Andrea Giant”, email = “agiunto@lbl.gov }
 ]
