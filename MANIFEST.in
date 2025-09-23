@@ -5,8 +5,10 @@ include LICENSE
 # Include scripts folder
 recursive-include scripts *
 
-# Include all Python files in the package
+# Include all Python files in the package, with exceptions
 recursive-include autoxsp *
+exclude detector_response_convolution_matrices.json
 
 # Exclude paper_data folder and all its contents
 recursive-exclude paper_data *
+

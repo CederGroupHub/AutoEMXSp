@@ -164,9 +164,8 @@ AutoXSp/
 ├── autoxsp/           # Main package source code
 ├── scripts/           # Helper scripts
 ├── tests/             # Unit tests
-├── Results/                            # Default output directory
-    ├── example_dataset/             # Two examples of acquired data, copied within pacakge
-    ├── all_other_paper_data/        # All other data from paper
+├── Results/           # Examples of acquired data, copied within package
+├── paper_data/        # Paper raw data. Download and copy to Results folder to analyse
 ├── LICENSE.txt
 ├── README.md
 └── pyproject.toml
