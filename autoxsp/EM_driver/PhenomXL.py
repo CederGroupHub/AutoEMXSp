@@ -29,6 +29,121 @@ image_to_stage_coords_transform = np.array([
     np.sign(stage_y_bottom - stage_y_top)    # Y axis: +1 if bottom > top, -1 otherwise
 ])
 
+def frame_rel_to_pixel_coords(pts_rel_coords: np.ndarray, img_width: int, img_height: int) -> np.ndarray:
+    """
+    Convert relative coordinates (centered at 0, aspect-ratio corrected) to pixel coordinates.
+    
+    Phenom Coordinate System
+    ----------------
+    The coordinates are expressed in a normalized, aspect-ratio-correct system centered at the image center:
+
+        - The origin (0, 0) is at the image center.
+        - The x-axis is horizontal, increasing to the right, ranging from -0.5 (left) to +0.5 (right).
+        - The y-axis is vertical, increasing downward, and scaled by the aspect ratio (height/width):
+            * Top edge:    y = -0.5 × (height / width)
+            * Bottom edge: y = +0.5 × (height / width)
+        
+        |        (-0.5, -0.5*height/width)         (0.5, -0.5*height/width)
+        |                       +-------------------------+
+        |                       |                         |
+        |                       |                         |
+        |                       |           +(0,0)        |-----> +x
+        |                       |                         |
+        |                       |                         |
+        v  +y                   +-------------------------+
+                (-0.5,  0.5*height/width)         (0.5, 0.5*height/width)
+
+    This ensures the coordinate system is always centered and aspect-ratio-correct, regardless of image size.
+    
+    Parameters
+    ----------
+    pts_rel_coords : np.ndarray
+        Array of shape (N, 2) with (x_rel, y_rel) coordinates.
+        - x_rel in [-0.5, 0.5]
+        - y_rel in [-0.5 * (H/W), 0.5 * (H/W)]
+    img_width : int
+        Image width in pixels (W).
+    img_height : int
+        Image height in pixels (H).
+
+    Returns
+    -------
+    np.ndarray
+        Array of shape (N, 2) with (x_px, y_px) pixel coordinates.
+    """
+    pts_rel_coords = np.asarray(pts_rel_coords, dtype=float)
+
+    # If it's a single point, reshape to (1, 2)
+    if pts_rel_coords.ndim == 1:
+        pts_rel_coords = pts_rel_coords[np.newaxis, :]
+
+    aspect_ratio = img_height / img_width
+
+    x_px = (pts_rel_coords[:, 0] + 0.5) * img_width
+    y_px = (pts_rel_coords[:, 1] / aspect_ratio + 0.5) * img_height
+
+    return np.column_stack((x_px, y_px))
+
+
+def frame_pixel_to_rel_coords(pts_pixel_coords: np.ndarray, img_width: int, img_height: int) -> np.ndarray:
+    """
+    Convert pixel coordinates to relative coordinates (centered at 0, aspect-ratio corrected).
+    
+    Phenom Coordinate System
+    ----------------
+    The coordinates are expressed in a normalized, aspect-ratio-correct system centered at the image center:
+
+        - The origin (0, 0) is at the image center.
+        - The x-axis is horizontal, increasing to the right, ranging from -0.5 (left) to +0.5 (right).
+        - The y-axis is vertical, increasing downward, and scaled by the aspect ratio (height/width):
+            * Top edge:    y = -0.5 × (height / width)
+            * Bottom edge: y = +0.5 × (height / width)
+        
+        |        (-0.5, -0.5*height/width)         (0.5, -0.5*height/width)
+        |                       +-------------------------+
+        |                       |                         |
+        |                       |                         |
+        |                       |           +(0,0)        |-----> +x
+        |                       |                         |
+        |                       |                         |
+        v  +y                   +-------------------------+
+                (-0.5,  0.5*height/width)         (0.5, 0.5*height/width)
+
+    This ensures the coordinate system is always centered and aspect-ratio-correct, regardless of image size.
+    
+    
+    Parameters
+    ----------
+    pts_pixel_coords : np.ndarray
+        Array of shape (N, 2) with (x_px, y_px) pixel coordinates.
+    img_width : int
+        Image width in pixels (W).
+    img_height : int
+        Image height in pixels (H).
+
+    Returns
+    -------
+    np.ndarray
+        Array of shape (N, 2) with (x_rel, y_rel) coordinates.
+        - x_rel in [-0.5, 0.5]
+        - y_rel in [-0.5 * (H/W), 0.5 * (H/W)]
+    """
+    pts_pixel_coords = np.asarray(pts_pixel_coords, dtype=float)
+
+    # Ensure shape is (N, 2) even if a single point is passed
+    if pts_pixel_coords.ndim == 1:
+        pts_pixel_coords = pts_pixel_coords[np.newaxis, :]
+
+    aspect_ratio = img_height / img_width  # H/W
+
+    # Map X: [0, W] -> [-0.5, 0.5]
+    x_rel = pts_pixel_coords[:, 0] / img_width - 0.5
+
+    # Map Y: [0, H] -> [-0.5*H/W, 0.5*H/W]
+    y_rel = (pts_pixel_coords[:, 1] / img_height - 0.5) * aspect_ratio
+
+    return np.column_stack((x_rel, y_rel))
+
 # =============================================================================
 # Microscope Navigation Camera Physical Dimensions
 # =============================================================================
@@ -60,6 +175,7 @@ im_height = 1200
 # =============================================================================
 # Microscope Controls
 # =============================================================================
+# Connect to electron microscope API
 try:
     import PyPhenom as ppi
     phenom = ppi.Phenom()
@@ -72,9 +188,9 @@ try:
     
     is_at_EM = True
 
-except:
+except Exception as e:
     is_at_EM = False
-    warnings.warn('Microscope driver not available.')
+    warnings.warn(f'Microscope driver not available: {e}.')
 
 
 # Limit min magnification to avoid seeing round-shape of lens in image, which can mess with the DQN, as it creates bright points

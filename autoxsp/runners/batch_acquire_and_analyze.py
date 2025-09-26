@@ -483,7 +483,7 @@ def batch_acquire_and_analyze(
         try:
             comp_analyzer.run_collection_and_quantification(quantify=quantify_spectra)
         except Exception as e:
-            logging.warning(f"Sample '{sample_ID}': acquisition/quantification failed: {e}")
+            logging.exception(f"Sample '{sample_ID}': acquisition/quantification failed: {e}")
             continue
     
     # # Put microscope in standby after completion #TODO

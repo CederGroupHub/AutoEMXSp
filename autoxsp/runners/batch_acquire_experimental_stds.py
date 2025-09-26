@@ -134,8 +134,7 @@ Created on Fri Aug 20 09:34:34 2025
 @author: Andrea
 """
 
-import logging
-import traceback
+import logging, os
 from typing import List, Dict, Tuple, Any
 
 from autoxsp.core.EMXSp_composition_analyser import EMXSp_Composition_Analyzer
@@ -300,8 +299,8 @@ def batch_acquire_experimental_stds(
             
     Returns
     -------
-    comp_analyzer : EMXSp_Composition_Analyzer
-        The composition analysis object containing the results and methods for further analysis.
+    results : list(EMXSp_Composition_Analyzer)
+        A list of the composition analysis objects (one per sample) containing the results and methods for further analysis.
     """
     if max_XSp_acquisition_time is None:
         max_XSp_acquisition_time = target_Xsp_counts / 10000 * 5
@@ -343,7 +342,9 @@ def batch_acquire_experimental_stds(
         shape=sample_substrate_shape,
         auto_detection=is_auto_substrate_detection
     )
-
+    
+    results = []
+    
     for std_sample in stds:
         # --- Sample configuration
         sample_ID = std_sample['ID']
@@ -359,7 +360,9 @@ def batch_acquire_experimental_stds(
             exp_stds_cfg = ExpStandardsConfig(is_exp_std_measurement = True, formula = formula, **exp_stds_meas_cfg_kwargs)
         else:
             exp_stds_cfg = ExpStandardsConfig(is_exp_std_measurement = True, formula = formula)
-            
+        
+        if exp_std_dir is not None:
+            sample_dir = os.path.join(exp_std_dir,sample_ID)
         
         measurement_cfg = MeasurementConfig(
             type=measurement_type,
@@ -430,14 +433,15 @@ def batch_acquire_experimental_stds(
             development_mode=development_mode,
             output_filename_suffix=output_filename_suffix,
             verbose=verbose,
-            results_dir=exp_std_dir
+            results_dir=sample_dir
         )
         
         try:
             comp_analyzer.run_exp_std_collection(fit_during_collection= fit_during_collection, update_std_library = update_std_library)
+            results.append(comp_analyzer)
         except Exception as e:
-            tb_str = traceback.format_exc()
-            logging.warning(f"Sample '{sample_ID}': acquisition/fitting failed: {e}\n{tb_str}")
+            results.append(None)
+            logging.exception(f"Sample '{sample_ID}': acquisition/fitting failed: {e}")
             continue
         
     
@@ -446,3 +450,8 @@ def batch_acquire_experimental_stds(
     #     EMXSp.EM_driver.standby()
     # except Exception as e:
     #     logging.warning(f"Could not put microscope in standby: {e}")
+    
+    return results
+    
+    
+    

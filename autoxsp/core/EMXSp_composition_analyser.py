@@ -137,7 +137,7 @@ class EMXSp_Composition_Analyzer:
     verbose : bool, optional
         If True, enables verbose output (default: True).
     results_dir : Optional[str], optional
-        Directory to save results (default: None).
+        Directory to save results (default: None). If None, uses default directory.
 
     Attributes
     ----------
@@ -270,12 +270,15 @@ class EMXSp_Composition_Analyzer:
         
         # --- Output
         # Create a new directory if acquiring
-        if results_dir is None and is_acquisition:
-            if self.exp_stds_cfg.is_exp_std_measurement:
-                results_folder = cnst.STDS_DIR
+        if is_acquisition:
+            if results_dir is None:
+                if self.exp_stds_cfg.is_exp_std_measurement:
+                    results_folder = cnst.STDS_DIR
+                else:
+                    results_folder = cnst.RESULTS_DIR
+                results_dir = make_unique_path(os.path.join(parent_dir, results_folder), sample_cfg.ID)
             else:
-                results_folder = cnst.RESULTS_DIR
-            results_dir = make_unique_path(os.paht.join(parent_dir, results_folder), sample_cfg.ID)
+                results_dir = make_unique_path(results_dir, sample_cfg.ID)
             os.makedirs(results_dir)
 
         self.sample_result_dir = results_dir
@@ -1116,8 +1119,10 @@ class EMXSp_Composition_Analyzer:
                 break
             
             self.particle_cntr = particle_cntr
-
-            for x, y in spots_xy_list:
+            
+            latest_spot_id = None # For image annotations
+            for i, (x, y) in enumerate(spots_xy_list):
+                latest_spot_id = i
                 value_map = {
                     cnst.SP_ID_DF_KEY: n_tot_sp_collected,
                     cnst.PAR_ID_DF_KEY: self.particle_cntr,
@@ -1150,6 +1155,13 @@ class EMXSp_Composition_Analyzer:
                         if self.verbose:
                                 print('Current particle is unlikely to be part of the sample.\nSkipping to the next particle.')
                         break
+            
+            if latest_spot_id is not None:
+                # Prepare save path
+                par_cntr_str = f"_par{self.particle_cntr}" if self.particle_cntr is not None else ''
+                filename = f"{self.sample_cfg.ID}{par_cntr_str}_fr{self.EM_controller.frame_labels[self.EM_controller._frame_cntr-1]}_xyspots"
+                im_annotations = [(n_tot_sp_collected - 1 - latest_spot_id + i, xy_coords, 10) for i, xy_coords in enumerate(spots_xy_list) if i <= latest_spot_id]
+                self.EM_controller.save_frame_image(filename, im_annotations = im_annotations, xy_coords_in_pixel = False)
                 
             if quantify:
                 self._fit_and_quantify_spectra()
@@ -3714,7 +3726,6 @@ class EMXSp_Composition_Analyzer:
             base_name = f'{cnst.DATA_FILENAME}' if not is_standards_measurements else f'{cnst.STDS_MEAS_FILENAME}'
             extension = f'{cnst.DATA_FILEEXT}'
             data_path = os.path.join(self.sample_result_dir, base_name + extension)
-            data_path_with_suffix = make_unique_path(self.sample_result_dir, base_name + self.output_filename_suffix, extension)
             
             # Unless it's saving a temporary file, check if Data.csv already exists and backup old version
             if os.path.exists(data_path) and backup_previous_data:
@@ -3736,7 +3747,10 @@ class EMXSp_Composition_Analyzer:
                 if backup_successful:
                     data_df.to_csv(data_path, index=False, header=True)
                     if isinstance(self.output_filename_suffix, str) and self.output_filename_suffix != '':
-                        data_path_with_suffix = make_unique_path(self.sample_result_dir, base_name + self.output_filename_suffix, extension)
+                        if backup_previous_data:
+                            data_path_with_suffix = make_unique_path(self.sample_result_dir, base_name + self.output_filename_suffix, extension)
+                        else:
+                            data_path_with_suffix = os.path.join(self.sample_result_dir, base_name + self.output_filename_suffix + extension)
                         data_df.to_csv(data_path_with_suffix, index=False, header=True)
                 else:
                     data_df.to_csv(data_path_with_suffix, index=False, header=True)

@@ -8,7 +8,7 @@ microscope-specific driver parameters and functions for SEM operation
 from the 'EM_driver' directory.
 
 Usage from other modules:
-    import EM_driver
+    from autoxsp import EM_driver
     EM_driver.load_microscope_driver(microscope_ID='PhenomXL')
 
 Author: Andrea Giunto
@@ -50,7 +50,7 @@ def load_microscope_driver(microscope_ID: str) -> None:
         )
 
     # Import the driver module dynamically
-    module_name = f"EM_driver.{microscope_ID}"
+    module_name = f"autoxsp.EM_driver.{microscope_ID}"
     try:
         pkg = __package__ if __package__ else __name__
         mod = importlib.import_module(module_name, package=pkg)

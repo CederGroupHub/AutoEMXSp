@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "autoxsp"
+name = "autoxsp-test"
 version = "0.1.0"
 description = "AutoXSp - Automated Compositional Characterization via X-Ray Spectroscopy at an Electron Microscope"
 readme = "README.md"
@@ -24,6 +24,8 @@ dependencies = [
     "seaborn==0.13.2",
     "sympy==1.13.2",
     "yellowbrick==1.5"
+    "opencv==4.10.0"
+    "tifffile==2023.4.12"
 ]
 
 [tool.setuptools.packages.find]

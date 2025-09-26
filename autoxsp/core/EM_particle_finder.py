@@ -81,7 +81,7 @@ from autoxsp.tools.utils import (
 from autoxsp.tools.config_classes import (
     PowderMeasurementConfig,
 )
-import autoxsp.EM_driver as EM_driver
+from autoxsp import EM_driver
 
 
 #%% Electron Microscope Particle Finder class    
@@ -416,13 +416,12 @@ class EM_Particle_Finder:
         #         par_mask[labels == i] = 0
         # cv2.imshow('Filtered mask', par_mask)
         
-        # Save image to visualize selected particles
-        color_image = cv2.cvtColor(frame_image, cv2.COLOR_GRAY2BGR)
-        for center, par_rad in zip(par_pos_pixels, par_radius_pixels):
-            radius_pixel = int(par_rad) # Half of the maximum of frame width and height
-            cv2.circle(color_image, center.astype(int), radius_pixel, (0, 0, 255), 2)  # Red dot at the center
-        color_image = draw_scalebar(color_image, self.EM.pixel_size_um)
-        cv2.imwrite(os.path.join(self.results_dir, self._sample_ID + f'_fr{self.EM.frame_labels[self.EM._frame_cntr-1]}_particles.png'), color_image)
+        
+        # Save frame image annotating it with the identified particles
+        filename = f"{self._sample_ID}_fr{self.EM.frame_labels[self.EM._frame_cntr-1]}_particles"
+        im_annotations = [('', center.astype(int), int(rad)) for center, rad in zip(par_pos_pixels, par_radius_pixels)]
+        self.EM_controller.save_frame_image(filename, im_annotations = im_annotations, xy_coords_in_pixel = True)
+        
         
         # Return false if no particles were detected in the frame
         num_par = len(par_pos_pixels)
@@ -876,13 +875,14 @@ class EM_Particle_Finder:
             )
     
         # --- 6. Convert pixel coordinates to relative image coordinates ---
-        pts_rel_coords = (
-            (np.array(selected_points) / np.array([self._im_width, self._im_height]) - 0.5) *
-            np.array([1, self._im_height / self._im_width])
+        pts_rel_coords = EM_driver.frame_pixel_to_rel_coords(
+            selected_points,
+            img_width=self._im_width,
+            img_height=self._im_height
         )
     
         # --- 7. Annotate image and save ---
-        if self.results_dir:
+        if self.development_mode and self.results_dir:
             color_image = cv2.cvtColor(par_image, cv2.COLOR_GRAY2BGR)
             for center in selected_points:
                 # Add circle indicating where X-ray spectrum was collected

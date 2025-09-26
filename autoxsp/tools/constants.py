@@ -109,6 +109,9 @@ IMAGES_DIR = 'SEM images'
 CALIBS_DIR = 'XSp_calibs'
 MICROSCOPES_CALIBS_DIR = 'Microscopes'
 XRAY_SPECTRA_CALIBS_DIR = 'XSp_calibs'
+DETECTOR_CHANNEL_PARAMS_CALIBR_DIR = 'Detector_channel_params_calibs'
+SDD_CALIBS_MEAS_DIR = 'SDD calibrations'
+
 
 # File names
 STD_FILENAME = 'Stds'
@@ -124,8 +127,11 @@ CLUSTERING_PLOT_FILENAME = 'Clustering_plot'
 POWDER_MIXTURE_PLOT_FILENAME = 'Powder_mixture_decomposition_plot'
 CLUSTERING_PLOT_FILEEXT = '.png'
 NAVCAM_IM_FILENAME = 'Analysed_region'
+INITIAL_SEM_IM_FILENAME = 'Initial_Position'
 DETECTOR_CONV_MATRICES_FILENAME = 'detector_response_convolution_matrices.json'
 DETECTOR_EFFICIENCY_FILENAME ='detector_efficiency.msa'
+DETECTOR_CHANNEL_PARAMS_CALIBR_FILENAME = 'detector_channel_params_calibs'
+
 
 # json files keys
 LIST_SPECTRAL_DATA_QUANT_KEYS = [
@@ -145,7 +151,9 @@ LIST_SPECTRUM_COORDINATES_KEYS = [
     PAR_ID_DF_KEY,
     PAR_X_COORD_DF_KEY,
     PAR_Y_COORD_DF_KEY
-    ]
+    ] # Update this list if adding keys
+# This allows correct loading when quantifying or analysing spectra after acquisition
+
 
 
 ### CONFIGURATION DATACLASSES

@@ -315,29 +315,47 @@ class PowderMeasurementConfig:
 @dataclass
 class BulkMeasurementConfig:
     """
-    Configuration for characterization or bulk or bulk-like samples.
+    Configuration for characterization or bulk-like samples.
 
-    Attributes:
-        grid_spot_spacing_um (float): Constructs a grid of points to measure with this defined distance, in um.
-        min_xsp_spots_distance_um (float): Distance, in um, by which acquisition spot grid is offset if original grid
-                does not contain enough spots to measure the required amount of spectra.
-        randomize_frames (bool) : Whether to randomise order of spectra acquisition in the constructed grid of spots
-        exclude_sample_margin (bool) : Whether to exclude the margin of the sample. Useful if contaminated.
+    Attributes
+    ----------
+    grid_spot_spacing_um : float
+        Distance between grid points to measure, in micrometers (µm).
+    min_xsp_spots_distance_um : float
+        Offset distance for acquisition spot grid if the original grid
+        does not contain enough spots to measure the required number
+        of spectra, in micrometers (µm).
+    image_frame_width_um : float, optional
+        Width of the image frame in micrometers (µm). If not specified,
+        defaults to 10 × grid_spot_spacing_um.
+    randomize_frames : bool
+        Whether to randomize the order of spectra acquisition in the constructed grid.
+    exclude_sample_margin : bool
+        Whether to exclude the margin of the sample (useful if contaminated).
     """
-    grid_spot_spacing_um: float = 100.0 # µm
-    min_xsp_spots_distance_um: float = 5.0 # µm
-    randomize_frames : bool = False
+    grid_spot_spacing_um: float = 100.0  # µm
+    min_xsp_spots_distance_um: float = 5.0  # µm
+    image_frame_width_um: float = None # µm
+    randomize_frames: bool = False
     exclude_sample_margin: bool = False
-    
+
     def __post_init__(self):
+        # Validate grid spot spacing
         if not (self.grid_spot_spacing_um > 0):
             raise ValueError("grid_spot_spacing_um must be positive.")
+
+        # Validate minimum spot distance
         if not (self.min_xsp_spots_distance_um > 0):
             raise ValueError("min_xsp_spots_distance_um must be positive.")
+
         if self.min_xsp_spots_distance_um > self.grid_spot_spacing_um:
             raise ValueError(
                 "min_xsp_spots_distance_um should not exceed grid_spot_spacing_um."
             )
+
+        # Set default image frame width if unspecified
+        if self.image_frame_width_um is None:
+            self.image_frame_width_um = 10 * self.grid_spot_spacing_um
  
 
 @dataclass

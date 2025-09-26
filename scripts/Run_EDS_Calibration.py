@@ -20,7 +20,17 @@ Created on Fri Aug 20 09:34:34 2025
 
 @author: Andrea
 """
+import os
+from datetime import datetime
+import pandas as pd
+
 from autoxsp.runners import batch_acquire_experimental_stds
+from autoxsp.runners import batch_fit_spectra
+from autoxsp.lib.Xray_lines import get_el_xray_lines
+import autoxsp.XSp_calibs as calibs
+import autoxsp.tools.constants as cnst
+
+
 # =============================================================================
 # General Configuration
 # =============================================================================
@@ -31,30 +41,32 @@ spectrum_lims = (14, 1100)  # eV
 
 use_instrument_background = False
 
-min_bckgrnd_cnts = 10
+min_bckgrnd_cnts = 3
 
-output_filename_suffix = ''
+now = datetime.now()
+now_formatted = now.strftime("%Y%m%d_%Hh%Mm")
+output_filename_suffix = f'_{now_formatted}_50kcnts'
 
 # =============================================================================
-# Sample Definitions
+# Sample Definitions - Add two pure elements to measure
 # =============================================================================
-
+Cu_center = (37.863,38.195)
 std_list = [
-    {'ID': 'Al','formula': 'Al', 'pos': (26.263,-21.261), 'sample_type': 'bulk', 'is_manual_meas' : False},
-    # {'ID': 'Al2O3_prec_BM','formula': 'Al2O3', 'pos': (-38.829, 40.011), 'sample_type': 'powder', 'is_manual_meas' : False},
-
+    {'ID': 'Cu','formula': 'Cu', 'ref_el' : 'Cu', 'ref_peak': 'Ka1', 'pos': Cu_center, 'sample_type': 'bulk', 'is_manual_meas' : False},
+   {'ID': 'Al','formula': 'Al', 'ref_el' : 'Al', 'ref_peak': 'Ka1', 'pos': tuple(a + b for a, b in zip(Cu_center, (5, 0))), 'sample_type': 'bulk', 'is_manual_meas' : False}, # CAlibration standard center
 ]
-sample_substrate_type = 'Ctape'
+
 # =============================================================================
 # Acquisition Options and Sample description
-working_distance = 5.7 #mm
+working_distance = 7.0 #mm
 is_auto_substrate_detection = False
 
-fit_during_collection= True
-update_std_library = True
+fit_during_collection= False
+update_std_library = False
 
+sample_substrate_type = 'None'
 sample_substrate_shape = 'circle'
-sample_halfwidth = 3  # mm
+sample_halfwidth = 1  # mm
 
 measurement_mode = 'point'
 beam_energy = 15  # keV
@@ -63,8 +75,8 @@ auto_adjust_brightness_contrast = True
 contrast = None # 4.3877  # Used if auto_adjust_brightness_contrast = False
 brightness = None # 0.4504  # Used if auto_adjust_brightness_contrast = False
 
-n_target_spectra = 2
-max_n_spectra = 200
+n_target_spectra = 5
+max_n_spectra = 10
 
 target_Xsp_counts = 50000
 max_XSp_acquisition_time = target_Xsp_counts / 10000 * 5
@@ -94,9 +106,8 @@ powder_meas_cfg_kwargs = dict(
 # Bulk options
 # =============================================================================
 bulk_meas_cfg_kwargs = dict(
-    grid_spot_spacing_um = 100.0, # µm
-    min_xsp_spots_distance_um = 5.0, # µm
-    image_frame_width_um = None, # µm
+    grid_spot_spacing_um = 10.0, # µm
+    min_xsp_spots_distance_um = 2.5, # µm
     randomize_frames = False,
     exclude_sample_margin = False
 )
@@ -107,12 +118,17 @@ bulk_meas_cfg_kwargs = dict(
 exp_stds_meas_cfg_kwargs = dict(
     min_acceptable_PB_ratio = 10,
     quant_flags_accepted = [0],
-    use_for_mean_PB_calc = not powder_meas_cfg_kwargs["is_known_powder_mixture_meas"]
+    use_for_mean_PB_calc = False
 )
 
 # =============================================================================
 # Run
 # =============================================================================
+# Load microscope calibrations for this instrument and mode
+calibs.load_microscope_calibrations(microscope_ID, measurement_mode, load_detector_channel_params=True)
+eds_calibration_path = os.path.join(calibs.calibration_files_dir, cnst.SDD_CALIBS_MEAS_DIR)
+
+# --- Acquire spectra
 exp_std_maker = batch_acquire_experimental_stds(
     stds=std_list,
     microscope_ID=microscope_ID,
@@ -144,4 +160,77 @@ exp_std_maker = batch_acquire_experimental_stds(
     output_filename_suffix=output_filename_suffix,
     development_mode=False,
     verbose=True,
+    exp_std_dir = eds_calibration_path
 )
+
+# --- Fit spectra and extract values of fitting parameters
+sample_IDs = list(std_d['ID'] for std_d in std_list)
+spectrum_IDs = 'all'
+fit_params_vals_to_extract = list(f"{std_d['ref_el']}_{std_d['ref_peak']}_center" for std_d in std_list)
+extracted_par_vals = batch_fit_spectra(sample_IDs,
+                spectrum_IDs,
+                is_standard = True,
+                fit_params_vals_to_extract = fit_params_vals_to_extract,
+                spectrum_lims = None,
+                output_path = os.path.join(eds_calibration_path, 'Fitting output'),
+                samples_path = eds_calibration_path,
+                use_instrument_background = False,
+                quantify_plot = False,
+                plot_signal = False,
+                zoom_plot = False,
+                line_to_plot = '',
+                els_substrate = els_substrate,
+                fit_tol = 1e-4,
+                is_particle = True,
+                max_undetectable_w_fr = 0,
+                force_single_iteration = False,
+                interrupt_fits_bad_spectra = False,
+                print_results = False,
+                quant_verbose = True,
+                fitting_verbose = False
+)
+
+# --- Calculate new SDD calibration values
+meas_modes_calibs = calibs.detector_channel_params
+current_energy_zero = meas_modes_calibs[measurement_mode][cnst.OFFSET_KEY]
+current_bin_width = meas_modes_calibs[measurement_mode][cnst.SCALE_KEY]
+
+# Extract mean measured energies for standards
+measured_means = {}
+for std in std_list:
+    el = std['ref_el']
+    ref_peak = std['ref_peak']
+    param_name = f"{el}_{ref_peak}_center"
+    sample_df = pd.DataFrame(extracted_par_vals[std['ID']])  # DataFrame for this sample
+
+    meas_mean = sample_df.loc[sample_df['sp_id'] == 'mean', param_name].values[0]
+    measured_means[param_name] = meas_mean
+
+# Assign to calibration variables
+x_measured_en = measured_means["Cu_Ka1_center"]
+y_measured_en = measured_means["Al_Ka1_center"]
+
+# Theoretical energies
+x_th_en = get_el_xray_lines("Cu")["Ka1"]["energy (keV)"]
+y_th_en = get_el_xray_lines("Al")["Ka1"]["energy (keV)"]
+
+# Calculate new calibration
+i_x = (x_measured_en - current_energy_zero) / current_bin_width
+i_y = (y_measured_en - current_energy_zero) / current_bin_width
+
+Dx = x_th_en - x_measured_en
+Dy = y_th_en - y_measured_en
+
+new_scale = (Dx - Dy + x_measured_en - y_measured_en) / (i_x - i_y)
+new_offset = Dy + y_measured_en - i_y * new_scale
+
+print(f"Current scale: {current_bin_width:.6f}")
+print(f"Current offset: {current_energy_zero:.6f}")
+print(f"New scale: {new_scale:.6f}")
+print(f"New offset: {new_offset:.6f}")
+
+# Add calibration file
+calibs.update_detector_channel_params(measurement_mode, new_offset, new_scale)
+
+    
+    

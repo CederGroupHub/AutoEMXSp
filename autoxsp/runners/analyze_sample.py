@@ -225,7 +225,7 @@ def analyze_sample(
     try:
         analysis_successful, _, _ = comp_analyzer.analyse_data(max_analytical_error_percent, k = clustering_cfg.k)
     except Exception as e:
-        logging.error(f'Error during clustering analysis for {sample_ID}: {e}')
+        logging.exception(f'Error during clustering analysis for {sample_ID}: {e}')
         return
 
     total_process_time = (time.time() - sample_processing_time_start)

@@ -1,0 +1,77 @@
+{
+  "datetime": "2025-09-23 18:06:25",
+  "sample_cfg": {
+    "ID": "Al",
+    "elements": [
+      "Al"
+    ],
+    "type": "bulk",
+    "w_frs": null,
+    "center_pos": [
+      42.863,
+      38.195
+    ],
+    "half_width_mm": 1
+  },
+  "microscope_cfg": {
+    "ID": "PhenomXL",
+    "type": "SEM",
+    "is_auto_BC": true,
+    "brightness": null,
+    "contrast": null,
+    "energy_zero": -0.032415,
+    "bin_width": 0.009972
+  },
+  "measurement_cfg": {
+    "type": "EDS",
+    "mode": "point",
+    "working_distance": 7.0,
+    "beam_energy_keV": 15,
+    "beam_current": 4.3,
+    "emergence_angle": 28.5,
+    "is_manual_navigation": false,
+    "max_acquisition_time": 25.0,
+    "target_acquisition_counts": 50000,
+    "min_n_spectra": 5,
+    "max_n_spectra": 10
+  },
+  "sample_substrate_cfg": {
+    "elements": [
+      "C",
+      "O",
+      "Al"
+    ],
+    "type": "Ctape",
+    "shape": "circle",
+    "auto_detection": false
+  },
+  "quant_cfg": {
+    "method": "PB",
+    "spectrum_lims": [
+      14,
+      1100
+    ],
+    "fit_tolerance": 0.001,
+    "use_instrument_background": false,
+    "interrupt_fits_bad_spectra": true,
+    "min_bckgrnd_cnts": 3
+  },
+  "bulk_meas_cfg": {
+    "grid_spot_spacing_um": 10.0,
+    "min_xsp_spots_distance_um": 2.5,
+    "randomize_frames": false,
+    "exclude_sample_margin": false
+  },
+  "exp_stds_cfg": {
+    "is_exp_std_measurement": true,
+    "formula": "Al",
+    "use_for_mean_PB_calc": false,
+    "min_acceptable_PB_ratio": 10,
+    "quant_flags_accepted": [
+      0
+    ],
+    "w_frs": {
+      "Al": 1.0
+    }
+  }
+}

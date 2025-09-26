@@ -19,6 +19,7 @@ import sys
 import importlib
 import json
 from typing import Optional
+from datetime import datetime
 
 
 import autoxsp.tools.constants as cnst
@@ -113,22 +114,51 @@ def load_microscope_calibrations(
     
     # Optionally load detector channel parameters and check for the required meas_mode
     if load_detector_channel_params:
-        required_XS_calib_keys = [cnst.BEAM_CURRENT_KEY, cnst.SCALE_KEY, cnst.OFFSET_KEY]
-        get_latest_detector_channel_params()
-        if 'detector_channel_params' not in globals():
-            raise RuntimeError("Failed to load detector_channel_params.")
-        if meas_mode not in detector_channel_params:
-            raise ValueError(
-                f"meas_mode '{meas_mode}' not found in loaded detector_channel_params.\n"
-                f"Available modes: {list(detector_channel_params.keys())}"
-            )
-        # Check that all required keys are present
-        missing = [k for k in required_XS_calib_keys if k not in detector_channel_params[meas_mode]]
-        if missing:
-            raise KeyError(
-                f"detector_channel_params for meas_mode '{meas_mode}' is missing required key(s): {missing}\n"
-                f"Present keys: {list(detector_channel_params[meas_mode].keys())}"
-            )
+        load_latest_detector_channel_params(meas_mode)
+
+
+def load_latest_detector_channel_params(meas_mode):
+    """
+    Load the latest detector channel parameters for a given measurement mode.
+
+    This function retrieves the most recent detector channel calibration parameters
+    (such as beam current, energy scale, and offset) for the specified measurement mode.
+    It ensures that all required calibration keys are present before returning.
+
+    The parameters are loaded via the `get_latest_detector_channel_params()` function,
+    which must populate the global `detector_channel_params` dictionary.
+
+    Parameters
+    ----------
+    meas_mode : str
+        The measurement mode for which detector channel parameters are requested.
+        Must be one of the modes available in `detector_channel_params`.
+
+    Raises
+    ------
+    RuntimeError
+        If `detector_channel_params` is not loaded into the global namespace.
+    ValueError
+        If the requested `meas_mode` is not present in `detector_channel_params`.
+    KeyError
+        If one or more required calibration keys are missing for the given `meas_mode`.
+    """
+    required_XS_calib_keys = [cnst.BEAM_CURRENT_KEY, cnst.SCALE_KEY, cnst.OFFSET_KEY]
+    get_latest_detector_channel_params()
+    if 'detector_channel_params' not in globals():
+        raise RuntimeError("Failed to load detector_channel_params.")
+    if meas_mode not in detector_channel_params:
+        raise ValueError(
+            f"meas_mode '{meas_mode}' not found in loaded detector_channel_params.\n"
+            f"Available modes: {list(detector_channel_params.keys())}"
+        )
+    # Check that all required keys are present
+    missing = [k for k in required_XS_calib_keys if k not in detector_channel_params[meas_mode]]
+    if missing:
+        raise KeyError(
+            f"detector_channel_params for meas_mode '{meas_mode}' is missing required key(s): {missing}\n"
+            f"Present keys: {list(detector_channel_params[meas_mode].keys())}"
+        )    
         
         
 def get_latest_detector_channel_params(verbose: bool = True) -> None:
@@ -150,8 +180,8 @@ def get_latest_detector_channel_params(verbose: bool = True) -> None:
     import json
     
     global calibration_files_dir
-    calibration_files_dir = os.path.join(microscope_calib_dir, 'Detector_channel_params_calibs')
-    calibration_files = [f for f in os.listdir(calibration_files_dir) if 'detector_channel_params_calibs.json' in f]
+    calibration_files_dir = os.path.join(microscope_calib_dir, cnst.DETECTOR_CHANNEL_PARAMS_CALIBR_DIR)
+    calibration_files = [f for f in os.listdir(calibration_files_dir) if f'{cnst.DETECTOR_CHANNEL_PARAMS_CALIBR_FILENAME}.json' in f]
     if not calibration_files:
         raise FileNotFoundError(
             f"No detector channel parameter calibration file found in '{calibration_files_dir}'."
@@ -167,6 +197,59 @@ def get_latest_detector_channel_params(verbose: bool = True) -> None:
         print_single_separator()
         print(f"Using detector calibration file '{calib_file}'")
         
+
+def update_detector_channel_params(meas_mode, new_offset, new_scale, verbose: bool = True):
+    """
+    Update and save detector channel calibration parameters for a given measurement mode.
+
+    This function retrieves the latest detector channel parameters for the specified
+    measurement mode, updates the offset and scale values, and saves the updated
+    parameters to a timestamped JSON file in the calibration directory.
+
+    Parameters
+    ----------
+    meas_mode : str
+        The measurement mode for which parameters will be updated.
+        Must be present in the loaded `detector_channel_params`.
+    new_offset : float
+        The new detector channel offset value to set.
+    new_scale : float
+        The new detector channel scale value to set.
+    verbose : bool, optional
+        If True (default), prints/logs the location of the saved calibration file.
+
+    Raises
+    ------
+    RuntimeError
+        If detector channel parameters cannot be loaded.
+    ValueError
+        If the specified `meas_mode` does not exist in the parameters.
+    KeyError
+        If required calibration keys are missing from the parameters.
+    """
+    # Ensure latest parameters are loaded and valid
+    load_latest_detector_channel_params(meas_mode)
+
+    # Create an updated copy of parameters
+    new_detector_channel_params = detector_channel_params.copy()
+    new_detector_channel_params[meas_mode][cnst.SCALE_KEY] = round(new_scale, 6)
+    new_detector_channel_params[meas_mode][cnst.OFFSET_KEY] = round(new_offset, 6)
+
+    # Timestamp for filename
+    now_str = datetime.now().strftime("%Y%m%d_%Hh%Mm")
+    output_file_path = os.path.join(
+        calibration_files_dir,
+        f"{now_str}_{cnst.DETECTOR_CHANNEL_PARAMS_CALIBR_FILENAME}.json"
+    )
+
+    # Save updated parameters
+    with open(output_file_path, "w") as f:
+        json.dump(new_detector_channel_params, f, indent=4)
+
+    if verbose:
+        print_single_separator()
+        print(f"Calibration saved to: {output_file_path}")
+
         
 
 def load_standards(meas_type: str, beam_energy: int) -> dict:

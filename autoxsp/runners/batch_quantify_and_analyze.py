@@ -311,7 +311,7 @@ def batch_quantify_and_analyze(
             try:
                 analysis_successful, _, _ = comp_analyzer.analyse_data(max_analytical_error)
             except Exception as e:
-                logging.warning(f"Error during clustering analysis for '{sample_ID}'. Rerun separately if needed: {e}")
+                logging.exception(f"Error during clustering analysis for '{sample_ID}'. Rerun separately if needed: {e}")
                 continue
             if analysis_successful:
                 comp_analyzer.print_results()

@@ -156,9 +156,11 @@ Created on Wed Jul 31 09:28:07 2024
 # Standard library imports
 import os
 import time
+import warnings
 
 # Third-party imports
 import cv2
+import tifffile
 import numpy as np
 
 # Typing (Python 3.5+)
@@ -171,6 +173,7 @@ from autoxsp.tools.utils import (
     Prompt_User,
     EMError,
     print_single_separator,
+    draw_scalebar
 )
 from autoxsp.tools.config_classes import (
     MicroscopeConfig,
@@ -180,7 +183,7 @@ from autoxsp.tools.config_classes import (
     PowderMeasurementConfig,
     BulkMeasurementConfig
 )
-import autoxsp.EM_driver as EM_driver
+from autoxsp import EM_driver
 from autoxsp.core.EM_particle_finder import EM_Particle_Finder
 
 
@@ -378,7 +381,7 @@ class EM_Controller:
 
 
         # Time after which auto focus and brightness are refreshed
-        self.refresh_time = 180  # secs (i.e., 3 min)
+        self.refresh_time = 1  # 180 secs (i.e., 3 min)
 
         # --- General options
         self.development_mode = development_mode
@@ -533,7 +536,8 @@ class EM_Controller:
                 development_mode=self.development_mode
             )
         elif self.sample_cfg.type == cnst.S_BULK_SAMPLE_TYPE:
-            self.grid_search_fw_mm = self.bulk_meas_cfg.grid_spot_spacing_um / 1000
+            self.grid_search_fw_mm = self.bulk_meas_cfg.image_frame_width_um / 1000
+            self.set_frame_width(self.grid_search_fw_mm)
             # Construct grid of acquisition spots
             self._calc_bulk_grid_acquisition_spots()
             
@@ -546,7 +550,7 @@ class EM_Controller:
         
         # Save image of initial location to show
         initial_image = EM_driver.get_image_data(self.im_width, self.im_height, 1)
-        cv2.imwrite(os.path.join(self.results_dir, 'Initial_Position.png'), initial_image)
+        cv2.imwrite(os.path.join(self.results_dir, cnst.INITIAL_SEM_IM_FILENAME + '.png'), initial_image)
         
     
     
@@ -796,7 +800,11 @@ class EM_Controller:
                     print("Error determining pixel size: {}".format(e))
                     return False, None, None
     
-                spots_xy_list = [(0, 0)]  # In manual mode, assume center of image
+                spots_xy_list = EM_driver.frame_pixel_to_rel_coords(
+                    (int(self.im_width / 2), int(self.im_height / 2)),
+                    self.im_width,
+                    self.im_height
+                ) # In manual mode, assume center of image
                 particle_cntr = None  # Not applicable for manual mode
                 return True, spots_xy_list, particle_cntr
             
@@ -825,7 +833,11 @@ class EM_Controller:
                 print("Error determining pixel size: {}".format(e))
                 return False, None, None
 
-            spots_xy_list = [(0, 0)]  # In bulk mode, only measures at center of image
+            spots_xy_list = EM_driver.frame_pixel_to_rel_coords(
+                (int(self.im_width / 2), int(self.im_height / 2)),
+                self.im_width,
+                self.im_height
+            )  # In bulk mode, only measures at center of image
             particle_cntr = None  # Not applicable for bulk mode
             return True, spots_xy_list, particle_cntr
         
@@ -1162,6 +1174,7 @@ class EM_Controller:
         # Adjust EM settings (focus, contrast, brightness) if too long has passed since last adjustments
         if time.time() - self._last_EM_adjustment_time > self.refresh_time:
             self.adjust_BCF()
+        
     
         if self.verbose:
             print_single_separator()
@@ -1172,7 +1185,110 @@ class EM_Controller:
     
         return True
     
-   
+    
+    def save_frame_image(self, filename, im_annotations=None, xy_coords_in_pixel=None, save_dir=None):
+        """
+        Save an annotated and raw electron microscopy (EM) frame as a multi-page TIFF.
+        
+        This function retrieves a raw grayscale EM image, generates an annotated
+        RGB version with optional markers and a scale bar, and saves both images
+        into a single multi-page TIFF file. The annotated image is stored as the
+        first page, and the raw image as the second page.
+        
+        Parameters
+        ----------
+        filename : str
+            Name used for saved .tif image file
+        im_annotations : list of tuple, optional
+            A list of (annotation_id, xy_coords) pairs. Coordinates are given in
+            relative frame units and converted to pixel positions before drawing.
+        xy_coords_in_pixel : bool, optional
+            If passing im_annotations, specify whether coordinates refer to image
+            pixels or to stage coordinates. Default: None
+        save_dir : str, optional
+            Directory in which to save the TIFF file. Defaults to self.results_dir
+            if available, otherwise it needs to be provided.
+        
+        Notes
+        -----
+        - Images are saved as RGB to maximize compatibility across platforms.
+
+        """
+        
+        # Determine save directory
+        if not save_dir:
+            if self.results_dir:
+                save_dir = self.results_dir
+            else:
+                warnings.warn(
+                    "No directory specified for saving frame image.",
+                    UserWarning
+                )
+                return
+        
+        # Get raw grayscale image from EM (H, W), dtype: uint8 or uint16
+        frame_image = EM_driver.get_image_data(self.im_width, self.im_height, 1)
+    
+        # Convert grayscale to RGB for annotation
+        color_image = cv2.cvtColor(frame_image, cv2.COLOR_GRAY2RGB)
+    
+        # Draw annotations if provided
+        if im_annotations is not None:
+            for an_id, xy_coords, r in im_annotations:
+                if not xy_coords_in_pixel:
+                    ann_pixel_coords = EM_driver.frame_rel_to_pixel_coords(
+                        xy_coords, self.im_width, self.im_height
+                    ).astype(int)[0]
+                else:
+                    ann_pixel_coords = xy_coords
+                
+                # Draw filled red circle
+                cv2.circle(color_image, tuple(ann_pixel_coords), r, (255, 0, 0), -1)  # RGB red
+                
+                # Add label text
+                label_pos = (ann_pixel_coords[0] - 30, ann_pixel_coords[1] - 15)
+                cv2.putText(
+                    color_image,
+                    str(an_id),
+                    label_pos,
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (255, 0, 0),  # RGB red
+                    2,
+                    cv2.LINE_AA
+                )
+        
+        # Add scale bar
+        color_image = draw_scalebar(color_image, self.pixel_size_um)
+    
+        # Prepare save path
+        save_path = os.path.join(save_dir, f"{filename}.tif")
+    
+        # Ensure dtype consistency (convert to uint8 if needed)
+        if frame_image.dtype != np.uint8:
+            frame_image = (frame_image / frame_image.max() * 255).astype(np.uint8)
+            color_image = (color_image / color_image.max() * 255).astype(np.uint8)
+    
+        # Convert grayscale to RGB for saving
+        if frame_image.ndim == 2:
+            frame_image = cv2.cvtColor(frame_image, cv2.COLOR_GRAY2RGB)
+    
+        # Save each page separately with append=True to avoid some metadata issues
+        tifffile.imwrite(
+            save_path,
+            color_image,
+            photometric='rgb',
+            planarconfig='contig',
+            compression=None
+        )
+        tifffile.imwrite(
+            save_path,
+            frame_image,
+            photometric='rgb',
+            planarconfig='contig',
+            compression=None,
+            append=True
+        )
         
     
 #%% Electron Microscope Sample Finder class    

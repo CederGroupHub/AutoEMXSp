@@ -26,6 +26,8 @@ sample_ID : str
     Sample identifier.
 spectrum_ID : int
     Value reported in 'Spectrum #' column in Data.csv.
+is_standard : bool
+    Defines whether measurement is of a standard (i.e., well defined composition) or not
 results_path : str, optional
     Base directory where results are stored. Default: AutoXSp/Results
 use_instrument_background : bool, optional
@@ -50,6 +52,12 @@ force_single_iteration : bool, optional
     If True, quantification will be run for a single iteration only (default: False).
 interrupt_fits_bad_spectra : bool, optional
     If True, interrupt fitting if bad spectra are detected (default: False).
+print_results : bool, optional
+    If True, prints all fitted parameters and their values (default: True).
+quant_verbose : bool, optional
+    If True, prints quantification operations
+fitting_verbose : bool, optional
+    If True, prints fitting operations
     
 Created on Tue Jul 29 13:18:16 2025
 
@@ -82,6 +90,7 @@ logging.basicConfig(
 def fit_and_quantify_spectrum(
     sample_ID: str,
     spectrum_ID: int,
+    is_standard: bool,
     spectrum_lims: tuple = None,
     results_path: str = None,
     use_instrument_background: bool = False,
@@ -95,6 +104,9 @@ def fit_and_quantify_spectrum(
     max_undetectable_w_fr: float = 0,
     force_single_iteration: bool = False,
     interrupt_fits_bad_spectra: bool = False,
+    print_results: bool = True,
+    quant_verbose: bool = True,
+    fitting_verbose: bool = True
 ):
     """
     Fit and (optionally) quantify a single spectrum.
@@ -105,6 +117,8 @@ def fit_and_quantify_spectrum(
         Sample identifier.
     spectrum_ID : int
         Value reported in 'Spectrum #' column in Data.csv.
+    is_standard : bool
+        Defines whether measurement is of a standard (i.e., well defined composition) or not
     results_path : str, optional
         Base directory where results are stored. Default: AutoXSp/Results
     use_instrument_background : bool, optional
@@ -129,6 +143,12 @@ def fit_and_quantify_spectrum(
         If True, quantification will be run for a single iteration only (default: False).
     interrupt_fits_bad_spectra : bool, optional
         If True, interrupt fitting if bad spectra are detected (default: False).
+    print_results : bool, optional
+        If True, prints all fitted parameters and their values (default: True).
+    quant_verbose : bool, optional
+        If True, prints quantification operations
+    fitting_verbose : bool, optional
+        If True, prints fitting operations
         
     Returns
     -------
@@ -141,10 +161,11 @@ def fit_and_quantify_spectrum(
         
     sample_dir = get_sample_dir(results_path, sample_ID)
     spectral_info_f_path = os.path.join(sample_dir, f"{cnst.ACQUISITION_INFO_FILENAME}.json")
-    data_path = os.path.join(sample_dir, f"{cnst.DATA_FILENAME}.csv")
+    data_filename = cnst.STDS_MEAS_FILENAME if is_standard else cnst.DATA_FILENAME
+    data_path = os.path.join(sample_dir, f"{data_filename}.csv")
     
     print_double_separator()
-    logging.info(f"Sample '{sample_ID}'")
+    logging.info(f"Sample '{sample_ID}', spectrum {spectrum_ID}")
     
     try:
         configs, metadata = load_configurations_from_json(spectral_info_f_path, config_classes_dict)
@@ -277,8 +298,8 @@ def fit_and_quantify_spectrum(
         sp_collection_time=sp_collection_time,
         max_undetectable_w_fr=max_undetectable_w_fr,
         fit_tol=fit_tol,
-        verbose=True,
-        fitting_verbose=True,
+        verbose=quant_verbose,
+        fitting_verbose=fitting_verbose,
         standards_dict = stds_dict
     )
     
@@ -287,16 +308,14 @@ def fit_and_quantify_spectrum(
             quant_result, _, flag = quantifier.quantify_spectrum(
                 force_single_iteration=force_single_iteration,
                 interrupt_fits_bad_spectra=interrupt_fits_bad_spectra,
-                print_result=True
+                print_results=print_results
                 )
         else:
             quantifier.initialize_and_fit_spectrum(
-                print_results=True
+                print_results=print_results
             )
     except Exception as e:
-        import traceback
-        tb_str = traceback.format_exc()
-        logging.exception(f"Error during spectral quantification for '{sample_ID}': {e}\n{tb_str}")
+        logging.exception(f"Error during spectral quantification for '{sample_ID}': {e}")
         return
 
     if plot_signal:
