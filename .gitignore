@@ -74,15 +74,6 @@ site/
 config_local.py
 *.env
 
-# Data & results (if generated during analysis)
-results/
-*.dat
-*.csv
-*.h5
-*.npy
-*.npz
-*.log
-
 # Temporary files
 tmp/
 temp/

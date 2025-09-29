@@ -1,0 +1,41 @@
+{
+  "datetime": "2025-08-27 17:11:00",
+  "n_spectra_collected": 103,
+  "n_spectra_used": 72,
+  "n_clusters": 1,
+  "wcss": 0.03167888763888889,
+  "sil_score": NaN,
+  "quant_cfg": {
+    "method": "PB",
+    "spectrum_lims": [
+      14,
+      1100
+    ],
+    "fit_tolerance": 0.001,
+    "use_instrument_background": false,
+    "interrupt_fits_bad_spectra": false,
+    "min_bckgrnd_cnts": 5
+  },
+  "clustering_cfg": {
+    "method": "kmeans",
+    "features": "at_fr",
+    "k": null,
+    "k_finding_method": "silhouette",
+    "max_k": 6,
+    "ref_formulae": [
+      "PbMoO4"
+    ],
+    "max_analytical_error_percent": 5,
+    "quant_flags_accepted": [
+      0,
+      -1
+    ]
+  },
+  "plot_cfg": {
+    "show_unused_comps_clust": true,
+    "els_excluded_clust_plot": [],
+    "save_plots": true,
+    "show_plots": false,
+    "use_custom_plots": false
+  }
+}

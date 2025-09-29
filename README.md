@@ -54,6 +54,7 @@ DOI: [link]
 - [🤝 Contributing](#-contributing)
 - [📄 License](#-license)
 - [📖 Citation](#-citation)
+- [📂 Paper Data](#-paper-data)
 - [📬 Contact](#-contact)
 
 ---
@@ -242,6 +243,28 @@ If you use **AutoXSp** in your research, please cite the following publication:
 > *Title of your paper*.  
 > *Journal Name*, Year, Volume, Pages.  
 > DOI: [link]
+make bibtex downloadable entry
+
+---
+
+## 📂 Paper Data
+
+The raw data used in the associated publication is stored in the `paper_data/` directory.  
+These files are tracked with **Git LFS** (Large File Storage).
+
+### 🔽 Download with Git LFS
+If you cloned the repository without Git LFS, you may only see placeholder text files instead of the actual datasets.  
+To download the full data, go to the repo directory and:
+
+```bash
+# 1. Install Git LFS (only needed once per machine)
+git lfs install
+
+# 2. Fetch the data files
+git lfs pull
+```
+
+After downloading, move the raw paper data into the Results/ folder to analyze it with AutoXSp.
 
 ---
 

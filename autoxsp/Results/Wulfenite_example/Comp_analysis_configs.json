@@ -1,0 +1,97 @@
+{
+  "datetime": "2025-08-27 14:44:39",
+  "sample_cfg": {
+    "ID": "Wulfenite_mineral",
+    "elements": [
+      "Pb",
+      "Mo",
+      "O"
+    ],
+    "type": "powder",
+    "w_frs": null,
+    "center_pos": [
+      0.0,
+      0.0
+    ],
+    "half_width_mm": 3
+  },
+  "microscope_cfg": {
+    "ID": "PhenomXL",
+    "type": "SEM",
+    "is_auto_BC": true,
+    "brightness": null,
+    "contrast": null,
+    "energy_zero": -0.034245,
+    "bin_width": 0.009972
+  },
+  "measurement_cfg": {
+    "type": "EDS",
+    "mode": "point",
+    "working_distance": null,
+    "beam_energy_keV": 15,
+    "beam_current": 4.3,
+    "emergence_angle": 28.5,
+    "is_manual_navigation": false,
+    "max_acquisition_time": 25.0,
+    "target_acquisition_counts": 50000,
+    "min_n_spectra": 103,
+    "max_n_spectra": 103
+  },
+  "sample_substrate_cfg": {
+    "elements": [
+      "C",
+      "O",
+      "Al"
+    ],
+    "type": "Ctape",
+    "shape": "circle",
+    "auto_detection": true
+  },
+  "quant_cfg": {
+    "method": "PB",
+    "spectrum_lims": [
+      14,
+      1100
+    ],
+    "fit_tolerance": 0.001,
+    "use_instrument_background": false,
+    "interrupt_fits_bad_spectra": false,
+    "min_bckgrnd_cnts": 5
+  },
+  "clustering_cfg": {
+    "method": "kmeans",
+    "features": "at_fr",
+    "k": null,
+    "k_finding_method": "silhouette",
+    "max_k": 6,
+    "ref_formulae": [
+      "PbMoO4"
+    ],
+    "max_analytical_error_percent": 5,
+    "quant_flags_accepted": [
+      0,
+      -1
+    ]
+  },
+  "plot_cfg": {
+    "show_unused_comps_clust": true,
+    "els_excluded_clust_plot": [],
+    "save_plots": true,
+    "show_plots": false,
+    "use_custom_plots": false
+  },
+  "powder_meas_cfg": {
+    "is_manual_particle_selection": false,
+    "is_known_powder_mixture_meas": false,
+    "max_n_par_per_frame": 30,
+    "max_spectra_per_par": 3,
+    "max_area_par": 100000,
+    "min_area_par": 10,
+    "par_mask_margin": 1.0,
+    "xsp_spots_distance_um": 1.0,
+    "par_brightness_thresh": 100,
+    "par_xy_spots_thresh": 100,
+    "par_feature_selection": "random",
+    "par_spot_spacing": "random"
+  }
+}
