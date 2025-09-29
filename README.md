@@ -228,7 +228,9 @@ Each script is tailored for a specific task in spectral acquisition, calibration
 
 Contributions are welcome!
 
-Open to collaborations to extend this package to different tools or to different types of samples, for example thin films
+Open to collaborations to extend this package to different tools or to different types of samples, for example thin films.
+
+Please contact me at agiunto@lbl.gov
 
 ---
 
