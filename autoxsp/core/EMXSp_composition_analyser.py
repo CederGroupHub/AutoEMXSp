@@ -137,7 +137,9 @@ class EMXSp_Composition_Analyzer:
     verbose : bool, optional
         If True, enables verbose output (default: True).
     results_dir : Optional[str], optional
-        Directory to save results (default: None). If None, uses default directory.
+        Directory to save results (default: None). If None, uses default directory, created inside package folder
+            - Results, for sample analysis
+            - Std_measurements, for experimental standard measurements
 
     Attributes
     ----------

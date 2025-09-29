@@ -131,7 +131,7 @@ def analyze_sample(
         The composition analysis object containing the results and methods for further analysis.
     """
     if results_path is None:
-        parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         results_path = os.path.join(parent_dir, cnst.RESULTS_DIR)
         
     print_double_separator()

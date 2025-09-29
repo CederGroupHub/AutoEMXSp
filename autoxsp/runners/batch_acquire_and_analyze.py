@@ -150,7 +150,7 @@ Created on Fri Jul 26 09:34:34 2024
 @author: Andrea
 """
 
-import logging
+import logging, os
 from typing import List, Dict, Tuple, Any
 
 from autoxsp.core.EMXSp_composition_analyser import EMXSp_Composition_Analyzer

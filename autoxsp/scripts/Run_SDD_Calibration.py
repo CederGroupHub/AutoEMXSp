@@ -1,20 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Automated X-Ray Experimental Standard Acquisition and Analysis
+Automated SDD Detector Calibration
 
-This script configures and runs automated collection and fitting
-of EDS/WDS spectra from experimental standards (i.e., samples of known composition)
-to generate reference values of peak-to-background ratios.
+This script automates the collection and fitting of X-ray spectra from experimental standards
+to generate an SDD calibration file for AutoXsp.
 
 Requirements:
-    - Proper instrument calibration files and instrument driver for the selected microscope
+- Proper instrument calibration files and instrument driver for the selected microscope
 
-Typical usage:
-    - Edit the 'std_list' list to define your standards
-        Use preferably bulk standards. Powder standards are also acceptable, especially when making standards for analysing known precursor mixtures.
-    - Adjust configuration parameters as needed
-    - Run the script to collect experimental standards for one or multiple samples at a time
+Typical Usage:
+    - Edit the 'std_list' list to define your standards.
+        - ID: A preferred ID is fine.
+        - formula: Composition of standard, for accurate spectral fitting.
+        - ref_el: Element in the composition whose peak should be taken as reference to calibrate the SDD.
+        - ref_peak: Characteristic X-ray to take as reference to calibrate the SDD (e.g., Ka1, La1, Ma1, Mz1).
+        - pos: Position of standard in the microscope stage.
+        - sample_type: 'bulk' or 'powder'. Check autoxsp.tools.config_classes.SampleConfig for updated support.
+        - is_manual_meas: Set to True to manually select spots to measure.
+
+    - Suggestions:
+        - Preferably use bulk standards. Powder standards are also acceptable if bulk standards are not available.
+        - Choose peaks above 2 keV, well-distanced between themselves.
+
+    - Run the script to collect and fit spectra, with automated generation of SDD calibration file.
 
 Created on Fri Aug 20 09:34:34 2025
 
@@ -58,7 +67,7 @@ std_list = [
 
 # =============================================================================
 # Acquisition Options and Sample description
-working_distance = 7.0 #mm
+working_distance = 5.5 #mm
 is_auto_substrate_detection = False
 
 fit_during_collection= False
@@ -126,7 +135,7 @@ exp_stds_meas_cfg_kwargs = dict(
 # =============================================================================
 # Load microscope calibrations for this instrument and mode
 calibs.load_microscope_calibrations(microscope_ID, measurement_mode, load_detector_channel_params=True)
-eds_calibration_path = os.path.join(calibs.calibration_files_dir, cnst.SDD_CALIBS_MEAS_DIR)
+eds_calibration_path = os.path.join(calibs.calibration_files_dir, cnst.SDD_CALIBS_MEAS_DIR, now_formatted)
 
 # --- Acquire spectra
 exp_std_maker = batch_acquire_experimental_stds(

@@ -156,7 +156,7 @@ def fit_and_quantify_spectrum(
         The quantifier object containing the results, fit parameters, and methods for further analysis and plotting.
     """
     if results_path is None:
-        parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         results_path = os.path.join(parent_dir, cnst.RESULTS_DIR)
         
     sample_dir = get_sample_dir(results_path, sample_ID)

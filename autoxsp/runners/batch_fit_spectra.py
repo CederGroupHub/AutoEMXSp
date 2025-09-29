@@ -119,7 +119,7 @@ def batch_fit_spectra(sample_IDs,
     """
     
     if samples_path is None:
-        parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         samples_path = os.path.join(parent_dir, cnst.RESULTS_DIR)
 
     logging.info("Starting batch fitting process...")
@@ -183,7 +183,7 @@ def batch_fit_spectra(sample_IDs,
                 logging.exception(f"Error fitting spectrum {sp_id} for sample '{sample_ID}': {e}")
                 sample_fit_results.append(None)
             else:
-                if fit_params_vals_to_extract:
+                if fit_params_vals_to_extract and quantifier.bad_quant_flag is None:
                     params = quantifier.fit_result.params
                     extracted_vals = {}
                     for param_name in fit_params_vals_to_extract:

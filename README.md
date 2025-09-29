@@ -47,6 +47,7 @@ AutoXSp is a **fully automated framework** for SEM-EDS workflows — from spectr
 - [📦 Requirements](#-requirements)
 - [🆕 Coming Soon](#-coming-soon)
 - [📂 Project Structure](#-project-structure)
+- [📁 Scripts](#-scripts)
 - [🤝 Contributing](#-contributing)
 - [📄 License](#-license)
 - [📬 Contact](#-contact)
@@ -145,7 +146,7 @@ batch_acquire_and_analyze(samples)
 Python 3.8 or newer
 Dependencies are installed automatically with pip or conda
 
-Electron Microscope driver developed for the Thermofisher Phenom Desktop SEMs. Will work with any microscope of the series, equipped with PPI (Phenom Programming Interface)
+Electron Microscope driver developed for the Thermofisher Phenom Desktop SEMs. Will work with any microscope of the series equipped with PPI (Phenom Programming Interface)
 
 ---
 
@@ -154,22 +155,61 @@ Here’s what’s planned for future releases of **AutoXSp**:
 - ⚡ GPU acceleration for faster data processing
 - 🐍 Upgrade to **Python 3.12** for improved performance, modern syntax features, and better compatibility with the latest scientific libraries
 - 🚀 Integration of a **forked `lmfit`** version accepting `Model.fit(data, fit_kws={'full_output': False})` to avoid covariance computations and speed up computations
+- 📏 New scripts for **spectral parameter calibration** to extend the `XSp_calibs` library to your own instrument.
 
 ---
 
 ## 📂 Project Structure
 
+The repository is organized as follows:
+
 ```text
 AutoXSp/
-├── autoxsp/           # Main package source code
-├── scripts/           # Helper scripts
-├── tests/             # Unit tests
-├── Results/           # Examples of acquired data, copied within package
-├── paper_data/        # Paper raw data. Download and copy to Results folder to analyse
+├── autoxsp/                   # Main package source code
+│   ├── core/                  # Core objects and source code
+│   ├── runners/               # Runner functions calling on core objects
+│   ├── lib/                   # Libraries of X-ray data
+│   ├── tools/                 # Miscellaneous helper functions
+│   │   └── custom_fnctns.py   # Customizable clustering plot function
+│   ├── EM_driver/             # Electron Microscope driver (⚠️ adapt to your own instrument)
+│   ├── XSp_calibs/            # X-ray spectral calibrations (⚠️ adapt to your own instrument)
+│   ├── scripts/               # Helper scripts (see [Scripts](#-scripts))
+│   └── Results/               # Example acquired data (used for unit tests)
+│
+├── tests/                     # Unit tests for fitting, quantification, and compositional analysis
+│                              # (Acquisition tests require proper drivers & calibration)
+├── paper_data/                # Raw paper data (move into `Results/` for analysis)
+│
 ├── LICENSE.txt
 ├── README.md
 └── pyproject.toml
 ```
+
+---
+
+## 📁 Scripts
+
+This repository includes a collection of scripts that streamline the use of **AutoXSp**.  
+Each script is tailored for a specific task in spectral acquisition, calibration, quantification, or analysis.
+
+### 🔬 Acquisition, Quantification & Analysis
+- **Run_Acquisition_Quant_Analysis.py** — Acquire X-ray spectra and optionally perform quantification and composition analysis.  
+- **Run_Quantification_Analysis.py** — Quantify acquired spectra (single or multiple samples) and perform machine-learning analysis.  
+- **Run_Analysis.py** — Launch customized machine-learning analysis on previously quantified data.  
+
+### 🛠️ Miscellaneous
+- **Fit_Quant_Single_Spectrum.py** — Fit a single spectrum with optional quantification. Prints fitting parameters for detailed inspection of model performance.  
+- **Run_Experimental_Standard_Collection.py** — Acquire and fit experimental standards.  
+- **Run_SDD_Calibration.py** — Perform SDD calibration.  
+
+### ⚗️ Powder Mixtures  
+*(see [Chem. Mater. 2015, 27, 20, 7084–7094](https://pubs.acs.org/doi/10.1021/acs.chemmater.5c01573))*  
+- **Run_Acquisition_PrecursorMix.py** — Acquire spectra for powder precursor mixtures.  
+- **Run_Quantification_PrecursorMix.py** — Quantify spectra for one or multiple powder mixtures and run machine-learning analysis.  
+
+👉 All scripts can be executed directly from the command line or imported into a Python environment.  
+Please ensure that all [dependencies](#dependencies) are installed and properly configured before running.
+
 
 ---
 

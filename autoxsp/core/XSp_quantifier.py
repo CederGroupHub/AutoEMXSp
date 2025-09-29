@@ -136,6 +136,8 @@ class XSp_Quantifier:
         Live time of spectrum acquisition (in seconds).
     fit_tol : float
         Tolerance for spectrum fitting convergence.
+    bad_quant_flag : int or None
+        Flag indicating quantification issues, or None if successful.
     microscope_ID : str
         Microscope identifier for calibration.
     meas_type : str
@@ -1046,7 +1048,9 @@ class XSp_Quantifier:
         else:
             quant_result = None
             min_bckgrnd_ref_lines = 0
-    
+        
+        self.bad_quant_flag = bad_quant_flag
+        
         return quant_result, min_bckgrnd_ref_lines, bad_quant_flag
 
 

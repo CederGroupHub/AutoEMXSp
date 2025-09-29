@@ -141,7 +141,7 @@ def batch_quantify_and_analyze(
         List of EMXSp_Composition_Analyzer, the composition analysis object containing the results and methods for further analysis.
     """
     if results_path is None:
-        parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         results_path = os.path.join(parent_dir, cnst.RESULTS_DIR)
         
     quant_results = []

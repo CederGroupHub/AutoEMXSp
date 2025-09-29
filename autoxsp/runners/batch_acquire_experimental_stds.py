@@ -134,7 +134,7 @@ Created on Fri Aug 20 09:34:34 2025
 @author: Andrea
 """
 
-import logging, os
+import logging
 from typing import List, Dict, Tuple, Any
 
 from autoxsp.core.EMXSp_composition_analyser import EMXSp_Composition_Analyzer
@@ -361,9 +361,6 @@ def batch_acquire_experimental_stds(
         else:
             exp_stds_cfg = ExpStandardsConfig(is_exp_std_measurement = True, formula = formula)
         
-        if exp_std_dir is not None:
-            sample_dir = os.path.join(exp_std_dir,sample_ID)
-        
         measurement_cfg = MeasurementConfig(
             type=measurement_type,
             mode=measurement_mode,
@@ -433,7 +430,7 @@ def batch_acquire_experimental_stds(
             development_mode=development_mode,
             output_filename_suffix=output_filename_suffix,
             verbose=verbose,
-            results_dir=sample_dir
+            results_dir=exp_std_dir
         )
         
         try:
