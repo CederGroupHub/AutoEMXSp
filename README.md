@@ -187,7 +187,7 @@ AutoXSp/
 │
 ├── tests/                     # Unit tests for fitting, quantification, and compositional analysis
 │                              # (Acquisition tests require proper drivers & calibration)
-├── paper_data/                # Raw paper data (move into `Results/` for analysis)
+├── paper_data/                # Raw paper data uploaded on Git LFS (Dowload instructions in Paper Data section below)
 │
 ├── LICENSE.txt
 ├── README.md
