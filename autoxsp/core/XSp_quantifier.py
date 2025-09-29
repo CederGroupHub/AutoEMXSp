@@ -523,7 +523,7 @@ class XSp_Quantifier:
         if self.verbose:
             print_double_separator()
             print(f"Fit of spectrum above {en_thresh} keV to get initial background scaling factor K...")
-            print("Particle geometrical parameters not used to avoid affecting value of K.")
+            print("Turned off particle morphology parameters to avoid affecting value of K.")
     
         if any(high_energy_indices):
             energy_vals = self.energy_vals[high_energy_indices]

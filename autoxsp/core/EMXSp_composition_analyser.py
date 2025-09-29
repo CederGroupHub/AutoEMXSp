@@ -3743,6 +3743,7 @@ class EMXSp_Composition_Analyzer:
             else:
                 backup_successful = True
             
+            # Save new version
             try:
                 if backup_successful:
                     data_df.to_csv(data_path, index=False, header=True)

@@ -90,7 +90,7 @@ logging.basicConfig(
 def fit_and_quantify_spectrum(
     sample_ID: str,
     spectrum_ID: int,
-    is_standard: bool,
+    is_standard: bool = False,
     spectrum_lims: tuple = None,
     results_path: str = None,
     use_instrument_background: bool = False,
@@ -291,7 +291,7 @@ def fit_and_quantify_spectrum(
         beam_e=beam_energy,
         emergence_angle=emergence_angle,
         background_vals=background,
-        els_sample=el_to_quantify +['Si','Cl'],
+        els_sample=el_to_quantify,
         els_substrate=els_substrate,
         els_w_fr=None,
         is_particle=is_particle,
@@ -308,7 +308,7 @@ def fit_and_quantify_spectrum(
             quant_result, _, flag = quantifier.quantify_spectrum(
                 force_single_iteration=force_single_iteration,
                 interrupt_fits_bad_spectra=interrupt_fits_bad_spectra,
-                print_results=print_results
+                print_result=print_results
                 )
         else:
             quantifier.initialize_and_fit_spectrum(

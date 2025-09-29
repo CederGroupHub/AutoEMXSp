@@ -23,17 +23,16 @@ from autoxsp.runners import fit_and_quantify_spectrum
 # Sample and spectrum to process
 # =============================================================================
 sample_ID = 'Wulfenite_example'
-sample_ID = 'Cu'
 
 spectrum_ID = 4  # Value reported in 'Spectrum #' column in Data.csv
 
 results_path = None # Looks in default Results folder if left unspecified
-results_path = 'EDS calibrations'
 
 # =============================================================================
 # Options
 # =============================================================================
 is_particle = True
+is_standard = False
 quantify_plot = False
 plot_signal = True
 zoom_plot = False
@@ -53,6 +52,7 @@ els_substrate = None # ['C', 'O', 'Al']
 quantifier = fit_and_quantify_spectrum(
     sample_ID=sample_ID,
     spectrum_ID=spectrum_ID,
+    is_standard = is_standard,
     spectrum_lims = spectrum_lims,
     use_instrument_background=use_instrument_background,
     quantify_plot=quantify_plot,
