@@ -148,8 +148,12 @@ batch_acquire_and_analyze(samples)
 
 ## 📦 Requirements
 
-- **Python 3.11+**  
+- **Python 3.11 or newer**  
 - All dependencies are installed automatically via `pip` or `conda`.  
+- Tested versions of dependencies are specified in `pyproject.toml`.  
+  > The package **may work** with more recent versions, but these have **not been tested**.
+  
+---
 
 ### Electron Microscope Support
 - ✅ Developed and tested for **Thermo Fisher Phenom Desktop SEMs**.  
