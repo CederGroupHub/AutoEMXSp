@@ -148,7 +148,7 @@ batch_acquire_and_analyze(samples)
 
 ## 📦 Requirements
 
-- **Python 3.10+**  
+- **Python 3.11+**  
 - All dependencies are installed automatically via `pip` or `conda`.  
 
 ### Electron Microscope Support
