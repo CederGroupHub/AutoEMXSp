@@ -13,10 +13,14 @@
 
 AutoXSp is a **fully automated framework** for SEM-EDS workflows — from spectral acquisition and quantification to data filtering and compositional analysis — all in **one click**.
 
+📖 This work is described in:  
+A. Giunto *et al.*, *Title of your paper*, *Journal Name*, Year.  
+DOI: [link]
+
 ### ✨ Key Features
-- **Automated acquisition & quantification** of X-ray spectra. Single spectrum quantification script available
-- **Rule-based filtering** to automatically discard poorly quantified spectra from the analysis
-- **Machine learning–based compositional analysis** to identify the compositions of individual phases in the sample  
+- **Automated acquisition & quantification** of X-ray spectra using the peak-to-background method. Single spectrum quantification also available
+- **Automated rule-based filtering** of compositions to discard poorly quantified spectra from the analysis
+- **Automated machine learning–based compositional analysis** to identify the compositions of individual phases in the sample  
 - **Automated experimental standard collection** scripts included
 - **Extensible architecture** — adaptable to other techniques such as  
   - Wavelength Dispersive Spectroscopy (WDS)  
@@ -25,7 +29,6 @@ AutoXSp is a **fully automated framework** for SEM-EDS workflows — from spectr
 
 ### 📊 Performance
 - **Benchmarked** on 74 single-phase samples with compositions spanning **38 elements** (from nitrogen to bismuth), it achieved **<5–10% relative deviation** from expected values  
-    *(See publication: TO ADD)* 
 - **Machine learning** compositional analysis detects individual phase composition in **multi-phase samples**, including minor phases
 - **Intermixed phases** can also be resolved
 
@@ -34,9 +37,9 @@ AutoXSp is a **fully automated framework** for SEM-EDS workflows — from spectr
 - Scanning Electron Microscopy (SEM) with Energy-Dispersive Spectroscopy (EDS)  
 
 ### ⚙️ Requirements
-- Works on all major platforms  
+- Cross-platform: runs on **Linux, macOS, and Windows**
 - Quick installation  
-- Requires some calibration for use with different electron microscopes  
+- Requires calibration for use with different electron microscopes  
 
 ---
 
@@ -50,12 +53,13 @@ AutoXSp is a **fully automated framework** for SEM-EDS workflows — from spectr
 - [📁 Scripts](#-scripts)
 - [🤝 Contributing](#-contributing)
 - [📄 License](#-license)
+- [📖 Citation](#-citation)
 - [📬 Contact](#-contact)
 
 ---
 
 ## 🎥 Demo
-- Watch Auto-XSp in action on a desktop SEM-EDS system at https://youtu.be/Bym58gNxlj0
+- Watch AutoXSp in action on a desktop SEM-EDS system at https://youtu.be/Bym58gNxlj0
 
 ---
 
@@ -84,7 +88,7 @@ conda install -c conda-forge autoxsp
 
 AutoXSp supports two main automated workflows:
 
-1. **Experimental Standard Collection** — acquire and fit EDS/WDS spectra from known-composition samples to generate reference peak-to-background ratios.
+1. **Experimental Standard Collection** — acquire and fit X-ray spectra from known-composition samples to generate reference peak-to-background ratios.
 2. **Sample Acquisition & Analysis** — acquire spectra from unknown samples, quantify them, and perform compositional phase analysis.
 
 ---
@@ -143,18 +147,22 @@ batch_acquire_and_analyze(samples)
 
 ## 📦 Requirements
 
-Python 3.8 or newer
-Dependencies are installed automatically with pip or conda
+- **Python 3.10+**  
+- All dependencies are installed automatically via `pip` or `conda`.  
 
-Electron Microscope driver developed for the Thermofisher Phenom Desktop SEMs. Will work with any microscope of the series equipped with PPI (Phenom Programming Interface)
+### Electron Microscope Support
+- ✅ Developed and tested for **Thermo Fisher Phenom Desktop SEMs**.  
+- ✅ Compatible with any Phenom microscope equipped with **PPI (Phenom Programming Interface)**.  
+- ⚠️ For other microscope models, the driver must be adapted to the appropriate API commands.  
+
 
 ---
 
 ## 🆕 Coming Soon
 Here’s what’s planned for future releases of **AutoXSp**:
-- ⚡ GPU acceleration for faster data processing
+- ⚡ GPU acceleration for faster spectral fitting
 - 🐍 Upgrade to **Python 3.12** for improved performance, modern syntax features, and better compatibility with the latest scientific libraries
-- 🚀 Integration of a **forked `lmfit`** version accepting `Model.fit(data, fit_kws={'full_output': False})` to avoid covariance computations and speed up computations
+- 🚀 Integration of a **forked `lmfit`** version accepting `Model.fit(data, fit_kws={'full_output': False})` to avoid covariance computations and speed up fitting
 - 📏 New scripts for **spectral parameter calibration** to extend the `XSp_calibs` library to your own instrument.
 
 ---
@@ -173,7 +181,7 @@ AutoXSp/
 │   │   └── custom_fnctns.py   # Customizable clustering plot function
 │   ├── EM_driver/             # Electron Microscope driver (⚠️ adapt to your own instrument)
 │   ├── XSp_calibs/            # X-ray spectral calibrations (⚠️ adapt to your own instrument)
-│   ├── scripts/               # Helper scripts (see [Scripts](#-scripts))
+│   ├── scripts/               # Helper scripts (see Scripts below)
 │   └── Results/               # Example acquired data (used for unit tests)
 │
 ├── tests/                     # Unit tests for fitting, quantification, and compositional analysis
@@ -208,8 +216,6 @@ Each script is tailored for a specific task in spectral acquisition, calibration
 - **Run_Quantification_PrecursorMix.py** — Quantify spectra for one or multiple powder mixtures and run machine-learning analysis.  
 
 👉 All scripts can be executed directly from the command line or imported into a Python environment.  
-Please ensure that all [dependencies](#dependencies) are installed and properly configured before running.
-
 
 ---
 
@@ -217,7 +223,7 @@ Please ensure that all [dependencies](#dependencies) are installed and properly 
 
 Contributions are welcome!
 
-Open to collaborations to extend this code to different microscopes or to different types of samples, for example thin films
+Open to collaborations to extend this package to different tools or to different types of samples, for example thin films
 
 ---
 
@@ -225,6 +231,17 @@ Open to collaborations to extend this code to different microscopes or to differ
 
 This project is licensed under an academic, nonprofit, internal, research & development, NON-COMMERCIAL USE ONLY,
 LICENSE — see the LICENSE file for details.
+
+---
+
+## 📖 Citation
+
+If you use **AutoXSp** in your research, please cite the following publication:
+
+> A. Giunto *et al.*  
+> *Title of your paper*.  
+> *Journal Name*, Year, Volume, Pages.  
+> DOI: [link]
 
 ---
 
