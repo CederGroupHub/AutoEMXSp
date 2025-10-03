@@ -1147,8 +1147,8 @@ class EMXSp_Composition_Analyzer:
                 if self.verbose:
                     print(f"Acquisition took {collection_time:.2f} s")
                 
-                # Contamination check: skip quantification if counts are too low
-                if self.sample_cfg.type == cnst.S_POWDER_SAMPLE_TYPE:
+                # Contamination check: skip quantification if counts are too low (only at first measurement spot)
+                if i==0 and self.sample_cfg.type == cnst.S_POWDER_SAMPLE_TYPE:
                     if sum(spectrum_data) < 0.95 * self.measurement_cfg.target_acquisition_counts:
                         if quantify:
                             self.spectra_quant.append(None)
@@ -1156,13 +1156,14 @@ class EMXSp_Composition_Analyzer:
                             self.spectral_data[cnst.QUANT_FLAG_DF_KEY].append(2)
                         if self.verbose:
                                 print('Current particle is unlikely to be part of the sample.\nSkipping to the next particle.')
+                                print('Increase measurement_cfg.target_acquisition_counts if this behavior is undesired.')
                         break
             
             if latest_spot_id is not None:
                 # Prepare save path
                 par_cntr_str = f"_par{self.particle_cntr}" if self.particle_cntr is not None else ''
                 filename = f"{self.sample_cfg.ID}{par_cntr_str}_fr{self.EM_controller.frame_labels[self.EM_controller._frame_cntr-1]}_xyspots"
-                im_annotations = [(n_tot_sp_collected - 1 - latest_spot_id + i, xy_coords, 10) for i, xy_coords in enumerate(spots_xy_list) if i <= latest_spot_id]
+                im_annotations = [(n_tot_sp_collected - 1 - latest_spot_id + i, xy_coords, 10, True) for i, xy_coords in enumerate(spots_xy_list) if i <= latest_spot_id]
                 self.EM_controller.save_frame_image(filename, im_annotations = im_annotations, xy_coords_in_pixel = False)
                 
             if quantify:

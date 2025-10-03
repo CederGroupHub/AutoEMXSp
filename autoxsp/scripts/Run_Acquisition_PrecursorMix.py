@@ -32,13 +32,10 @@ microscope_type = 'SEM'
 measurement_type = 'EDS'
 measurement_mode = 'point'
 quantification_method = 'PB'
-sample_type = 'powder'
-sample_halfwidth = 3  # mm
-sample_substrate_type = 'Ctape'
-sample_substrate_shape = 'circle'
-working_distance = 5 #mm
 beam_energy = 15  # keV
 spectrum_lims = (14, 1100)  # eV
+
+working_distance = 5 #mm
 
 use_instrument_background = False
 interrupt_fits_bad_spectra = True
@@ -55,6 +52,10 @@ output_filename_suffix = ''
 # =============================================================================
 # Sample Definitions
 # =============================================================================
+sample_type = 'powder' # powder, bulk
+sample_halfwidth = 3  # mm
+sample_substrate_type = 'Ctape' # Ctape, None
+sample_substrate_shape = 'circle' # square, circle
 
 samples = [
     {'ID': 'In2O3_Al2O3', 'els': ['Ca', 'Al', 'Si', 'O'], 'pos': (-37.5, -37.5), 'cnd': ['In2O3', 'Al2O3']},

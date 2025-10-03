@@ -520,6 +520,7 @@ class EM_Controller:
             # Calculate frame centers for particle search
             im_h_to_w_ratio = self.im_height / self.im_width
             self._calc_frame_centers(
+                horizontal_spacing_mm=self.grid_search_fw_mm,
                 im_h_to_w_ratio = im_h_to_w_ratio,
                 center_pos = self._center_pos,
                 randomize_frames = True,
@@ -550,6 +551,7 @@ class EM_Controller:
         
         # Save image of initial location to show
         initial_image = EM_driver.get_image_data(self.im_width, self.im_height, 1)
+        draw_scalebar(initial_image, self.pixel_size_um)
         cv2.imwrite(os.path.join(self.results_dir, cnst.INITIAL_SEM_IM_FILENAME + '.png'), initial_image)
         
     
@@ -592,6 +594,7 @@ class EM_Controller:
     
         # Construct grid of acquisition spots (always square grid)
         self._calc_frame_centers(
+            horizontal_spacing_mm=self.bulk_meas_cfg.grid_spot_spacing_um / 1000,
             im_h_to_w_ratio=1,
             center_pos=center_pos,
             randomize_frames=self.bulk_meas_cfg.randomize_frames,
@@ -603,7 +606,7 @@ class EM_Controller:
         return True
         
     
-    def _calc_frame_centers(self, im_h_to_w_ratio, center_pos, randomize_frames, exclude_sample_margin):
+    def _calc_frame_centers(self, horizontal_spacing_mm, im_h_to_w_ratio, center_pos, randomize_frames, exclude_sample_margin):
         '''
         Generates and labels a set of evenly spaced scanning locations (frames) within a sample area,
         either circular or rectangular. Optionally avoids the rough sample border (margin), and can 
@@ -617,6 +620,8 @@ class EM_Controller:
         
         Parameters
         ----------
+        horizontal_spacing_mm: float
+            Horizontal spacing between neighboring grid spots in mm
         im_h_to_w_ratio: float,
             ratio height/width of frame dimensions
         center_pos: tuple(float, float)
@@ -646,7 +651,7 @@ class EM_Controller:
             - Each frame center is assigned a label such as 'A0', 'B3', etc.
             - For a circular sample, only frames within the circle are included.
         
-        Example grid (see above):
+        Example grid:
         
               y
               ^
@@ -669,7 +674,7 @@ class EM_Controller:
         # Determine the usable sample half width, optionally removing margin 
         if exclude_sample_margin:
             # margin defined as the size of a single frame
-            margin = self.grid_search_fw_mm * np.sqrt(1 + (im_h_to_w_ratio)**2)
+            margin = horizontal_spacing_mm * np.sqrt(1 + (im_h_to_w_ratio)**2)
             sample_hw_mm = self._sample_hw_mm - margin
         else:
             sample_hw_mm = self._sample_hw_mm
@@ -692,8 +697,8 @@ class EM_Controller:
         else:
             raise ValueError(f"Sample substrate shape must be one among {self.sample_substrate_cfg.ALLOWED_SHAPES}")
             
-        half_n_frames_x = int(self._sample_hw_mm / self.grid_search_fw_mm) + 1
-        half_n_frames_y = int(self._sample_hw_mm / (self.grid_search_fw_mm * im_h_to_w_ratio)) + 1
+        half_n_frames_x = int(self._sample_hw_mm / horizontal_spacing_mm) + 1
+        half_n_frames_y = int(self._sample_hw_mm / (horizontal_spacing_mm * im_h_to_w_ratio)) + 1
         
         frame_centers = []
         frame_labels = []
@@ -703,8 +708,8 @@ class EM_Controller:
             label_letter = alphabet_mapper.get_letter(i + half_n_frames_x)
             for j in range(-half_n_frames_y, half_n_frames_y + 1):
                 label = label_letter + str(j + half_n_frames_y)
-                x = cx + i * self.grid_search_fw_mm
-                y = cy + j * self.grid_search_fw_mm * im_h_to_w_ratio
+                x = cx + i * horizontal_spacing_mm
+                y = cy + j * horizontal_spacing_mm * im_h_to_w_ratio
         
                 if is_inside_region(x, y):
                     frame_centers.append((x, y))
@@ -1200,8 +1205,17 @@ class EM_Controller:
         filename : str
             Name used for saved .tif image file
         im_annotations : list of tuple, optional
-            A list of (annotation_id, xy_coords) pairs. Coordinates are given in
-            relative frame units and converted to pixel positions before drawing.
+            A list of (annotation_id, xy_center, radius, is_filled):
+                - annotation_id : str
+                    text printed next to annotation
+                - xy_center : tuple(float, float)
+                    (x,y) coordinates in pixel or stage coordinates (specified with xy_coords_in_pixel)
+                    where a circle is centered
+                - radius : int
+                    radius of circle
+                - is_filled : bool or int
+                    if bool, whether to fill circle or not. Uses default border thickness of 2
+                    if int, circle is unfilled, with int specifying the border thickness
         xy_coords_in_pixel : bool, optional
             If passing im_annotations, specify whether coordinates refer to image
             pixels or to stage coordinates. Default: None
@@ -1234,16 +1248,23 @@ class EM_Controller:
     
         # Draw annotations if provided
         if im_annotations is not None:
-            for an_id, xy_coords, r in im_annotations:
+            for an_id, xy_center, r, is_filled in im_annotations:
                 if not xy_coords_in_pixel:
                     ann_pixel_coords = EM_driver.frame_rel_to_pixel_coords(
-                        xy_coords, self.im_width, self.im_height
+                        xy_center, self.im_width, self.im_height
                     ).astype(int)[0]
                 else:
-                    ann_pixel_coords = xy_coords
+                    ann_pixel_coords = xy_center
+                
+                if isinstance(is_filled, bool):
+                    border_thickness = -1 if is_filled else 2
+                elif isinstance(is_filled, int):
+                    border_thickness = is_filled
+                else:
+                    raise ValueError("Invalid type for is_filled")
                 
                 # Draw filled red circle
-                cv2.circle(color_image, tuple(ann_pixel_coords), r, (255, 0, 0), -1)  # RGB red
+                cv2.circle(color_image, tuple(ann_pixel_coords), r, (255, 0, 0), border_thickness)  # RGB red
                 
                 # Add label text
                 label_pos = (ann_pixel_coords[0] - 30, ann_pixel_coords[1] - 15)

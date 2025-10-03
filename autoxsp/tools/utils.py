@@ -644,7 +644,7 @@ def get_sample_dir(results_path: str, sample_ID: str) -> str:
     elif found_in_subdir:
         return found_in_subdir
     else:
-        raise FileNotFoundError(f"'{sample_ID}' folder not found in '{results_path}' or its subdirectories.")
+        raise FileNotFoundError(f"'{sample_ID}' folder not found in '{os.path.abspath(results_path)}' or its subdirectories.")
 
 
 

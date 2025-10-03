@@ -419,8 +419,8 @@ class EM_Particle_Finder:
         
         # Save frame image annotating it with the identified particles
         filename = f"{self._sample_ID}_fr{self.EM.frame_labels[self.EM._frame_cntr-1]}_particles"
-        im_annotations = [('', center.astype(int), int(rad)) for center, rad in zip(par_pos_pixels, par_radius_pixels)]
-        self.EM_controller.save_frame_image(filename, im_annotations = im_annotations, xy_coords_in_pixel = True)
+        im_annotations = [('', center.astype(int), int(rad), False) for center, rad in zip(par_pos_pixels, par_radius_pixels)]
+        self.EM.save_frame_image(filename, im_annotations = im_annotations, xy_coords_in_pixel = True)
         
         
         # Return false if no particles were detected in the frame
