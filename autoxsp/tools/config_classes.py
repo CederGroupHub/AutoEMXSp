@@ -24,6 +24,7 @@ Configurations:
 
 Each dataclass includes attribute documentation and input validation.
 """
+import re
 from dataclasses import dataclass, field
 from typing import Any, List, Optional, Tuple, Dict
 
@@ -118,6 +119,9 @@ class SampleConfig:
     ALLOWED_TYPES = (cnst.S_POWDER_SAMPLE_TYPE, cnst.S_BULK_SAMPLE_TYPE , cnst.S_FILM_SAMPLE_TYPE)
 
     def __post_init__(self) -> None:
+        # Validate and clean sample ID
+        self.ID = self._clean_ID(self.ID)
+        
         # Validate sample type
         if self.type not in self.ALLOWED_TYPES:
             raise ValueError(f"Sample type must be one of {self.ALLOWED_TYPES}, got '{self.type}'.")
@@ -131,6 +135,16 @@ class SampleConfig:
                 Element(symbol)
             except Exception:
                 raise ValueError(f"Element symbol '{symbol}' is not a recognized element.")
+    
+    @staticmethod
+    def _clean_ID(ID: str) -> str:
+        """Remove trailing whitespace and invisible characters from the ID to avoid errors in output saving."""
+        cleaned_ID = ID.rstrip()
+        if cleaned_ID != ID:
+            print(f"Warning: ID '{ID}' contained trailing whitespace or invisible characters. Using cleaned ID: '{cleaned_ID}'")
+        # Remove leading and trailing invisible characters
+        cleaned_ID = re.sub(r'^\W+|\W+$', '', cleaned_ID)
+        return cleaned_ID
 
 
 @dataclass
