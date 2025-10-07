@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "autoxsp-test"
-version = "0.1.5"
-description = "AutoXSp - Automated Compositional Characterization via X-Ray Spectroscopy at an Electron Microscope"
+name = "autoemxsp"
+version = "0.1.0"
+description = "AutoEMXSp - Automated Electron Microscopy X-Ray Spectroscopy for Compositional Characterization of Materials"
 readme = "README.md"
 license = { file = "LICENSE.txt" }
 authors = [
@@ -23,7 +23,7 @@ dependencies = [
     "scipy>=1.14.1,<=1.16.2",
     "seaborn>=0.13.2,<=0.13.2",
     "sympy>=1.13.2,<=1.14.0",
-    "yellowbrick>=1.5,<=",
+    "yellowbrick==1.5",
     "opencv-python>=4.10.0,<=4.12.0.88",
     "tifffile>=2023.4.12,<=2025.9.30",
 ]
@@ -33,4 +33,4 @@ dependencies = [
 where = ["."]
 
 [tool.setuptools.exclude-package-data]
-autoxsp = ["detector_response_convolution_matrices.json"]
+autoemxsp = ["detector_response_convolution_matrices.json"]

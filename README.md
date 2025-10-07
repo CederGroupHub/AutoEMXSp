@@ -1,17 +1,17 @@
 <div align="center">
 
-# AutoXSp  
+# autoemxsp  
 
-[![PyPI version](https://badge.fury.io/py/autoxsp.svg)](https://pypi.org/project/autoxsp/)
-[![Python Version](https://img.shields.io/pypi/pyversions/autoxsp.svg)](https://pypi.org/project/autoxsp/)
-[![License](https://img.shields.io/github/license/CederGroupHub/AutoXSp.svg?style=flat-square)](LICENSE.txt)
-[![Downloads](https://pepy.tech/badge/autoxsp)](https://pepy.tech/project/autoxsp)
+[![PyPI version](https://badge.fury.io/py/autoemxsp.svg)](https://pypi.org/project/autoemxsp/)
+[![Python Version](https://img.shields.io/pypi/pyversions/autoemxsp.svg)](https://pypi.org/project/autoemxsp/)
+[![License](https://img.shields.io/github/license/CederGroupHub/AutoEMXSp.svg?style=flat-square)](LICENSE.txt)
+[![Downloads](https://pepy.tech/badge/autoemxsp)](https://pepy.tech/project/autoemxsp)
 
 **Automated Electron Microscopy X-Ray Spectroscopy for Compositional Characterization of Materials**
 
 </div>
 
-AutoXSp is a **fully automated framework** for SEM-EDS workflows — from spectral acquisition and quantification to data filtering and compositional analysis — all in **one click**.
+AutoEMXSp is a **fully automated framework** for SEM-EDS workflows — from spectral acquisition and quantification to data filtering and compositional analysis — all in **one click**.
 
 📖 This work is described in:  
 A. Giunto *et al.*, *Title of your paper*, *Journal Name*, Year.  
@@ -60,34 +60,34 @@ DOI: [link]
 ---
 
 ## 🎥 Demo
-- Watch AutoXSp in action on a desktop SEM-EDS system at https://youtu.be/Bym58gNxlj0
+- Watch AutoEMXSp in action on a desktop SEM-EDS system at https://youtu.be/Bym58gNxlj0
 
 ---
 
 ## 🚀 Installation
 
-You can install **AutoXSp** in just one command.
+You can install **AutoEMXSp** in just one command.
 
 ### Using pip
 ```bash
-pip install autoxsp
+pip install autoemxsp
 ```
 
 ### Or directly from GitHub:
 ```bash
-pip install git+https://github.com/CederGroupHub/AutoXSp
+pip install git+https://github.com/CederGroupHub/AutoEMXSp
 ```
 
 ### Using conda
 ```bash
-conda install -c conda-forge autoxsp
+conda install -c conda-forge autoemxsp
 ```
 
 ---
 
 ## 🖥 Quick Start
 
-AutoXSp supports two main automated workflows:
+AutoEMXSp supports two main automated workflows:
 
 1. **Experimental Standard Collection** — acquire and fit X-ray spectra from known-composition samples to generate reference peak-to-background ratios.
 2. **Sample Acquisition & Analysis** — acquire spectra from unknown samples, quantify them, and perform compositional phase analysis.
@@ -97,7 +97,7 @@ AutoXSp supports two main automated workflows:
 ### 1️⃣ Acquire Experimental Standards
 
 ```python
-from autoxsp.runners import batch_acquire_experimental_stds
+from autoemxsp.runners import batch_acquire_experimental_stds
 
 # Define standards(s) to analyse (additional options available):
 # - 'ID': unique standard identifier
@@ -123,7 +123,7 @@ batch_acquire_experimental_stds(stds=std_list)
 ### 2️⃣ Acquire & Analyse Samples
 
 ```python
-from autoxsp.runners import batch_acquire_and_analyze
+from autoemxsp.runners import batch_acquire_and_analyze
 
 # Define sample(s) to analyse (additional options available):
 # - 'id': unique sample identifier
@@ -164,7 +164,7 @@ batch_acquire_and_analyze(samples)
 ---
 
 ## 🆕 Coming Soon
-Here’s what’s planned for future releases of **AutoXSp**:
+Here’s what’s planned for future releases of **AutoEMXSp**:
 - ⚡ GPU acceleration for faster spectral fitting
 - 🐍 Upgrade to **Python 3.12** for improved performance, modern syntax features, and better compatibility with the latest scientific libraries
 - 🚀 Integration of a **forked `lmfit`** version accepting `Model.fit(data, fit_kws={'full_output': False})` to avoid covariance computations and speed up fitting
@@ -177,8 +177,8 @@ Here’s what’s planned for future releases of **AutoXSp**:
 The repository is organized as follows:
 
 ```text
-AutoXSp/
-├── autoxsp/                   # Main package source code
+AutoEMXSp/
+├── autoemxsp/                   # Main package source code
 │   ├── core/                  # Core objects and source code
 │   ├── runners/               # Runner functions calling on core objects
 │   ├── lib/                   # Libraries of X-ray data
@@ -202,7 +202,7 @@ AutoXSp/
 
 ## 📁 Scripts
 
-This repository includes a collection of scripts that streamline the use of **AutoXSp**.  
+This repository includes a collection of scripts that streamline the use of **AutoEMXSp**.  
 Each script is tailored for a specific task in spectral acquisition, calibration, quantification, or analysis.
 
 ### 🔬 Acquisition, Quantification & Analysis
@@ -243,7 +243,7 @@ LICENSE — see the LICENSE file for details.
 
 ## 📖 Citation
 
-If you use **AutoXSp** in your research, please cite the following publication:
+If you use **AutoEMXSp** in your research, please cite the following publication:
 
 > A. Giunto *et al.*  
 > *Title of your paper*.  
@@ -270,7 +270,7 @@ git lfs install
 git lfs pull
 ```
 
-After downloading, move the raw paper data into the Results/ folder to analyze it with AutoXSp.
+After downloading, move the raw paper data into the Results/ folder to analyze it with AutoEMXSp.
 
 ---
 

@@ -29,6 +29,35 @@ sample_IDs = [
     'K-412_NISTstd_example'
     ]
 
+# =============================================================================
+# Paper data (Download data from github repository:
+#       https://github.com/CederGroupHub/AutoEMXSp/tree/main/paper_data)   
+# =============================================================================
+# sample_IDs = [
+    # Minerals
+    # 'Alamosite_mineral',
+    # 'Albite_mineral',
+    # 'Anhydrite_mineral',
+    # 'Anorthite_mineral',
+    # 'Benitoite_mineral',
+    # 'Bornite_mineral',
+    # 'Chalcopyrite_mineral',
+    # 'CoOlivine_mineral',
+    # 'FeOlivine_mineral',
+    # 'Fluorphlogopite_mineral',
+    # 'Jadeite_mineral',
+    # 'K-412_NISTstd_mineral',
+    # 'Labradorite_mineral',
+    # 'MnOlivine_mineral',
+    # 'Nepheline_mineral',
+    # 'Orthoclase_mineral',
+    # 'Rhodonite_mineral',
+    # 'ScPO4_mineral',
+    # 'Wulfenite_mineral',
+    # 'YIG_mineral',
+    # 'YPO4_mineral',
+    # ]
+
 results_path = None # Looks in default Results folder if left unspecified
 # =============================================================================
 # Options

@@ -67,3 +67,9 @@ quantifier = fit_and_quantify_spectrum(
     interrupt_fits_bad_spectra=interrupt_fits_bad_spectra,
     results_path = results_path
 )
+
+#%% Optionally print atomic and mass fractions of reference compound
+# from autoemxsp.tools.utils import print_element_fractions_table
+
+# This uses the elements from the loaded sample config
+# print_element_fractions_table('ZnF2')  # Or use: print_element_fractions_table(''.join(sample_cfg.elements))

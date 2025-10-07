@@ -3,7 +3,7 @@ include README.md
 include LICENSE
 
 # Include all files in the package
-recursive-include autoxsp *
+recursive-include autoemxsp *
 
 # Exclude specific files
 exclude detector_response_convolution_matrices.json

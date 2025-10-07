@@ -19,7 +19,7 @@ Created on Tue Jul 29 13:18:16 2025
 @author: Andrea
 """
 
-from autoxsp.runners import analyze_sample
+from autoemxsp.runners import analyze_sample
 
 # =============================================================================
 # Initializations - Uses default values if variable is set to None
