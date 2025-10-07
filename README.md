@@ -1,6 +1,6 @@
 <div align="center">
 
-# autoemxsp  
+# AutoEMXSp 
 
 [![PyPI version](https://badge.fury.io/py/autoemxsp.svg)](https://pypi.org/project/autoemxsp/)
 [![Python Version](https://img.shields.io/pypi/pyversions/autoemxsp.svg)](https://pypi.org/project/autoemxsp/)
