@@ -211,14 +211,14 @@ Each script is tailored for a specific task in spectral acquisition, calibration
 - **Run_Analysis.py** — Launch customized machine-learning analysis on previously quantified data.  
 
 ### 🛠️ Miscellaneous
-- **Fit_Quant_Single_Spectrum.py** — Fit a single spectrum with optional quantification. Prints fitting parameters for detailed inspection of model performance.  
+- **Fit_Quant_Single_Spectrum.py** — Fit and optionally quantify a single spectrum. Prints fitting parameters and plots fitted spectrum for detailed inspection of model performance.  
 - **Run_Experimental_Standard_Collection.py** — Acquire and fit experimental standards.  
-- **Run_SDD_Calibration.py** — Perform SDD calibration.  
+- **Run_SDD_Calibration.py** — Perform calibration of the SDD detector.
 
 ### ⚗️ Powder Mixtures  
 *(see [Chem. Mater. 2015, 27, 20, 7084–7094](https://pubs.acs.org/doi/10.1021/acs.chemmater.5c01573))*  
 - **Run_Acquisition_PrecursorMix.py** — Acquire spectra for powder precursor mixtures.  
-- **Run_Quantification_PrecursorMix.py** — Quantify spectra for one or multiple powder mixtures and run machine-learning analysis.  
+- **Run_Quantification_PrecursorMix.py** — Quantify spectra for one or multiple powder mixtures and run machine-learning analysis.
 
 👉 All scripts can be executed directly from the command line or imported into a Python environment.  
 
