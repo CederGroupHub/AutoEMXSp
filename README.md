@@ -219,8 +219,9 @@ Each script is tailored for a specific task in spectral acquisition, calibration
 *(see [Chem. Mater. 2015, 27, 20, 7084–7094](https://pubs.acs.org/doi/10.1021/acs.chemmater.5c01573) for example)*  
 - **Run_Acquisition_PrecursorMix.py** — Acquire spectra for powder precursor mixtures.  
 - **Run_Quantification_PrecursorMix.py** — Quantify spectra for one or multiple powder mixtures and run machine-learning analysis.
+- Customized analysis can be performed using the **Run_Analysis.py** script
 
-👉 All scripts can be executed directly from the command line or imported into a Python environment.  
+👉 All scripts can be executed directly from the command line or imported into a Python environment, making them accessible from anywhere on your system.  
 
 ---
 
