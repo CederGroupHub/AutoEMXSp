@@ -215,8 +215,8 @@ Each script is tailored for a specific task in spectral acquisition, calibration
 - **Run_Experimental_Standard_Collection.py** — Acquire and fit experimental standards.  
 - **Run_SDD_Calibration.py** — Perform calibration of the SDD detector.
 
-### ⚗️ Powder Mixtures  
-*(see [Chem. Mater. 2015, 27, 20, 7084–7094](https://pubs.acs.org/doi/10.1021/acs.chemmater.5c01573))*  
+### ⚗️ Characterize Extent of Intermixing in Known Powder Mixtures  
+*(see [Chem. Mater. 2015, 27, 20, 7084–7094](https://pubs.acs.org/doi/10.1021/acs.chemmater.5c01573) for example)*  
 - **Run_Acquisition_PrecursorMix.py** — Acquire spectra for powder precursor mixtures.  
 - **Run_Quantification_PrecursorMix.py** — Quantify spectra for one or multiple powder mixtures and run machine-learning analysis.
 
