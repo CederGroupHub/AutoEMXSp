@@ -260,7 +260,7 @@ These files are tracked with **Git LFS** (Large File Storage).
 
 ### 🔽 Download with Git LFS
 If you cloned the repository without Git LFS, you may only see placeholder text files instead of the actual datasets.  
-To download the full data, go to the repo directory and:
+To download the full data, on the terminal go to the repo directory and:
 
 ```bash
 # 1. Install Git LFS (only needed once per machine)
@@ -269,6 +269,8 @@ git lfs install
 # 2. Fetch the data files
 git lfs pull
 ```
+
+Alternatively, download manually from the github repo Download button.
 
 After downloading, move the raw paper data into the Results/ folder to analyze it with AutoEMXSp.
 
