@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/github/license/CederGroupHub/AutoXSp.svg?style=flat-square)](LICENSE.txt)
 [![Downloads](https://pepy.tech/badge/autoxsp)](https://pepy.tech/project/autoxsp)
 
-**Automated Compositional Characterization via X-Ray Spectroscopy at Electron Microscopes**
+**Automated Electron Microscopy X-Ray Spectroscopy for Compositional Characterization of Materials**
 
 </div>
 
