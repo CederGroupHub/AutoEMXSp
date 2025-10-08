@@ -46,7 +46,7 @@ Example Usage
 
 # C tape detection workflow:
 >>> from em_analysis import EM_Sample_Finder
->>> finder = EM_Sample_Finder('MySEM', (0, 0), './results', verbose=True)
+>>> finder = EM_Sample_Finder('MySEM', (0, 0), 3, 12, './results', verbose=True)
 >>> Ctape_coords = finder.detect_Ctape()
 >>> if Ctape_coords:
 ...     print("Center (mm):", Ctape_coords[0], "Half-width (mm):", Ctape_coords[1])
@@ -129,9 +129,6 @@ Notes
     
     - navcam_y_offset
         Navigation camera Y offset.
-    
-    - stub_w_mm
-        Standard stub width in mm.
     
     - microscope_calib_dir
         Directory containing microscope calibration files.
@@ -450,12 +447,12 @@ class EM_Controller:
             EM_driver.to_SEM()
     
             # Set detector type to BSD (Backscattered electron detector)
-            EM_driver.set_electron_detector_mode("All")
+            EM_driver.set_electron_detector_mode(self.microscope_cfg.detector_type)
     
             # Set beam voltage (high tension) for EDS collection
-            beam_voltage = -self.measurement_cfg.beam_energy_keV * 1000  # Beam voltage in Volts
-            EM_driver.set_high_tension(beam_voltage)
-
+            EM_driver.set_high_tension(self.measurement_cfg.beam_energy_keV)
+            
+            # Set beam current for EDS collection
             EM_driver.set_beam_current(self.measurement_cfg.beam_current)   
     
             # Move to sample center
@@ -749,7 +746,7 @@ class EM_Controller:
         
         if beam_voltage is not None:
             # Set beam voltage (high tension) for EDS collection (expects volts)
-            EM_driver.set_high_tension(beam_voltage * 1000)  # Convert kV to V     
+            EM_driver.set_high_tension(beam_voltage)  # Convert kV to V     
     
             
     def get_XSp_coords(
@@ -1340,6 +1337,8 @@ class EM_Sample_Finder:
     >>> finder = EM_Sample_Finder(
     ...     microscope_ID='MySEM',
     ...     center_pos=sample_center,
+    ...     sample_half_width_mm: 3,
+    ...     substrate_width_mm: 12,
     ...     results_dir='./results',
     ...     verbose=True
     ... )
@@ -1357,7 +1356,7 @@ class EM_Sample_Finder:
     -----
     - The navigation camera image can be provided directly (for offline testing) or acquired live from the microscope.
     - For successful detection, the microscope calibration file must include the attributes:
-      'navcam_im_w_mm', 'navcam_x_offset', 'navcam_y_offset', and 'stub_w_mm'.
+      'navcam_im_w_mm', 'navcam_x_offset', 'navcam_y_offset'.
     - The detected center and half-width (radius) can be used to configure automated acquisition grids or for quality control.
     """
 
@@ -1366,6 +1365,7 @@ class EM_Sample_Finder:
         microscope_ID: str,
         center_pos: Union[np.ndarray, tuple, list],
         sample_half_width_mm: float,
+        substrate_width_mm: float,
         development_mode: Optional[bool] = False, 
         results_dir: Optional[str] = None,
         verbose: bool = False
@@ -1390,6 +1390,7 @@ class EM_Sample_Finder:
                 raise EMError("Instrument driver could not be loaded")
         
         self._sample_half_width_mm = sample_half_width_mm
+        self._substrate_width_mm = substrate_width_mm
         self._center_pos = np.array(center_pos, dtype=float)
         self.results_dir = results_dir
         self.development_mode = development_mode
@@ -1425,7 +1426,7 @@ class EM_Sample_Finder:
         navcam_h, navcam_w, _ = navcam_im.shape
         
         # Load navigation camera calibrated parameters and check their presence
-        required_attrs = ['navcam_im_w_mm', 'navcam_x_offset', 'navcam_y_offset', 'stub_w_mm']
+        required_attrs = ['navcam_im_w_mm', 'navcam_x_offset', 'navcam_y_offset']
         for attr in required_attrs:
             if not hasattr(EM_driver, attr):
                 raise AttributeError(f"Microscope calibration file at {EM_driver.microscope_calib_dir} is missing required attribute '{attr}'")
@@ -1438,7 +1439,7 @@ class EM_Sample_Finder:
         stub_c += np.array([EM_driver.navcam_x_offset, EM_driver.navcam_y_offset]).astype(np.uint16)
 
         # Calculate size of stub half-width in pixels
-        stub_hw = int(EM_driver.stub_w_mm / navcam_pixel_size / 2)
+        stub_hw = int(self._substrate_width_mm / navcam_pixel_size / 2)
 
         # Crop image around stub
         y1 = max(stub_c[1] - stub_hw, 0)
@@ -1468,8 +1469,7 @@ class EM_Sample_Finder:
         
         # Detect circles in image
         min_radius = int(self._sample_half_width_mm / navcam_pixel_size / 1.5)
-        stub_radius = EM_driver.stub_w_mm / navcam_pixel_size / 2
-        max_radius = int(stub_radius * 0.9)
+        max_radius = int(stub_hw * 0.9)
         circles = cv2.HoughCircles(
             gray, cv2.HOUGH_GRADIENT, dp=1.5, minDist=5,
             param1=50, param2=50, minRadius=min_radius, maxRadius=max_radius

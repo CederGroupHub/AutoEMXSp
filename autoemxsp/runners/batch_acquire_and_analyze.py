@@ -63,6 +63,8 @@ sample_substrate_type : str, optional
 sample_substrate_shape : str, optional
     Shape of the substrate. Allowed: `'circle'`, `'square'`.
     Default is `'circle'` (SampleSubstrateConfig.shape).
+sample_substrate_width_mm : float, optional
+    Lateral dimension of substrate holder in mm (SampleSubstrateConfig.stub_w_mm).
 working_distance : float, optional
     Working distance in mm for acquisition. If None, taken from microscope driver.
     Default is `5.0` (MeasurementConfig.working_distance).
@@ -187,6 +189,7 @@ def batch_acquire_and_analyze(
     sample_halfwidth: float = 3.0,
     sample_substrate_type: str = 'Ctape',
     sample_substrate_shape: str = 'circle',
+    sample_substrate_width_mm: float = 12,
     working_distance: float = 5, #mm
     beam_energy: float = 15.0,
     spectrum_lims: Tuple[float, float] = (14, 1100),
@@ -254,6 +257,8 @@ def batch_acquire_and_analyze(
     sample_substrate_shape : str, optional
         Shape of the substrate. Allowed: `'circle'`, `'square'`.
         Default is `'circle'` (SampleSubstrateConfig.shape).
+    sample_substrate_width_mm : float, optional
+        Lateral dimension of substrate holder in mm (SampleSubstrateConfig.stub_w_mm).
     working_distance : float, optional
         Working distance in mm for acquisition. If None, taken from microscope driver.
         Default is `5.0` (MeasurementConfig.working_distance).
@@ -392,7 +397,8 @@ def batch_acquire_and_analyze(
         elements=els_substrate,
         type=sample_substrate_type,
         shape=sample_substrate_shape,
-        auto_detection=is_auto_substrate_detection
+        auto_detection=is_auto_substrate_detection,
+        stub_w_mm=sample_substrate_width_mm
     )
 
     for sample in samples:

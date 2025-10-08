@@ -55,6 +55,7 @@ class MicroscopeConfig:
 
     ID: str
     type: str
+    detector_type: str = 'BSD'
     is_auto_BC: bool = True
     brightness: Optional[float] = None
     contrast: Optional[float] = None
@@ -62,6 +63,7 @@ class MicroscopeConfig:
     bin_width: Optional[float] = None
 
     ALLOWED_TYPES = ("SEM", "STEM")
+    ALLOWED_DETECTOR_TYPES = ("BSD")
 
     def __post_init__(self) -> None:
         import os
@@ -82,7 +84,10 @@ class MicroscopeConfig:
         if self.type == "STEM":
             # STEM mode is not supported yet.
             raise NotImplementedError("STEM mode is not implemented yet.")
-
+            
+        if self.detector_type not in self.ALLOWED_DETECTOR_TYPES:
+            raise ValueError(f"Detector type must be one of {self.ALLOWED_DETECTOR_TYPES}, got '{self.detector_type}'.")
+                
         if not self.is_auto_BC:
             if self.brightness is None or self.contrast is None:
                 raise ValueError(
@@ -156,7 +161,8 @@ class SampleSubstrateConfig:
         elements (List[str]): List of element symbols present in the sample substrate.
         type (str): Type of the sample substrate. Allowed values: 'Ctape'.
         shape (str): Shape of the sample substrate. Allowed values: 'circle', 'rectangle'.
-        auto_detection (bool): Whether to attempt automatic dection of substrate. (implemented only for Ctape)
+        auto_detection (bool): Whether to attempt automatic detection of substrate. (implemented only for type = Ctape & shape = 'circle')
+        stub_w_mm (float): Lateral dimension of substrate holder in mm, used for determining image size for auto_detection.
 
     Notes:
         - Element symbols are validated. An error is raised if any symbol is unrecognized.
@@ -165,6 +171,7 @@ class SampleSubstrateConfig:
     type: str = cnst.CTAPE_SUBSTRATE_TYPE
     shape: str = cnst.CIRCLE_SUBSTRATE_SHAPE
     auto_detection: bool = True
+    stub_w_mm: float = 12
 
     ALLOWED_TYPES = (cnst.CTAPE_SUBSTRATE_TYPE, cnst.NONE_SUBSTRATE_TYPE)
     ALLOWED_SHAPES = (cnst.CIRCLE_SUBSTRATE_SHAPE, cnst.SQUARE_SUBSTRATE_SHAPE)

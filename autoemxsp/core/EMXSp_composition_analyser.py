@@ -342,6 +342,7 @@ class EMXSp_Composition_Analyzer:
                 microscope_ID=self.microscope_cfg.ID,
                 center_pos=self.sample_cfg.center_pos,
                 sample_half_width_mm=self.sample_cfg.half_width_mm,
+                substrate_width_mm=self.sample_substrate_cfg.stub_w_mm,
                 results_dir=self.sample_result_dir,
                 verbose=self.verbose
             )

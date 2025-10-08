@@ -56,6 +56,7 @@ sample_type = 'powder' # powder, bulk
 sample_halfwidth = 3  # mm
 sample_substrate_type = 'Ctape' # Ctape, None
 sample_substrate_shape = 'circle' # square, circle
+sample_substrate_width_mm = 12 # Al stub diameter, in mm
 
 samples = [
     {'ID': 'In2O3_Al2O3', 'els': ['Ca', 'Al', 'Si', 'O'], 'pos': (-37.5, -37.5), 'cnd': ['In2O3', 'Al2O3']},
@@ -125,6 +126,7 @@ comp_analyzer = batch_acquire_and_analyze(
     sample_halfwidth=sample_halfwidth,
     sample_substrate_type=sample_substrate_type,
     sample_substrate_shape=sample_substrate_shape,
+    sample_substrate_width_mm=sample_substrate_width_mm,
     working_distance = working_distance,
     beam_energy=beam_energy,
     spectrum_lims=spectrum_lims,
