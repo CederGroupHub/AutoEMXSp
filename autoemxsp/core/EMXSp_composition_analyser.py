@@ -3733,15 +3733,20 @@ class EMXSp_Composition_Analyzer:
             
             # Unless it's saving a temporary file, check if Data.csv already exists and backup old version
             if os.path.exists(data_path) and backup_previous_data:
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                backup_path = make_unique_path(self.sample_result_dir, f'{base_name}_old_{timestamp}', extension)
-                try: 
-                    shutil.copyfile(data_path, backup_path)
-                except Exception as e:
-                    backup_successful = False
-                    raise OSError(f"Could not backup previous {data_path} file. This file was not overwritten."
-                                  f"Ensure you ovewrite it with a copy of {base_name}{extension} prior analysis:"
-                                  f"{e}")
+                # Avoid backing up acquisition files that do not contain any quantification or fitting, simply replace them
+                # Checks if current data file has Quant_flag in the headers
+                if cnst.QUANT_FLAG_DF_KEY in pd.read_csv(data_path, nrows=0).columns:
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    backup_path = make_unique_path(self.sample_result_dir, f'{base_name}_old_{timestamp}', extension)
+                    try: 
+                        shutil.copyfile(data_path, backup_path)
+                    except Exception as e:
+                        backup_successful = False
+                        raise OSError(f"Could not backup previous {data_path} file. This file was not overwritten."
+                                      f"Ensure you ovewrite it with a copy of {base_name}{extension} prior analysis:"
+                                      f"{e}")
+                    else:
+                        backup_successful = True
                 else:
                     backup_successful = True
             else:

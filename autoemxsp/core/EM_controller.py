@@ -1471,8 +1471,8 @@ class EM_Sample_Finder:
         min_radius = int(self._sample_half_width_mm / navcam_pixel_size / 1.5)
         max_radius = int(stub_hw * 0.9)
         circles = cv2.HoughCircles(
-            gray, cv2.HOUGH_GRADIENT, dp=1.5, minDist=5,
-            param1=50, param2=50, minRadius=min_radius, maxRadius=max_radius
+            gray, cv2.HOUGH_GRADIENT, dp=1.35, minDist=5,
+            param1=50, param2=60, minRadius=min_radius, maxRadius=max_radius
         )
         
         if self.development_mode:

@@ -104,7 +104,7 @@ powder_meas_cfg_kwargs = dict(
 bulk_meas_cfg_kwargs = dict(
     grid_spot_spacing_um = 100.0, # µm
     min_xsp_spots_distance_um = 5.0, # µm
-    image_frame_width_um = None, # µm
+    image_frame_width_um = 50, # µm
     randomize_frames = False,
     exclude_sample_margin = False
 )

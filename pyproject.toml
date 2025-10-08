@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "autoemxsp"
-version = "0.1.0"
+name = "autoemxsp-test"
+version = "0.1.1"
 description = "AutoEMXSp - Automated Electron Microscopy X-Ray Spectroscopy for Compositional Characterization of Materials"
 readme = "README.md"
 license = { file = "LICENSE.txt" }
@@ -17,7 +17,7 @@ dependencies = [
     "lmfit>=1.3.2,<=1.3.4",
     "matplotlib>=3.5.2,<=3.10.6",
     "numpy>=1.26.4,<=2.2.6",
-    "pandas>=2.2.2,<=2.3.2",
+    "pandas>=2.2.2,<=2.3.3",
     "pymatgen>=2024.11.13,<=2025.6.14",
     "scikit-learn>=1.5.1,<=1.7.2",
     "scipy>=1.14.1,<=1.16.2",
