@@ -84,6 +84,4 @@ temp/
 # Other
 detector_response_convolution_matrices.json
 paper_data/*/
-PhenomXL_unformatted.py
-Rettenberger.py
-autoemxsp/core/particle_segmentation_models/Rettenberger2024.py
+Rettenberger2024.py
