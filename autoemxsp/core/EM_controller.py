@@ -154,6 +154,7 @@ Created on Wed Jul 31 09:28:07 2024
 import os
 import time
 import warnings
+import json
 
 # Third-party imports
 import cv2
@@ -186,6 +187,8 @@ from autoemxsp.core.EM_particle_finder import EM_Particle_Finder
 
 #%% Electron Microscope Particle Finder class    
 class EM_Controller:
+    an_circle_key = 'circle'
+    an_text_key = 'text'
     """
     Electron Microscope (EM) controller for automated particle analysis and X-ray spectra (EDS, WDS) acquisition.
 
@@ -376,7 +379,6 @@ class EM_Controller:
         # Frame width employed during initial grid search, in mm
         self.grid_search_fw_mm = init_fw  # fallback for offline/test mode
 
-
         # Time after which auto focus and brightness are refreshed
         self.refresh_time = 1  # 180 secs (i.e., 3 min)
 
@@ -450,10 +452,18 @@ class EM_Controller:
             EM_driver.set_electron_detector_mode(self.microscope_cfg.detector_type)
     
             # Set beam voltage (high tension) for EDS collection
-            EM_driver.set_high_tension(self.measurement_cfg.beam_energy_keV)
+            if self.measurement_cfg.beam_energy_keV:
+                EM_driver.set_high_tension(self.measurement_cfg.beam_energy_keV)
+            else:
+                warnings.warn("No acceleration voltage was provided via measurement_cfg.beam_energy_keV. Using current microscope configurations",
+                              UserWarning)
             
             # Set beam current for EDS collection
-            EM_driver.set_beam_current(self.measurement_cfg.beam_current)   
+            if self.measurement_cfg.beam_current:
+                EM_driver.set_beam_current(self.measurement_cfg.beam_current)
+            else:
+                warnings.warn("No beam current was provided via measurement_cfg.beam_current. Using current microscope configurations",
+                              UserWarning)
     
             # Move to sample center
             self.move_to_pos(self._center_pos)
@@ -487,7 +497,7 @@ class EM_Controller:
         exclude_sample_margin: bool = True
     ) -> None:
         """
-        Initialize the sample navigator for automated specgtra collection.
+        Initialize the sample navigator for automated spectra collection.
     
         Only 'powder' and 'bulk' samples are currently supported for automated particle detection and navigation.
         For other sample types, use manual navigation, setting measurement_cfg.is_manual_navigation = True.
@@ -509,9 +519,9 @@ class EM_Controller:
         """
         if self.sample_cfg.type == cnst.S_POWDER_SAMPLE_TYPE:
             # Set frame width, and update current pixel size
-            if getattr(EM_driver, "is_at_EM", False):
+            if getattr(EM_driver, "is_at_EM", True):
                 min_fw, max_fw = EM_driver.get_range_frame_width()
-                self.grid_search_fw_mm = np.clip(self.grid_search_fw_mm, min_fw, max_fw)
+                self.grid_search_fw_mm = np.clip(self.powder_meas_cfg.par_search_frame_width_um /1000, min_fw, max_fw)
             self.set_frame_width(self.grid_search_fw_mm)
             
             # Calculate frame centers for particle search
@@ -534,7 +544,9 @@ class EM_Controller:
                 development_mode=self.development_mode
             )
         elif self.sample_cfg.type == cnst.S_BULK_SAMPLE_TYPE:
-            self.grid_search_fw_mm = self.bulk_meas_cfg.image_frame_width_um / 1000
+            if getattr(EM_driver, "is_at_EM", True):
+                min_fw, max_fw = EM_driver.get_range_frame_width()
+                self.grid_search_fw_mm = np.clip(self.bulk_meas_cfg.image_frame_width_um / 1000, min_fw, max_fw)
             self.set_frame_width(self.grid_search_fw_mm)
             # Construct grid of acquisition spots
             self._calc_bulk_grid_acquisition_spots()
@@ -545,7 +557,6 @@ class EM_Controller:
                 "Sample type '{}' is not supported for automated composition analysis. "
                 "Use measurement_cfg.is_manual_navigation = True.".format(self.sample_cfg.type)
             )
-        
         # Save image of initial location to show
         initial_image = EM_driver.get_image_data(self.im_width, self.im_height, 1)
         draw_scalebar(initial_image, self.pixel_size_um)
@@ -864,6 +875,33 @@ class EM_Controller:
     
         print("Acquisition mode not implemented for sample type: {}".format(self.sample_cfg.type))
         return False, None, None
+    
+    
+    def convert_XS_coords_to_pixels(self, xy_coords):
+        """
+        Convert XY coordinates from the XS coordinate system to pixel coordinates.
+    
+        This function uses the EM_driver to transform coordinates relative to the frame 
+        into pixel positions based on the image width and height. The returned pixel 
+        coordinates are integer values.
+    
+        Parameters
+        ----------
+        xy_coords : tuple(float, float)
+            The XY coordinates in the XS coordinate system to be converted.
+    
+        Returns
+        -------
+        tuple(int, int)
+            The corresponding (x, y) pixel coordinates as integers.
+        """
+        xy_coords_pixels = EM_driver.frame_rel_to_pixel_coords(
+            xy_coords,
+            self.im_width,
+            self.im_height
+        ).astype(int)[0]
+    
+        return xy_coords_pixels
 
             
     def acquire_XS_spot_spectrum(
@@ -1141,6 +1179,12 @@ class EM_Controller:
     
         return pos_abs_mm
     
+    @staticmethod
+    def standby():
+        """
+        Put microscope in standby mode
+        """
+        EM_driver.standby()
     
     #%% Frame and Particle Navigation Methods
     # =============================================================================
@@ -1188,7 +1232,7 @@ class EM_Controller:
         return True
     
     
-    def save_frame_image(self, filename, im_annotations=None, xy_coords_in_pixel=None, save_dir=None):
+    def save_frame_image(self, filename, im_annotations=None, frame_image = None, save_dir=None):
         """
         Save an annotated and raw electron microscopy (EM) frame as a multi-page TIFF.
         
@@ -1201,21 +1245,22 @@ class EM_Controller:
         ----------
         filename : str
             Name used for saved .tif image file
-        im_annotations : list of tuple, optional
-            A list of (annotation_id, xy_center, radius, is_filled):
-                - annotation_id : str
-                    text printed next to annotation
-                - xy_center : tuple(float, float)
-                    (x,y) coordinates in pixel or stage coordinates (specified with xy_coords_in_pixel)
-                    where a circle is centered
-                - radius : int
-                    radius of circle
-                - is_filled : bool or int
-                    if bool, whether to fill circle or not. Uses default border thickness of 2
-                    if int, circle is unfilled, with int specifying the border thickness
-        xy_coords_in_pixel : bool, optional
-            If passing im_annotations, specify whether coordinates refer to image
-            pixels or to stage coordinates. Default: None
+            
+        im_annotations : dict | list(dict) | None, optional
+            A dictionary with the following keys:
+                - 'text' : tuple(text, xy_coords)
+                    text: str, text to print
+                    xy_coords : (int, int), coordinates in pixels where to place the text
+                - 'circle' : tuple(radius, xy_center, is_filled, border_thickness)
+                    radius : int, radius of circle, in pixels
+                    xy_center : (int, int), (x,y) coordinates of center, in pixels
+                    thickness : int, thickness of circle border. Set to -1 for filling
+            For multiple annotations, use a list of dictionaries.
+            Do not include the relative key if that particular annotation is not desired.
+            
+        frame_image : np.array | None, opt
+            Frame image to save. Captures the current frame image if not provided
+        
         save_dir : str, optional
             Directory in which to save the TIFF file. Defaults to self.results_dir
             if available, otherwise it needs to be provided.
@@ -1225,7 +1270,6 @@ class EM_Controller:
         - Images are saved as RGB to maximize compatibility across platforms.
 
         """
-        
         # Determine save directory
         if not save_dir:
             if self.results_dir:
@@ -1236,45 +1280,41 @@ class EM_Controller:
                     UserWarning
                 )
                 return
-        
-        # Get raw grayscale image from EM (H, W), dtype: uint8 or uint16
-        frame_image = EM_driver.get_image_data(self.im_width, self.im_height, 1)
+
+        if not isinstance(frame_image, np.ndarray):
+            # Get raw grayscale image from EM (H, W), dtype: uint8 or uint16
+            frame_image = EM_driver.get_image_data(self.im_width, self.im_height, 1)
     
         # Convert grayscale to RGB for annotation
         color_image = cv2.cvtColor(frame_image, cv2.COLOR_GRAY2RGB)
     
         # Draw annotations if provided
         if im_annotations is not None:
-            for an_id, xy_center, r, is_filled in im_annotations:
-                if not xy_coords_in_pixel:
-                    ann_pixel_coords = EM_driver.frame_rel_to_pixel_coords(
-                        xy_center, self.im_width, self.im_height
-                    ).astype(int)[0]
-                else:
-                    ann_pixel_coords = xy_center
+            if isinstance(im_annotations, dict):
+                im_annotations = list(im_annotations)
                 
-                if isinstance(is_filled, bool):
-                    border_thickness = -1 if is_filled else 2
-                elif isinstance(is_filled, int):
-                    border_thickness = is_filled
-                else:
-                    raise ValueError("Invalid type for is_filled")
+            for ann_dict in im_annotations:
                 
-                # Draw filled red circle
-                cv2.circle(color_image, tuple(ann_pixel_coords), r, (255, 0, 0), border_thickness)  # RGB red
+                # Add dot/circles
+                if self.an_circle_key in ann_dict.keys():
+                    radius, xy_center, border_thickness = ann_dict[self.an_circle_key]
+                
+                    # Draw filled red circle
+                    cv2.circle(color_image, tuple(xy_center), radius, (255, 0, 0), border_thickness)  # RGB red
                 
                 # Add label text
-                label_pos = (ann_pixel_coords[0] - 30, ann_pixel_coords[1] - 15)
-                cv2.putText(
-                    color_image,
-                    str(an_id),
-                    label_pos,
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1,
-                    (255, 0, 0),  # RGB red
-                    2,
-                    cv2.LINE_AA
-                )
+                if self.an_text_key in ann_dict.keys():
+                    text, text_xy = ann_dict[self.an_text_key]
+                    cv2.putText(
+                        color_image,
+                        text,
+                        text_xy,
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        1,
+                        (255, 0, 0),  # RGB red
+                        2,
+                        cv2.LINE_AA
+                    )
         
         # Add scale bar
         color_image = draw_scalebar(color_image, self.pixel_size_um)
@@ -1297,7 +1337,15 @@ class EM_Controller:
             color_image,
             photometric='rgb',
             planarconfig='contig',
-            compression=None
+            compression=None,
+            description=json.dumps({
+                "sample_ID" : self.sample_cfg.ID,
+                "microscope_ID" : self.microscope_cfg.ID,
+                "microscope_type" : self.microscope_cfg.type,
+                "detector" : self.microscope_cfg.detector_type,
+                "resolution" : (self.im_width, self.im_height),
+                "pixel_size_um": self.pixel_size_um
+                })
         )
         tifffile.imwrite(
             save_path,
@@ -1471,8 +1519,8 @@ class EM_Sample_Finder:
         min_radius = int(self._sample_half_width_mm / navcam_pixel_size / 1.5)
         max_radius = int(stub_hw * 0.9)
         circles = cv2.HoughCircles(
-            gray, cv2.HOUGH_GRADIENT, dp=1.35, minDist=5,
-            param1=50, param2=60, minRadius=min_radius, maxRadius=max_radius
+            gray, cv2.HOUGH_GRADIENT, dp=1.4, minDist=5,
+            param1=50, param2=50, minRadius=min_radius, maxRadius=max_radius
         )
         
         if self.development_mode:

@@ -111,6 +111,7 @@ MICROSCOPES_CALIBS_DIR = 'Microscopes'
 XRAY_SPECTRA_CALIBS_DIR = 'XSp_calibs'
 DETECTOR_CHANNEL_PARAMS_CALIBR_DIR = 'Detector_channel_params_calibs'
 SDD_CALIBS_MEAS_DIR = 'SDD calibrations'
+PAR_SEGMENTATION_MODELS_DIR = 'particle_segmentation_models'
 
 
 # File names
@@ -124,7 +125,7 @@ COMPOSITIONS_FILENAME = 'Compositions'
 CLUSTERS_FILENAME = 'Clusters'
 CLUSTERING_INFO_FILENAME = 'Clustering_info'
 CLUSTERING_PLOT_FILENAME = 'Clustering_plot'
-POWDER_MIXTURE_PLOT_FILENAME = 'Powder_mixture_decomposition_plot'
+POWDER_MIXTURE_PLOT_FILENAME = 'Mixture_decomposition_plot'
 CLUSTERING_PLOT_FILEEXT = '.png'
 NAVCAM_IM_FILENAME = 'Analysed_region'
 INITIAL_SEM_IM_FILENAME = 'Initial_Position'

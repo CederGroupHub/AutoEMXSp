@@ -152,7 +152,7 @@ Created on Fri Jul 26 09:34:34 2024
 @author: Andrea
 """
 
-import logging, os
+import logging
 from typing import List, Dict, Tuple, Any
 
 from autoemxsp.core.EMXSp_composition_analyser import EMXSp_Composition_Analyzer
@@ -492,8 +492,9 @@ def batch_acquire_and_analyze(
             logging.exception(f"Sample '{sample_ID}': acquisition/quantification failed: {e}")
             continue
     
-    # # Put microscope in standby after completion #TODO
-    # try:
-    #     EMXSp.EM_driver.standby()
-    # except Exception as e:
-    #     logging.warning(f"Could not put microscope in standby: {e}")
+    # Put microscope in standby after completion
+    if not development_mode and len(samples) > 1:
+        try:
+            comp_analyzer.EM_controller.standby()
+        except Exception as e:
+            logging.warning(f"Could not put microscope in standby: {e}")

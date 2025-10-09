@@ -62,6 +62,7 @@ Created on Wed Jul 31 09:28:07 2024
 import os
 import time
 import random
+import warnings
 
 # Third-party imports
 import cv2
@@ -69,7 +70,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-# Typing (Python 3.5+)
 from typing import List, Optional
 
 # Local project imports
@@ -82,7 +82,7 @@ from autoemxsp.tools.config_classes import (
     PowderMeasurementConfig,
 )
 from autoemxsp import EM_driver
-
+import autoemxsp.core.particle_segmentation_models as par_seg_models
 
 #%% Electron Microscope Particle Finder class    
 class EM_Particle_Finder:
@@ -419,8 +419,8 @@ class EM_Particle_Finder:
         
         # Save frame image annotating it with the identified particles
         filename = f"{self._sample_ID}_fr{self.EM.frame_labels[self.EM._frame_cntr-1]}_particles"
-        im_annotations = [('', center.astype(int), int(rad), False) for center, rad in zip(par_pos_pixels, par_radius_pixels)]
-        self.EM.save_frame_image(filename, im_annotations = im_annotations, xy_coords_in_pixel = True)
+        im_annotations = [{self.EM.an_circle_key : (int(rad), center.astype(int), 2)} for rad, center in zip(par_radius_pixels, par_pos_pixels)]
+        self.EM.save_frame_image(filename, im_annotations = im_annotations)
         
         
         # Return false if no particles were detected in the frame
@@ -480,8 +480,24 @@ class EM_Particle_Finder:
         The commented `cv2.imshow` line can be enabled for debugging visualization.
 
         '''
-        # Apply the threshold to get a binary image
-        _, par_mask = cv2.threshold(frame_image, self.powder_meas_cfg.par_brightness_thresh, 255, cv2.THRESH_BINARY)
+        if self.powder_meas_cfg.par_segmentation_model not in self.powder_meas_cfg.AVAILABLE_PAR_SEGMENTATION_MODELS:
+            self.powder_meas_cfg.par_segmentation_model = "threshold_bright"
+            warnings.warn(
+                f"Chosen particle segmentation model {self.powder_meas_cfg.par_segmentation_model} not available."
+                "Defaulting to 'threshold_bright'",
+                UserWarning
+            )
+            
+        if self.powder_meas_cfg.par_segmentation_model == "threshold_bright":
+            # Apply the threshold to get a binary image
+            _, par_mask = cv2.threshold(frame_image, self.powder_meas_cfg.par_brightness_thresh, 255, cv2.THRESH_BINARY)
+            
+        elif self.powder_meas_cfg.par_segmentation_model in self.powder_meas_cfg.AVAILABLE_PAR_SEGMENTATION_MODELS:
+            model_module = par_seg_models.PAR_SEGMENTATION_MODEL_REGISTRY[self.powder_meas_cfg.par_segmentation_model]
+            par_mask = model_module.segment_particles(frame_image, self.powder_meas_cfg)
+
+        else:
+            raise ValueError(f"Unknown error with current particle segmentation model {self.powder_meas_cfg.par_segmentation_model}")
         
         # Find all contours in the image
         contours, hierarchy = cv2.findContours(par_mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
@@ -490,10 +506,10 @@ class EM_Particle_Finder:
         for i, contour in enumerate(contours):
             if hierarchy[0][i][3] != -1:  # If contour is inside another contour
                 cv2.drawContours(par_mask, [contour], 0, 255, -1)
-    
+                
         # cv2.imshow('Segmented Particles Mask', par_mask)
 
-        mask_img_path = os.path.join(self.results_dir, self._sample_ID + f'_fr_{self.EM._frame_cntr}_mask.png')
+        mask_img_path = os.path.join(self.results_dir, self._sample_ID + f'_fr{self.EM.frame_labels[self.EM._frame_cntr -1]}_mask.png')
         if self.development_mode or save_image:
             cv2.imwrite(mask_img_path, par_mask)
         
@@ -1101,7 +1117,7 @@ class EM_Particle_Finder:
     
         Notes
         -----
-        - The function relies on `_get_particles_stats_in_frame()` to process each frame and find new particles.
+        - The function relies on `_move_and_get_particles_stats_in_frame()` to process each frame and find new particles.
         - If no particles are found or frames are exhausted, the function will print a warning and exit early.
         - Equivalent diameters are computed assuming each particle is a circle of the same area.
         - The function sorts particle areas to facilitate percentile calculations.
@@ -1120,7 +1136,7 @@ class EM_Particle_Finder:
         par_not_found_cntr = 0 # To check if particles were not found too many times
         while len(self.par_areas_um2) < n_par_target:
             previous_n_par = len(self.par_areas_um2)
-            par_were_found = self._get_particles_stats_in_frame()
+            par_were_found = self._move_and_get_particles_stats_in_frame()
             if par_were_found is None:
                 print(f"Could not find {n_par_target} particles. Completed statistics using {len(self.par_areas_um2)} particles.")
                 break
@@ -1247,14 +1263,12 @@ class EM_Particle_Finder:
         plt.title('Particle size distribution')
         out_path = os.path.join(results_dir, f'{_sample_ID}_Par_size_distribution_hist.png')
         plt.savefig(out_path)
-        if verbose:
-            plt.show()
         plt.close()
         
     
-    def _get_particles_stats_in_frame(self, frame_image=None, pixel_size=None, results_dir=None):
+    def _move_and_get_particles_stats_in_frame(self, frame_image=None, pixel_size=None, results_dir=None):
         """
-        Analyze the current frame to detect and characterize particles on the substrate.
+        Move to the next frame and analyze it to detect and characterize particles on the substrate.
     
         This function either acquires a new frame from the electron microscope (if running at the EM)
         or processes a provided image. It detects particles, filters them by size and edge proximity,
@@ -1312,7 +1326,7 @@ class EM_Particle_Finder:
         blurred_image = cv2.GaussianBlur(frame_image, (5, 5), 0)
         
         # Get mask of particles on substrate
-        save_mask_img = True
+        save_mask_img = False
         par_mask, mask_img_path = self._get_particles_on_substrate_mask(blurred_image, save_image=save_mask_img)
     
         # Find connected components
@@ -1336,21 +1350,28 @@ class EM_Particle_Finder:
                 
         # Save image to visualize selected particles
         text_margin = 20  # pixel margin to determine where to annotate image with particle numbers
+        im_annotations = []
         if par_cntr > 0:
-            color_image = cv2.cvtColor(frame_image, cv2.COLOR_GRAY2BGR)
             first_par_n = len(self.par_areas_um2) - par_cntr
             for i, (center, area) in enumerate(zip(par_centroids, par_areas)):
+                ann_dict = {}
                 radius_pixel = int(np.sqrt(area / np.pi))  # Equivalent radius for particle (as a circle)
-                cv2.circle(color_image, center.astype(int), radius_pixel, (0, 0, 255), 2)  # Red outline
+                
+                ann_dict[self.EM.an_circle_key] = (radius_pixel, center.astype(int), 2)
+                
                 x_pos_text = int(center[0] + radius_pixel)  # Number on the top-right of the circle
                 y_pos_text = int(center[1] - radius_pixel)
                 if x_pos_text > (self._im_width - text_margin):  # Move number to left if near edge
                     x_pos_text = int(center[0] - radius_pixel)
                 if y_pos_text < text_margin:  # Move number below if near top edge
                     y_pos_text = int(center[1] + radius_pixel)
-                cv2.putText(color_image, str(first_par_n + i), (x_pos_text, y_pos_text), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            color_image = draw_scalebar(color_image, self.EM.pixel_size_um)
-            cv2.imwrite(os.path.join(self.results_dir, self._sample_ID + f'_fr_{self.EM._frame_cntr}_particles.png'), color_image)
+                ann_dict[self.EM.an_text_key] = (str(first_par_n + i), (x_pos_text, y_pos_text))
+                im_annotations.append(ann_dict)
+                
+            filename = f"{self._sample_ID}_fr{self.EM.frame_labels[self.EM._frame_cntr-1]}"
+            self.EM.save_frame_image(filename + '_particles', im_annotations = im_annotations, frame_image = frame_image)
+            self.EM.save_frame_image(filename + '_par_mask', im_annotations = im_annotations, frame_image = par_mask)
+
         
         # Return True if at least 1 particle was found
         if par_cntr == 0:
@@ -1359,7 +1380,7 @@ class EM_Particle_Finder:
             return False
         else:
             # Re-adjust focus, but only if a particle is actually present
-            if time.time() - self.EM.last_EM_adjustment_time > self.EM.refresh_time:
+            if time.time() - self.EM._last_EM_adjustment_time > self.EM.refresh_time:
                 # Adjust EM focus, contrast and brightness
                 self.EM.adjust_BCF()
             return True

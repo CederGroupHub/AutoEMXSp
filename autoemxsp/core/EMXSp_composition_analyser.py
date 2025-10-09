@@ -152,8 +152,8 @@ class EMXSp_Composition_Analyzer:
         sample_cfg: SampleConfig,
         measurement_cfg: MeasurementConfig,
         sample_substrate_cfg: SampleSubstrateConfig,
-        quant_cfg: QuantConfig,
-        clustering_cfg: ClusteringConfig,
+        quant_cfg: QuantConfig = QuantConfig(),
+        clustering_cfg: ClusteringConfig = ClusteringConfig(),
         powder_meas_cfg: PowderMeasurementConfig = PowderMeasurementConfig(),
         bulk_meas_cfg: BulkMeasurementConfig = BulkMeasurementConfig(),
         exp_stds_cfg: ExpStandardsConfig = ExpStandardsConfig(),
@@ -178,15 +178,18 @@ class EMXSp_Composition_Analyzer:
             
         # --- Define use of class instance
         self.is_acquisition = is_acquisition
+        is_XSp_measurement = measurement_cfg.type != measurement_cfg.PARTICLE_STATS_MEAS_TYPE_KEY
         self.development_mode = development_mode
         
         
         # --- System characteristics
         self.microscope_cfg = microscope_cfg
-        # Load microscope calibrations for this instrument and mode
-        calibs.load_microscope_calibrations(microscope_cfg.ID, measurement_cfg.mode, load_detector_channel_params=is_acquisition)
-        if not measurement_cfg.emergence_angle:
-            measurement_cfg.emergence_angle = calibs.emergence_angle # Fixed by instrument geometry
+        
+        if is_XSp_measurement:
+            # Load microscope calibrations for this instrument and mode
+            calibs.load_microscope_calibrations(microscope_cfg.ID, measurement_cfg.mode, load_detector_channel_params=is_acquisition)
+            if not measurement_cfg.emergence_angle:
+                measurement_cfg.emergence_angle = calibs.emergence_angle # Fixed by instrument geometry
         
         
         # --- Measurement configurations
@@ -194,76 +197,81 @@ class EMXSp_Composition_Analyzer:
         self.powder_meas_cfg = powder_meas_cfg
         self.bulk_meas_cfg = bulk_meas_cfg
         self.exp_stds_cfg = exp_stds_cfg
-        if is_acquisition:
-            # Loaded latest detector calibration values
-            meas_modes_calibs = calibs.detector_channel_params
-            energy_zero = meas_modes_calibs[measurement_cfg.mode][cnst.OFFSET_KEY]
-            bin_width = meas_modes_calibs[measurement_cfg.mode][cnst.SCALE_KEY]
-            beam_current = meas_modes_calibs[measurement_cfg.mode][cnst.BEAM_CURRENT_KEY]
-            # Store, because needed to call XS_Quantifier
-            self.microscope_cfg.energy_zero = energy_zero
-            self.microscope_cfg.bin_width = bin_width
-            if not measurement_cfg.beam_current:
-                self.measurement_cfg.beam_current = beam_current
+        
+        if is_XSp_measurement:
+            if is_acquisition:
+                # Loaded latest detector calibration values
+                meas_modes_calibs = calibs.detector_channel_params
+                energy_zero = meas_modes_calibs[measurement_cfg.mode][cnst.OFFSET_KEY]
+                bin_width = meas_modes_calibs[measurement_cfg.mode][cnst.SCALE_KEY]
+                beam_current = meas_modes_calibs[measurement_cfg.mode][cnst.BEAM_CURRENT_KEY]
+                # Store, because needed to call XS_Quantifier
+                self.microscope_cfg.energy_zero = energy_zero
+                self.microscope_cfg.bin_width = bin_width
+                if not measurement_cfg.beam_current:
+                    self.measurement_cfg.beam_current = beam_current
+                    
+                # --- Type checking ---
+                for var_name, var_value in [
+                    ('energy_zero', energy_zero),
+                    ('bin_width', bin_width),
+                    ('beam_current', beam_current)
+                ]:
+                    if not isinstance(var_value, float):
+                        raise TypeError(f"{var_name} must be a float, got {type(var_value).__name__}: {var_value}")
+            else:
+                energy_zero = microscope_cfg.energy_zero
+                bin_width = microscope_cfg.bin_width
+                beam_current = measurement_cfg.beam_current
                 
-            # --- Type checking ---
-            for var_name, var_value in [
-                ('energy_zero', energy_zero),
-                ('bin_width', bin_width),
-                ('beam_current', beam_current)
-            ]:
-                if not isinstance(var_value, float):
-                    raise TypeError(f"{var_name} must be a float, got {type(var_value).__name__}: {var_value}")
-        else:
-            energy_zero = microscope_cfg.energy_zero
-            bin_width = microscope_cfg.bin_width
-            beam_current = measurement_cfg.beam_current
-            
-        self.det_ch_offset = energy_zero
-        self.det_ch_width = bin_width
+            self.det_ch_offset = energy_zero
+            self.det_ch_width = bin_width
 
-        # Max and min number of EDS spectra to be collected
-        self.min_n_spectra = measurement_cfg.min_n_spectra
-        if measurement_cfg.max_n_spectra < self.min_n_spectra:
-            self.max_n_spectra = self.min_n_spectra
-        else:
-            self.max_n_spectra = measurement_cfg.max_n_spectra
+            # Max and min number of EDS spectra to be collected
+            self.min_n_spectra = measurement_cfg.min_n_spectra
+            if measurement_cfg.max_n_spectra < self.min_n_spectra:
+                self.max_n_spectra = self.min_n_spectra
+            else:
+                self.max_n_spectra = measurement_cfg.max_n_spectra
             
             
         # --- Sample characteristics
         self.sample_cfg = sample_cfg         # Elements possibly present in the sample
         self.sample_substrate_cfg = sample_substrate_cfg
-        # Elements possibly present in the sample
-        self.all_els_sample = list(dict.fromkeys(sample_cfg.elements)) #remove any eventual duplicate, keeping original order
-        # Detectable elements possibly present in the sample 
-        self.detectable_els_sample = [el for el in self.all_els_sample if el not in calibs.undetectable_els]
-        # Elements present in the substrate, which have to be subtracted if not present in the sample
-        self.all_els_substrate = list(dict.fromkeys(sample_substrate_cfg.elements)) #remove any eventual duplicate, keeping original order
-        detectable_els_substrate = [el for el in self.all_els_substrate if el not in calibs.undetectable_els] # remove undetectable elements
-        self.detectable_els_substrate = [el for el in detectable_els_substrate if el not in self.detectable_els_sample] #remove any eventual duplicate
-        self.is_particle = True if sample_cfg.type == cnst.S_POWDER_SAMPLE_TYPE else False
+        if is_XSp_measurement:
+            # Elements possibly present in the sample
+            self.all_els_sample = list(dict.fromkeys(sample_cfg.elements)) #remove any eventual duplicate, keeping original order
+            # Detectable elements possibly present in the sample 
+            self.detectable_els_sample = [el for el in self.all_els_sample if el not in calibs.undetectable_els]
+            # Elements present in the substrate, which have to be subtracted if not present in the sample
+            self.all_els_substrate = list(dict.fromkeys(sample_substrate_cfg.elements)) #remove any eventual duplicate, keeping original order
+            detectable_els_substrate = [el for el in self.all_els_substrate if el not in calibs.undetectable_els] # remove undetectable elements
+            self.detectable_els_substrate = [el for el in detectable_els_substrate if el not in self.detectable_els_sample] #remove any eventual duplicate
+            self.is_particle = True if sample_cfg.type == cnst.S_POWDER_SAMPLE_TYPE else False
         
         
         # --- Fitting and Quantification
         self.quant_cfg = quant_cfg
-        # Set EDS detector channels to include in the quantification
-        self.sp_start, self.sp_end = quant_cfg.spectrum_lims
-        # Compute values of energies corresponding to detector channels
-        if energy_zero and bin_width:
-            self.energy_vals = np.array([energy_zero + bin_width * i for i in range(self.sp_start, self.sp_end)])
-        elif is_acquisition:
-            raise ValueError("Missing detector calibration values.\n Please add detector calibration file at {calibs.calibration_files_dir}")
-        # Set a threshold value below which counts are considered to be too low
-        # Used to filter "bad" spectra out from clustering analysis. All spectra having less counts than this threshold are filtered out
-        # Used also to avoid fitting spectra with excessive absorption, which inevitably lead to large quantification errors
-        if not quant_cfg.min_bckgrnd_cnts:
-            min_bckgrnd_cnts = measurement_cfg.target_acquisition_counts/(2*10**4) # empirical value
-            self.quant_cfg.min_bckgrnd_cnts = min_bckgrnd_cnts
+        if is_XSp_measurement:
+            # Set EDS detector channels to include in the quantification
+            self.sp_start, self.sp_end = quant_cfg.spectrum_lims
+            # Compute values of energies corresponding to detector channels
+            if energy_zero and bin_width:
+                self.energy_vals = np.array([energy_zero + bin_width * i for i in range(self.sp_start, self.sp_end)])
+            elif is_acquisition and is_XSp_measurement:
+                raise ValueError("Missing detector calibration values.\n Please add detector calibration file at {calibs.calibration_files_dir}")
+            # Set a threshold value below which counts are considered to be too low
+            # Used to filter "bad" spectra out from clustering analysis. All spectra having less counts than this threshold are filtered out
+            # Used also to avoid fitting spectra with excessive absorption, which inevitably lead to large quantification errors
+            if not quant_cfg.min_bckgrnd_cnts:
+                min_bckgrnd_cnts = measurement_cfg.target_acquisition_counts/(2*10**4) # empirical value
+                self.quant_cfg.min_bckgrnd_cnts = min_bckgrnd_cnts
 
         # --- Clustering
         self.clustering_cfg = clustering_cfg
-        self.ref_formulae = list(dict.fromkeys(clustering_cfg.ref_formulae)) # Remove duplicates
-        self._calc_reference_phases_df() # Calculate dataframe with reference compositions, and any possible analyitical error deriving from undetectable elements
+        if is_XSp_measurement:
+            self.ref_formulae = list(dict.fromkeys(clustering_cfg.ref_formulae)) # Remove duplicates
+            self._calc_reference_phases_df() # Calculate dataframe with reference compositions, and any possible analyitical error deriving from undetectable elements
         
         
         # --- Plotting
@@ -287,21 +295,25 @@ class EMXSp_Composition_Analyzer:
         self.output_filename_suffix = output_filename_suffix
         self.verbose = verbose
 
-        # --- Variable initialization
-        self.sp_coords = [] # List containing particle number + relative coordinates on the image to retrieve exact position where spectra were collected
-        self.particle_cntr = -1 # Counter to save particle number
-        
-        # Initialise lists containing spectral data and comments that will be saved with the quantification data
-        self.spectral_data = {key : [] for key in cnst.LIST_SPECTRAL_DATA_KEYS}
-        
-        # List containing the quantification results of each of the collected spectra (composition and analytical error)
-        self.spectra_quant = []
+        if is_XSp_measurement:
+            # --- Variable initialization
+            self.sp_coords = [] # List containing particle number + relative coordinates on the image to retrieve exact position where spectra were collected
+            self.particle_cntr = -1 # Counter to save particle number
+            
+            # Initialise lists containing spectral data and comments that will be saved with the quantification data
+            self.spectral_data = {key : [] for key in cnst.LIST_SPECTRAL_DATA_KEYS}
+            
+            # List containing the quantification results of each of the collected spectra (composition and analytical error)
+            self.spectra_quant = []
+            
+            # Initialise dictionary of standards to (optionally) pass onto XSp_Quantifier. Only used with known powder mixtures
+            self._initialise_std_dict()
         
         
         # --- Save configurations
         # Save spectrum collection info when class is used to collect spectra
         if is_acquisition:
-            self._save_experimental_config()
+            self._save_experimental_config(is_XSp_measurement)
         
         
         # --- Initialisations
@@ -310,10 +322,9 @@ class EMXSp_Composition_Analyzer:
             if microscope_cfg.type == 'SEM':
                 self._initialise_SEM()
             
-            self._initialise_Xsp_analyzer()
+            if is_XSp_measurement:
+                self._initialise_Xsp_analyzer()
         
-        # Initialise dictionary of standards to (optionally) pass onto XSp_Quantifier. Only used with known powder mixtures
-        self._initialise_std_dict()
 
     #%% Instrument initializations
     # =============================================================================
@@ -398,7 +409,7 @@ class EMXSp_Composition_Analyzer:
         # Only EDS is supported at present
         if self.measurement_cfg.type == 'EDS':
             self.EM_controller.initialise_XS_analyzer()
-        else:
+        elif self.measurement_cfg.type not in self.measurement_cfg.ALLOWED_TYPES:
             raise NotImplementedError(
                 f"X-ray spectroscopy analyzer initialization for measurement type '{self.measurement_cfg.type}' is not currently implemented."
             )
@@ -1157,15 +1168,34 @@ class EMXSp_Composition_Analyzer:
                             self.spectral_data[cnst.QUANT_FLAG_DF_KEY].append(2)
                         if self.verbose:
                                 print('Current particle is unlikely to be part of the sample.\nSkipping to the next particle.')
-                                print('Increase measurement_cfg.target_acquisition_counts if this behavior is undesired.')
+                                print('Increase measurement_cfg.max_acquisition_time if this behavior is undesired.')
                         break
             
+            # Save image of particle, with ID of acquired XSp spots
             if latest_spot_id is not None:
                 # Prepare save path
                 par_cntr_str = f"_par{self.particle_cntr}" if self.particle_cntr is not None else ''
                 filename = f"{self.sample_cfg.ID}{par_cntr_str}_fr{self.EM_controller.frame_labels[self.EM_controller._frame_cntr-1]}_xyspots"
-                im_annotations = [(n_tot_sp_collected - 1 - latest_spot_id + i, xy_coords, 10, True) for i, xy_coords in enumerate(spots_xy_list) if i <= latest_spot_id]
-                self.EM_controller.save_frame_image(filename, im_annotations = im_annotations, xy_coords_in_pixel = False)
+                # Construct annotation dictionary
+                im_annotations = []
+                for i, xy_coords in enumerate(spots_xy_list):
+                    # Skip if latest_spot_id is None or i is out of range
+                    if latest_spot_id is None or i > latest_spot_id:
+                        break
+                
+                    xy_center = self.EM_controller.convert_XS_coords_to_pixels(xy_coords)
+                    if xy_center is None:
+                        continue
+                    
+                    im_annotations.append({
+                        self.EM_controller.an_text_key: (
+                            str(n_tot_sp_collected - 1 - latest_spot_id + i),
+                            (xy_center[0] - 30, xy_center[1] - 15)
+                        ),
+                        self.EM_controller.an_circle_key: (10, xy_center, -1)
+                    })
+                # Save image with annotations
+                self.EM_controller.save_frame_image(filename, im_annotations = im_annotations)
                 
             if quantify:
                 self._fit_and_quantify_spectra()
@@ -3325,7 +3355,7 @@ class EMXSp_Composition_Analyzer:
         # Save figure
         fig.savefig(
             os.path.join(self.analysis_dir,
-                         cnst.POWDER_MIXTURE_PLOT_FILENAME + cnst.CLUSTERING_PLOT_FILEEXT),
+                         cnst.POWDER_MIXTURE_PLOT_FILENAME + f"_{ref_names[0]}_{ref_names[1]}" + cnst.CLUSTERING_PLOT_FILEEXT),
             dpi=300,
             bbox_inches='tight',
             pad_inches=0
@@ -3780,7 +3810,7 @@ class EMXSp_Composition_Analyzer:
         return data_df
     
     
-    def _save_experimental_config(self) -> None:
+    def _save_experimental_config(self, is_XSp_measurement) -> None:
         """
         Save all relevant configuration dataclasses and metadata related to the
         current spectrum collection/acquisition to a JSON file.
@@ -3806,8 +3836,10 @@ class EMXSp_Composition_Analyzer:
             cnst.MICROSCOPE_CFG_KEY: asdict(self.microscope_cfg),
             cnst.MEASUREMENT_CFG_KEY: asdict(self.measurement_cfg),
             cnst.SAMPLESUBSTRATE_CFG_KEY: asdict(self.sample_substrate_cfg),
-            cnst.QUANTIFICATION_CFG_KEY: asdict(self.quant_cfg),
         }
+        
+        if is_XSp_measurement:
+            cfg_dataclasses[cnst.QUANTIFICATION_CFG_KEY] = asdict(self.quant_cfg)
     
         # Include dataclass corresponding to sample type
         if self.sample_cfg.type == cnst.S_POWDER_SAMPLE_TYPE:
@@ -3818,7 +3850,7 @@ class EMXSp_Composition_Analyzer:
         # Include dataclasses corresponding to measurement type
         if self.exp_stds_cfg.is_exp_std_measurement:
             cfg_dataclasses[cnst.EXP_STD_MEASUREMENT_CFG_KEY] = asdict(self.exp_stds_cfg)
-        else:
+        elif is_XSp_measurement:
             cfg_dataclasses[cnst.CLUSTERING_CFG_KEY] = asdict(self.clustering_cfg)
             cfg_dataclasses[cnst.PLOT_CFG_KEY] = asdict(self.plot_cfg)
 

@@ -442,11 +442,12 @@ def batch_acquire_experimental_stds(
             continue
         
     
-    # # Put microscope in standby after completion #TODO
-    # try:
-    #     EMXSp.EM_driver.standby()
-    # except Exception as e:
-    #     logging.warning(f"Could not put microscope in standby: {e}")
+    # Put microscope in standby after completion
+    if not development_mode and len(stds) > 1:
+        try:
+            comp_analyzer.EM_controller.standby()
+        except Exception as e:
+            logging.warning(f"Could not put microscope in standby: {e}")
     
     return results
     

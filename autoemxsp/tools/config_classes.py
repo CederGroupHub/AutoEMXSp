@@ -25,6 +25,7 @@ Configurations:
 Each dataclass includes attribute documentation and input validation.
 """
 import re
+import numpy as np
 from dataclasses import dataclass, field
 from typing import Any, List, Optional, Tuple, Dict
 
@@ -32,6 +33,7 @@ from pymatgen.core.periodic_table import Element
 from pymatgen.core import Composition
 
 import autoemxsp.tools.constants as cnst
+import autoemxsp.core.particle_segmentation_models as par_seg_models
 
 @dataclass
 class MicroscopeConfig:
@@ -226,8 +228,9 @@ class MeasurementConfig:
     target_acquisition_counts: int = 50000
     min_n_spectra: int = 30
     max_n_spectra: int = 100
-
-    ALLOWED_TYPES = ("EDS", "WDS")
+    
+    PARTICLE_STATS_MEAS_TYPE_KEY = "particle_stats"
+    ALLOWED_TYPES = ("EDS", "WDS", PARTICLE_STATS_MEAS_TYPE_KEY)
 
     def __post_init__(self) -> None:
         if self.type not in self.ALLOWED_TYPES:
@@ -274,6 +277,8 @@ class PowderMeasurementConfig:
     Attributes:
         is_manual_particle_selection (bool): Whether to manually navigate sample to select particles to analyse (Default = False).
         is_known_powder_mixture_meas (bool): Whether sample is a known binary mixture of powders. Used to characterize precursor extent of intermixing (Default = False).
+        par_search_frame_width_um (float, optional): Frame width used when searching for particles, in um.
+            Default: min(20*max_par_radius, 500 um)
         max_n_par_per_frame (int): Maximum number of particles analyzed in a single frame. 
             Used to ensure spatial representation of the analyzed sample.
         max_spectra_per_par (int): Maximum number of spot X-ray spectra collected in a single particle.
@@ -282,6 +287,7 @@ class PowderMeasurementConfig:
         min_area_par (float): Minimum area (in µm²) for a particle to be considered.
         par_mask_margin (float): Margin (in µm) from particle edge where X-ray spectra should not be collected.
         xsp_spots_distance_um (float): Min distance between X-ray spectrum acquisition points
+        par_segmentation_model (str) : Model to use for particle segmentation. Default: "threshold_bright"
         par_brightness_thresh (int): Intensity threshold in 8-bit image that defines a particle over a dark background.
         par_xy_spots_thresh (int): Intensity threshold in 8-bit image that defines bright (i.e., thickest) regions in particles.
             X-ray spectra are acquired only from these regions.
@@ -289,32 +295,43 @@ class PowderMeasurementConfig:
         par_feature_selection (str): 'random' for random selection of points within bright regions, 'peaks' for brightest peak spots (default: 'random').
         par_spot_spacing (str): 'random' for unbiased spot selecton, 'maximized' for maximized spot spacing over particle (default: 'random').
     """
+    DEFAULT_PAR_SEGMENTATION_MODEL = "threshold_bright"
+
     is_manual_particle_selection: bool = False
     is_known_powder_mixture_meas: bool = False
+    par_search_frame_width_um: float = None 
     max_n_par_per_frame: int = 30
     max_spectra_per_par: int = 3
     max_area_par: float = 300.0    # µm²
     min_area_par: float = 10.0     # µm²
     par_mask_margin: float = 1.0   # µm
     xsp_spots_distance_um: float = 1.0 # µm
+    par_segmentation_model : str =  DEFAULT_PAR_SEGMENTATION_MODEL
     par_brightness_thresh: int = 100 # in 8-bit image
     par_xy_spots_thresh: int = 100  # considering particle pixel intensities are scaled to 8-bit image
     par_feature_selection: str = 'random'
     par_spot_spacing: str = 'random'
-
+    
+    AVAILABLE_PAR_SEGMENTATION_MODELS = [DEFAULT_PAR_SEGMENTATION_MODEL] + par_seg_models.AVAILABLE_SEGMENTATION_MODELS
+    AVAILABLE_FEATURE_SELECTION = ('random', 'peaks')
+    AVAILABLE_SPOT_SPACING_SELECTION = ('random', 'maximized')
+    
     def __post_init__(self):
         # --- 0. Check validity of passed variables
-        available_feature_selection = ('random', 'peaks')
-        if self.par_feature_selection not in available_feature_selection:
+        if self.par_segmentation_model not in self.AVAILABLE_PAR_SEGMENTATION_MODELS:
+            raise ValueError(
+                f'Value of "par_segmentation_model" set to {self.par_segmentation_model} is invalid. '
+                f'Must be one of {self.AVAILABLE_PAR_SEGMENTATION_MODELS}.'
+            )
+        if self.par_feature_selection not in self.AVAILABLE_FEATURE_SELECTION:
             raise ValueError(
                 f'Value of "par_feature_selection" set to {self.par_feature_selection} is invalid. '
-                f'Must be one of {available_feature_selection}.'
+                f'Must be one of {self.available_feature_selection}.'
             )
-        available_spot_spacing = ('random', 'maximized')
-        if self.par_spot_spacing not in available_spot_spacing:
+        if self.par_spot_spacing not in self.AVAILABLE_SPOT_SPACING_SELECTION:
             raise ValueError(
                 f'Value of "par_spot_spacing" set to {self.par_spot_spacing} is invalid. '
-                f'Must be one of {available_spot_spacing}.'
+                f'Must be one of {self.available_spot_spacing}.'
             )
         # Additional checks can be added here (e.g., for numeric bounds)
         if self.min_area_par < 0 or self.max_area_par < 0:
@@ -331,6 +348,11 @@ class PowderMeasurementConfig:
             raise ValueError("par_brightness_thresh must be in 0..255.")
         if not (0 <= self.par_xy_spots_thresh <= 255):
             raise ValueError("par_xy_spots_thresh must be in 0..255.")
+            
+        # --- 1. Define default par_search_frame_width_um if None
+        if self.par_search_frame_width_um is None:
+            max_par_radius = np.sqrt(self.max_area_par / np.pi)  # in µm
+            self.par_search_frame_width_um = min(20 * max_par_radius, 500.0)  # µm
  
 
 @dataclass
