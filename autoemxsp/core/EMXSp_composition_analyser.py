@@ -2374,8 +2374,10 @@ class EMXSp_Composition_Analyzer:
         """
         # Set a minimum reconstruction error threshold for accepting mixtures
         min_acceptable_recon_error = 2  # Empirically determined
-    
-        if reconstruction_error < min_acceptable_recon_error:
+        
+        save_violin_plot = self.sample_cfg.type == cnst.S_POWDER_SAMPLE_TYPE and self.powder_meas_cfg.is_known_powder_mixture_meas
+        
+        if reconstruction_error < min_acceptable_recon_error or save_violin_plot:
             # Calculate confidence score: 0.66 when error is 0.5 (empirical)
             gauss_sigma = 0.5
             conf = np.exp(-reconstruction_error**2 / (2 * gauss_sigma**2))
@@ -2393,7 +2395,7 @@ class EMXSp_Composition_Analyzer:
             mol_frs_norm_means = np.mean(W_mol_frs, axis=0)
             mol_frs_norm_stddevs = np.std(W_mol_frs, axis=0)
             
-            if self.sample_cfg.type == cnst.S_POWDER_SAMPLE_TYPE and self.powder_meas_cfg.is_known_powder_mixture_meas:
+            if save_violin_plot:
                 self._save_violin_plot_powder_mixture(W_mol_frs, ref_names)
             
             # Store mixture information
@@ -3290,7 +3292,7 @@ class EMXSp_Composition_Analyzer:
         yellow_cmap = cm.get_cmap('autumn')
     
         # Extract coordinates from W
-        y_vals = W_mol_frs[:, 1]
+        y_vals = W_mol_frs[:, 0]
     
         fig, ax_left = plt.subplots(figsize=(4, 4))
         
