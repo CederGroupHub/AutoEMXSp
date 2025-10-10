@@ -272,7 +272,7 @@ git lfs pull
 
 Alternatively, download manually from the github repo Download button.
 
-After downloading, move the raw paper data into the Results/ folder to analyze it with AutoEMXSp.
+After downloading, move the raw paper data into the Results/ folder to analyze it with AutoEMXSp, or add the folder's path to 'results_dir' within the provided analysis and quantification scripts.
 
 ---
 
