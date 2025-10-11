@@ -383,7 +383,7 @@ class EM_Particle_Finder:
         par_mask, _ = self._get_particles_on_substrate_mask(frame_image)
     
         # Find connected components
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(par_mask, connectivity=8)
+        num_labels, labels, stats, centroids = self._get_connected_components_with_stats(par_mask)
         
         ### Filter out particles that are too small or too big, and store their centroid + size
         par_pos_pixels = []
@@ -471,7 +471,9 @@ class EM_Particle_Finder:
         Returns
         -------
         par_mask : ndarray
-            The binary mask of detected particles.
+            Either a binary mask of detected particles, or a labels array, where the pixels
+            of each particle are identified by a different integer (same as labels returned by
+                                                                    cv2.ConnectedComponents)
         mask_img_path : str
             File path for where the mask image is (or would be) saved.
             
@@ -492,6 +494,12 @@ class EM_Particle_Finder:
             # Apply the threshold to get a binary image
             _, par_mask = cv2.threshold(frame_image, self.powder_meas_cfg.par_brightness_thresh, 255, cv2.THRESH_BINARY)
             
+            # Find all contours in the image and fill them
+            contours, hierarchy = cv2.findContours(par_mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+            for i, contour in enumerate(contours):
+                if hierarchy[0][i][3] != -1:  # If contour is inside another contour
+                    cv2.drawContours(par_mask, [contour], 0, 255, -1)
+                    
         elif self.powder_meas_cfg.par_segmentation_model in self.powder_meas_cfg.AVAILABLE_PAR_SEGMENTATION_MODELS:
             model_module = par_seg_models.PAR_SEGMENTATION_MODEL_REGISTRY[self.powder_meas_cfg.par_segmentation_model]
             par_mask = model_module.segment_particles(frame_image, self.powder_meas_cfg)
@@ -499,14 +507,6 @@ class EM_Particle_Finder:
         else:
             raise ValueError(f"Unknown error with current particle segmentation model {self.powder_meas_cfg.par_segmentation_model}")
         
-        # Find all contours in the image
-        contours, hierarchy = cv2.findContours(par_mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
-    
-        # Iterate over the contours and fill inner contours with white
-        for i, contour in enumerate(contours):
-            if hierarchy[0][i][3] != -1:  # If contour is inside another contour
-                cv2.drawContours(par_mask, [contour], 0, 255, -1)
-                
         # cv2.imshow('Segmented Particles Mask', par_mask)
 
         mask_img_path = os.path.join(self.results_dir, self._sample_ID + f'_fr{self.EM.frame_labels[self.EM._frame_cntr -1]}_mask.png')
@@ -514,6 +514,79 @@ class EM_Particle_Finder:
             cv2.imwrite(mask_img_path, par_mask)
         
         return par_mask, mask_img_path
+    
+    
+    def _get_connected_components_with_stats(self, par_mask: np.ndarray):
+        """
+        Compute connected components with statistics.
+    
+        This function accepts either:
+          1. A binary mask (0/255 or boolean), in which case it directly calls
+             cv2.connectedComponentsWithStats.
+          2. A pre-labeled image (integer labels, like output of cv2.connectedComponents),
+             in which case stats and centroids are recomputed manually.
+    
+        Parameters
+        ----------
+        par_mask : np.ndarray
+            Input binary mask (0/255 or bool) or label image (int32).
+    
+        Returns
+        -------
+        Same as cv2.connectedComponentsWithStats
+        
+        num_labels : int
+            Number of connected components (including background).
+        labels : np.ndarray
+            Labeled image of the same size as input.
+        stats : np.ndarray
+            Statistics for each label. Shape: (num_labels, 5).
+            Columns indexed by:
+                cv2.CC_STAT_LEFT   (x)
+                cv2.CC_STAT_TOP    (y)
+                cv2.CC_STAT_WIDTH  (width)
+                cv2.CC_STAT_HEIGHT (height)
+                cv2.CC_STAT_AREA   (area)
+        centroids : np.ndarray
+            Centroids of each component. Shape: (num_labels, 2).
+        """
+    
+        # --- Case 1: Binary image ---
+        if par_mask.dtype == np.bool_ or np.array_equal(np.unique(par_mask), [0, 255]):
+            num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+                par_mask.astype(np.uint8), connectivity=8, ltype=cv2.CV_32S
+            )
+    
+        else:
+            # --- Case 2: Already a label image ---
+            labels = par_mask.astype(np.int32, copy=False)
+            num_labels = labels.max() + 1
+    
+            stats = np.zeros((num_labels, 5), dtype=np.int32)
+            centroids = np.zeros((num_labels, 2), dtype=np.float64)
+    
+            for label in range(num_labels):
+                mask = labels == label
+                if not np.any(mask):
+                    continue
+    
+                ys, xs = np.where(mask)
+    
+                x_min, x_max = xs.min(), xs.max()
+                y_min, y_max = ys.min(), ys.max()
+                w = x_max - x_min + 1
+                h = y_max - y_min + 1
+                area = mask.sum()
+    
+                stats[label, cv2.CC_STAT_LEFT]   = x_min
+                stats[label, cv2.CC_STAT_TOP]    = y_min
+                stats[label, cv2.CC_STAT_WIDTH]  = w
+                stats[label, cv2.CC_STAT_HEIGHT] = h
+                stats[label, cv2.CC_STAT_AREA]   = area
+    
+                centroids[label] = [xs.mean(), ys.mean()]
+    
+        return num_labels, labels, stats, centroids
 
     
     def is_particle_at_frame_edge(self, stats, i):
@@ -633,7 +706,7 @@ class EM_Particle_Finder:
         # cv2.imshow('Initial mask of particles', par_mask)
         
         # Find connected components
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(par_mask, connectivity=8)
+        num_labels, labels, stats, centroids = self._get_connected_components_with_stats(par_mask)
         
         # Make sure particles are present
         if num_labels == 1:
@@ -1330,7 +1403,7 @@ class EM_Particle_Finder:
         par_mask, mask_img_path = self._get_particles_on_substrate_mask(blurred_image, save_image=save_mask_img)
     
         # Find connected components
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(par_mask, connectivity=8)
+        num_labels, labels, stats, centroids = self._get_connected_components_with_stats(par_mask)
         
         # Store particle area
         par_centroids = []  # Only used for saving image

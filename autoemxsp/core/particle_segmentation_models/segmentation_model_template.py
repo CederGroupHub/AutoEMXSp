@@ -40,9 +40,20 @@ def segment_particles(frame_image : np.array,
     Returns
     -------
     par_mask : ndarray
-        A binary mask of detected particles where:
-        - Pixels corresponding to particles are set to 255 (white).
-        - Background pixels are set to 0 (black).
+        Choose either a binary mask or a labeled image:
+
+        - **Binary mask (uint8 or bool)**
+          Background pixels are set to ``0`` (black), and particle pixels
+          are set to ``255`` (white).
+          OK TO USE ONLY IF PARTICLE EDGES ARE NOT TOUCHING, because it will use
+          cv2.ConnectedComponentsWithStats(img, connectivity=8) to discern particles
+
+        - **Labeled image (uint8 or higher precision)**
+            USE THIS IF DIFFERENT PARTICLES HAVE CONTIGOUS EDGES
+          Background pixels are set to ``0`` (black). Each detected particle
+          is assigned a unique positive integer label, starting from ``1`` and
+          increasing consecutively (same format as the ``labels`` output from
+          ``cv2.connectedComponents``).
 
     Note
     ----
