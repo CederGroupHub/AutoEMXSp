@@ -158,8 +158,8 @@ import json
 
 # Third-party imports
 import cv2
-import tifffile
 import numpy as np
+from PIL import Image
 
 # Typing (Python 3.5+)
 from typing import Any, List, Optional, Tuple, Union
@@ -1330,30 +1330,31 @@ class EM_Controller:
         # Convert grayscale to RGB for saving
         if frame_image.ndim == 2:
             frame_image = cv2.cvtColor(frame_image, cv2.COLOR_GRAY2RGB)
-    
-        # Save each page separately with append=True to avoid some metadata issues
-        tifffile.imwrite(
+            
+        image_description_d = {
+            "sample_ID" : self.sample_cfg.ID,
+            "microscope_ID" : self.microscope_cfg.ID,
+            "microscope_type" : self.microscope_cfg.type,
+            "detector" : self.microscope_cfg.detector_type,
+            "resolution" : (self.im_width, self.im_height),
+            "pixel_size_um": self.pixel_size_um # um
+            } 
+
+        # Convert dict to JSON string, ASCII-safe for Preview
+        desc_str = json.dumps(image_description_d, ensure_ascii=True)
+        
+        # Convert numpy arrays to Pillow Image objects, force RGB mode
+        im1 = Image.fromarray(color_image.astype('uint8'), mode='RGB')
+        im2 = Image.fromarray(frame_image.astype('uint8'), mode='RGB')
+        
+        # Save as multi-page TIFF, with description on first page
+        im1.save(
             save_path,
-            color_image,
-            photometric='rgb',
-            planarconfig='contig',
-            compression=None,
-            description=json.dumps({
-                "sample_ID" : self.sample_cfg.ID,
-                "microscope_ID" : self.microscope_cfg.ID,
-                "microscope_type" : self.microscope_cfg.type,
-                "detector" : self.microscope_cfg.detector_type,
-                "resolution" : (self.im_width, self.im_height),
-                "pixel_size_um": self.pixel_size_um # um
-                })
-        )
-        tifffile.imwrite(
-            save_path,
-            frame_image,
-            photometric='rgb',
-            planarconfig='contig',
-            compression=None,
-            append=True
+            format='TIFF',
+            description=desc_str,
+            save_all=True,
+            append_images=[im2],
+            compression=None
         )
         
     
