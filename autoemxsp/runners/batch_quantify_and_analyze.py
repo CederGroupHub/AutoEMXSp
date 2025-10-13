@@ -101,7 +101,8 @@ def batch_quantify_and_analyze(
     run_analysis: bool = True,
     quantify_only_unquantified_spectra: bool = False,
     interrupt_fits_bad_spectra: bool = False,
-    is_known_precursor_mixture: Optional[bool] = None
+    is_known_precursor_mixture: Optional[bool] = None,
+    standards_dict: dict = None,
 ) -> None:
     """
     Batch quantification and analysis for a list of samples.
@@ -134,6 +135,10 @@ def batch_quantify_and_analyze(
         See example at:
             L. N. Walters et al., Synthetic Accessibility and Sodium Ion Conductivity of the Na 8– x A x P 2 O 9 (NAP)
             High-Temperature Sodium Superionic Conductor Framework, Chem. Mater. 37, 6807 (2025).
+    standards_dict : dict, optional
+        Dictionary of reference PB values from experimental standards. Default : None.
+        If None, dictionary of standards is loaded from the XSp_calibs/Your_Microscope_ID directory.
+        Provide standards_dict only when providing different standards from those normally used for quantification.
             
     Returns
     -------
@@ -239,6 +244,7 @@ def batch_quantify_and_analyze(
             plot_cfg=plot_cfg,
             is_acquisition=False,
             development_mode=False,
+            standards_dict=standards_dict,
             output_filename_suffix=output_suffix,
             verbose=True,
             results_dir=sample_dir

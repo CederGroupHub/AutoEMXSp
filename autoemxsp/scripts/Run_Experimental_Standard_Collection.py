@@ -63,7 +63,7 @@ auto_adjust_brightness_contrast = True
 contrast = None # 4.3877  # Used if auto_adjust_brightness_contrast = False
 brightness = None # 0.4504  # Used if auto_adjust_brightness_contrast = False
 
-n_target_spectra = 2
+n_target_spectra = 15
 max_n_spectra = 200
 
 target_Xsp_counts = 50000
@@ -77,7 +77,7 @@ els_substrate = ['C', 'O', 'Al']  # Contaminants that may be present in the spec
 # =============================================================================
 powder_meas_cfg_kwargs = dict(
     is_manual_particle_selection = False,
-    is_known_powder_mixture_meas = True,
+    is_known_powder_mixture_meas = False,
     max_n_par_per_frame=30,
     max_spectra_per_par=3,
     max_area_par=10000.0,

@@ -1344,7 +1344,7 @@ class EM_Controller:
                 "microscope_type" : self.microscope_cfg.type,
                 "detector" : self.microscope_cfg.detector_type,
                 "resolution" : (self.im_width, self.im_height),
-                "pixel_size_um": self.pixel_size_um
+                "pixel_size_um": self.pixel_size_um # um
                 })
         )
         tifffile.imwrite(

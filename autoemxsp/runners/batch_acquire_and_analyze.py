@@ -213,6 +213,7 @@ def batch_acquire_and_analyze(
     els_substrate: List[str] = None,
     powder_meas_cfg_kwargs: Dict[str, Any] = None,
     bulk_meas_cfg_kwargs: Dict[str, Any] = None,
+    standards_dict: Dict[str, float] = None,
     output_filename_suffix: str = '',
     development_mode: bool = False,
     verbose: bool = True,
@@ -328,6 +329,10 @@ def batch_acquire_and_analyze(
         Additional keyword arguments for PowderMeasurementConfig.
     bulk_meas_cfg_kwargs : dict, optional
         Additional keyword arguments for BulkMeasurementConfig.
+    standards_dict : dict, optional
+        Dictionary of reference PB values from experimental standards. Default : None.
+        If None, dictionary of standards is loaded from the XSp_calibs/Your_Microscope_ID directory.
+        Provide standards_dict only when providing different standards from those normally used for quantification.
     output_filename_suffix : str, optional
         String appended to output filenames.
         Default is `''`.
@@ -481,6 +486,7 @@ def batch_acquire_and_analyze(
             plot_cfg=PlotConfig(),
             is_acquisition=True,
             development_mode=development_mode,
+            standards_dict=standards_dict,
             output_filename_suffix=output_filename_suffix,
             verbose=verbose,
             results_dir=results_dir

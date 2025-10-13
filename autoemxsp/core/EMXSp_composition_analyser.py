@@ -130,6 +130,10 @@ class EMXSp_Composition_Analyzer:
         Configuration for plotting.
     is_acquisition : bool, optional
         If True, indicates class is being used for automated acquisition (default: False).
+    standards_dict : dict, optional
+        Dictionary of reference PB values from experimental standards. Default : None.
+        If None, dictionary of standards is loaded from the XSp_calibs/Your_Microscope_ID directory.
+        Provide standards_dict only when providing different standards from those normally used for quantification.
     development_mode : bool, optional
         If True, enables development/debug features (default: False).
     output_filename_suffix : str, optional
@@ -159,6 +163,7 @@ class EMXSp_Composition_Analyzer:
         exp_stds_cfg: ExpStandardsConfig = ExpStandardsConfig(),
         plot_cfg: PlotConfig = PlotConfig(),
         is_acquisition: bool = False,
+        standards_dict: dict = None,
         development_mode: bool = False,
         output_filename_suffix: str = '',
         verbose: bool = True,
@@ -252,6 +257,7 @@ class EMXSp_Composition_Analyzer:
         
         # --- Fitting and Quantification
         self.quant_cfg = quant_cfg
+        self.standards_dict = standards_dict
         if is_XSp_measurement:
             # Set EDS detector channels to include in the quantification
             self.sp_start, self.sp_end = quant_cfg.spectrum_lims
@@ -4097,9 +4103,10 @@ class EMXSp_Composition_Analyzer:
                             )
     
                 if len(ref_entries) < 1:
+                    text_line = "provided standards" if std_dir == "" else f"standards file at: {std_dir}"
                     warnings.warn(
                         f"None of the input reference phases {ref_formulae} "
-                        f"is present for line {el_line} in the standards file at: {std_dir}. "
+                        f"is present for line {el_line} in the {text_line}. "
                         "Using other available standards."
                     )
                     continue
@@ -4497,13 +4504,17 @@ class EMXSp_Composition_Analyzer:
         """
         meas_mode = self.measurement_cfg.mode
         # Load or create standards dictionary
-        try:
-            standards, std_dir = calibs.load_standards(self.measurement_cfg.type, self.measurement_cfg.beam_energy_keV)
-        except FileNotFoundError:
-            std_dir = calibs.standards_dir
-            standards = {meas_mode: {}}
-        except Exception as e:
-            raise RuntimeError("Failed to load standards library.") from e
+        if self.standards_dict is None:
+            try:
+                standards, std_dir = calibs.load_standards(self.measurement_cfg.type, self.measurement_cfg.beam_energy_keV)
+            except FileNotFoundError:
+                std_dir = calibs.standards_dir
+                standards = {meas_mode: {}}
+            except Exception as e:
+                raise RuntimeError("Failed to load standards library.") from e
+        else:
+            standards = self.standards_dict
+            std_dir = ''
             
         # Ensure measurement mode exists in the standards dictionary, otherwise create it
         if meas_mode not in standards:
@@ -4545,6 +4556,11 @@ class EMXSp_Composition_Analyzer:
         """
         meas_mode = self.measurement_cfg.mode
         
+        # Load standards
+        if self.standards_dict is not None:
+            warnings.warn("The 'standards_dict' provided when initializing EMXSp_Composition_Analyzer will be ignored."
+                          f"Loading standards dictionary from XSp_calibs/{self.microscope_cfg.ID}", UserWarning())
+            self.standards_dict = None
         standards, std_dir = self._load_xsp_standards()
         
         std_lib = standards[meas_mode]

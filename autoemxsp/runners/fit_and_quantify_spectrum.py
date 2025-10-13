@@ -104,6 +104,7 @@ def fit_and_quantify_spectrum(
     max_undetectable_w_fr: float = 0,
     force_single_iteration: bool = False,
     interrupt_fits_bad_spectra: bool = False,
+    standards_dict: dict = None,
     print_results: bool = True,
     quant_verbose: bool = True,
     fitting_verbose: bool = True
@@ -143,6 +144,10 @@ def fit_and_quantify_spectrum(
         If True, quantification will be run for a single iteration only (default: False).
     interrupt_fits_bad_spectra : bool, optional
         If True, interrupt fitting if bad spectra are detected (default: False).
+    standards_dict : dict, optional
+        Dictionary of reference PB values from experimental standards. Default : None.
+        If None, dictionary of standards is loaded from the XSp_calibs/Your_Microscope_ID directory.
+        Provide standards_dict only when providing different standards from those normally used for quantification.
     print_results : bool, optional
         If True, prints all fitted parameters and their values (default: True).
     quant_verbose : bool, optional
@@ -203,7 +208,8 @@ def fit_and_quantify_spectrum(
                                                    quant_cfg,
                                                    clustering_cfg,
                                                    powder_meas_cfg = powder_meas_cfg,
-                                                   exp_stds_cfg = exp_stds_cfg)
+                                                   exp_stds_cfg = exp_stds_cfg,
+                                                   standards_dict = standards_dict)
         stds_dict = comp_analyzer.XSp_std_dict
     else:
         stds_dict = None
