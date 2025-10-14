@@ -272,7 +272,7 @@ LICENSE — see the LICENSE file for details.
 
 If you use **AutoEMXSp** in your research, please cite the following publication:
 
-> A. Giunto *et al.*  
+> A. Giunto, Y. Fei, P. Nevatia, B. Rendy, N. Szymanski and G. Ceder
 > *Harnessing Automated SEM-EDS and Machine Learning to Unlock High-Throughput Compositional Characterization of Powder Materials*, 2025.  
 > DOI: [https://doi.org/10.21203/rs.3.rs-7837297/v1](https://doi.org/10.21203/rs.3.rs-7837297/v1)
 
