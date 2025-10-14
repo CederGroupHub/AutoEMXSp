@@ -4108,7 +4108,7 @@ class EMXSp_Composition_Analyzer:
                                 f"or compare with reference formulas {ref_formulae}. Error: {e}"
                             )
     
-                if len(ref_entries) < 1:
+                if len(ref_entries) < 1 and not self.exp_stds_cfg.is_exp_std_measurement:
                     text_line = "provided standards" if std_dir == "" else f"standards file at: {std_dir}"
                     warnings.warn(
                         f"None of the input reference phases {ref_formulae} "

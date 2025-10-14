@@ -5,7 +5,6 @@
 [![PyPI version](https://badge.fury.io/py/autoemxsp.svg)](https://pypi.org/project/autoemxsp/)
 [![Python Version](https://img.shields.io/pypi/pyversions/autoemxsp.svg)](https://pypi.org/project/autoemxsp/)
 [![License](https://img.shields.io/github/license/CederGroupHub/AutoEMXSp.svg?style=flat-square)](LICENSE.txt)
-[![Downloads](https://pepy.tech/badge/autoemxsp)](https://pepy.tech/project/autoemxsp)
 
 **Automated Electron Microscopy X-Ray Spectroscopy for Compositional Characterization of Materials**
 
@@ -14,8 +13,8 @@
 AutoEMXSp is a **fully automated framework** for SEM-EDS workflows — from spectral acquisition and quantification to data filtering and compositional analysis — all in **one click**.
 
 📖 This work is described in:  
-A. Giunto *et al.*, *Title of your paper*, *Journal Name*, Year.  
-DOI: [link]
+A. Giunto *et al.*, *Harnessing Automated SEM-EDS and Machine Learning to Unlock High-Throughput Compositional Characterization of Powder Materials*, *Submitted*, 2025.  
+DOI: [https://doi.org/10.21203/rs.3.rs-7837297/v1](https://doi.org/10.21203/rs.3.rs-7837297/v1)
 
 ### ✨ Key Features
 - **Automated acquisition & quantification** of X-ray spectra using the peak-to-background method. Single spectrum quantification also available
@@ -87,14 +86,16 @@ conda install -c conda-forge autoemxsp
 
 ## 🖥 Quick Start
 
-AutoEMXSp supports two main automated workflows:
+AutoEMXSp supports three main automated workflows:
 
 1. **Experimental Standard Collection** — acquire and fit X-ray spectra from known-composition samples to generate reference peak-to-background ratios.
 2. **Sample Acquisition & Analysis** — acquire spectra from unknown samples, quantify them, and perform compositional phase analysis.
+3. **Particle Size Statistical Analysis** - control EM to search for particles and collect statistics on their size distribution.
 
 ---
 
 ### 1️⃣ Acquire Experimental Standards
+See **Run_Experimental_Standard_Collection.py** script
 
 ```python
 from autoemxsp.runners import batch_acquire_experimental_stds
@@ -121,6 +122,7 @@ batch_acquire_experimental_stds(stds=std_list)
 ```
 
 ### 2️⃣ Acquire & Analyse Samples
+See **Run_Acquisition_Quant_Analysis.py** script
 
 ```python
 from autoemxsp.runners import batch_acquire_and_analyze
@@ -142,6 +144,28 @@ samples = [
 
 # Run acquisition and analysis at the microscope computer
 batch_acquire_and_analyze(samples)
+```
+
+
+### 3️⃣ Particle Size Statistical Analysis
+See **Collect_Particle_Statistics.py** script
+
+```python
+from autoemxsp.runners import collect_particle_statistics
+
+# Define sample(s) to analyse (additional options available):
+# - 'id': unique sample identifier
+# - 'pos': stage position (x, y) in mm
+
+samples = [
+    {
+        'id': 'Anorthite_mineral',
+        'pos': (-37.5, -37.5),
+    },
+]
+
+# Run acquisition and analysis at the microscope computer
+collect_particle_statistics(samples)
 ```
 
 ---
@@ -180,17 +204,17 @@ The repository is organized as follows:
 AutoEMXSp/
 ├── autoemxsp/                   # Main package source code
 │   ├── core/                  # Core objects and source code
-│   ├── runners/               # Runner functions calling on core objects
-│   ├── lib/                   # Libraries of X-ray data
-│   ├── tools/                 # Miscellaneous helper functions
-│   │   └── custom_fnctns.py   # Customizable clustering plot function
-│   ├── EM_driver/             # Electron Microscope driver (⚠️ adapt to your own instrument)
-│   ├── XSp_calibs/            # X-ray spectral calibrations (⚠️ adapt to your own instrument)
-│   ├── scripts/               # Helper scripts (see Scripts below)
-│   └── Results/               # Example acquired data (used for unit tests)
+│   ├── runners/                # Runner functions calling on core objects
+│   ├── lib/                    # Libraries of X-ray data
+│   ├── tools/                  # Miscellaneous helper functions
+│   │   └── custom_fnctns.py        # Customizable clustering plot function
+│   ├── EM_driver/              # Electron Microscope driver (⚠️ adapt to your own instrument)
+│   ├── XSp_calibs/             # X-ray spectral calibrations (⚠️ adapt to your own instrument)
+│   ├── scripts/                # Helper scripts (see Scripts below)
+│   └── Results/                # Example acquired data (used for unit tests)
 │
-├── tests/                     # Unit tests for fitting, quantification, and compositional analysis
-│                              # (Acquisition tests require proper drivers & calibration)
+├── tests/                     # Unit tests for fitting, quantification, compositional analysis and image processing
+│                               # (Acquisition tests require proper EM drivers & calibration)
 ├── paper_data/                # Raw paper data uploaded on Git LFS (Dowload instructions in Paper Data section below)
 │
 ├── LICENSE.txt
@@ -211,6 +235,7 @@ Each script is tailored for a specific task in spectral acquisition, calibration
 - **Run_Analysis.py** — Launch customized machine-learning analysis on previously quantified data.  
 
 ### 🛠️ Miscellaneous
+- **Collect_Particle_Statistics.py** - Analyse sample collecting particle size statistics and distribution.
 - **Fit_Quant_Single_Spectrum.py** — Fit and optionally quantify a single spectrum. Prints fitting parameters and plots fitted spectrum for detailed inspection of model performance.  
 - **Run_Experimental_Standard_Collection.py** — Acquire and fit experimental standards.  
 - **Run_SDD_Calibration.py** — Perform calibration of the SDD detector.
@@ -246,10 +271,21 @@ LICENSE — see the LICENSE file for details.
 If you use **AutoEMXSp** in your research, please cite the following publication:
 
 > A. Giunto *et al.*  
-> *Title of your paper*.  
-> *Journal Name*, Year, Volume, Pages.  
-> DOI: [link]
-make bibtex downloadable entry
+> *Harnessing Automated SEM-EDS and Machine Learning to Unlock High-Throughput Compositional Characterization of Powder Materials*.  
+> *Submitted*, 2025.  
+> DOI: [https://doi.org/10.21203/rs.3.rs-7837297/v1](https://doi.org/10.21203/rs.3.rs-7837297/v1)
+
+### BibTeX
+```bibtex
+@article{Giunto2025AutoEMXSp,
+  author    = {A. Giunto and others},
+  title     = {Harnessing Automated SEM-EDS and Machine Learning to Unlock High-Throughput Compositional Characterization of Powder Materials},
+  journal   = {Submitted},
+  year      = {2025},
+  doi       = {10.21203/rs.3.rs-7837297/v1},
+  url       = {https://doi.org/10.21203/rs.3.rs-7837297/v1}
+}
+```
 
 ---
 
