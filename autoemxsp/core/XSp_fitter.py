@@ -747,14 +747,25 @@ class XSp_Fitter:
                 self.spectrum_pars[par].value = val
     
         # Setting full_output=False prevents calculation of uncertainties for faster fitting, but throws error in original versiopn of lmfit
-        fit_result = self.spectrum_mod.fit(
-            self.spectrum_vals,
-            params,
-            x=self.energy_vals,
-            iter_cb=self._iteration_callback,
-            verbose=True,
-            fit_kws={'ftol': function_tolerance, 'full_output': False}
-        )
+        try:
+            fit_result = self.spectrum_mod.fit(
+                self.spectrum_vals,
+                params,
+                x=self.energy_vals,
+                iter_cb=self._iteration_callback,
+                verbose=True,
+                fit_kws={'ftol': function_tolerance, 'full_output': False}
+            )
+        except:
+            # main lmfit branch does not accept 'full_output': False
+            fit_result = self.spectrum_mod.fit(
+                self.spectrum_vals,
+                params,
+                x=self.energy_vals,
+                iter_cb=self._iteration_callback,
+                verbose=True,
+                fit_kws={'ftol': function_tolerance}
+            )
     
         if self.verbose:
             fitting_time = time.time() - start_time
