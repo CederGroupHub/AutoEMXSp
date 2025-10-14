@@ -1,3 +1,8 @@
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["autoemxsp"]
+exclude = ["paper_data", "examples", "tests"]
+
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -7,7 +12,8 @@ name = "autoemxsp"
 version = "0.1.1"
 description = "AutoEMXSp - Automated Electron Microscopy X-Ray Spectroscopy for Compositional Characterization of Materials"
 readme = "README.md"
-license = { file = "LICENSE.txt" }
+license = "LicenseRef-AcademicNonCommercial"
+license-files = ["LICENSE.txt"]
 authors = [
     { name = "Andrea Giunto", email = "agiunto@lbl.gov" }
 ]
@@ -32,7 +38,5 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "License :: Free for non-commercial use",
-    "License :: Other/Proprietary License",
     "Operating System :: OS Independent"
 ]

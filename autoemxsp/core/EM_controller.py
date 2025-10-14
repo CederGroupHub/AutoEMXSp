@@ -1003,6 +1003,7 @@ class EM_Controller:
                 # Set brightness and contrast to fixed values, then autofocus
                 self._set_frame_BC()
                 adj_time = self._auto_focus()
+                time.wait(0.5)
             self._last_EM_adjustment_time = adj_time
         except Exception as e:
             # You may want to log e here with more context if needed.

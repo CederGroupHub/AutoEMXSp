@@ -1,14 +1,22 @@
 # Include important documentation
-include README.md
-include LICENSE
+include LICENSE*
+include README*
 
 # Include all files in the package
 recursive-include autoemxsp *
+
+# Exclude common junk files
+global-exclude *.py[cod]
+global-exclude *.so
+global-exclude *.DS_Store
+global-exclude *~
+global-exclude __pycache__/*
+global-exclude .ipynb_checkpoints/*
 
 # Exclude specific files
 exclude detector_response_convolution_matrices.json
 
 # Exclude paper_data folder and all its contents
-recursive-exclude paper_data *
-exclude paper_data.zip
-
+prune tests
+prune examples
+prune paper_data
