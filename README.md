@@ -279,12 +279,11 @@ If you use **AutoEMXSp** in your research, please cite the following publication
 ### BibTeX
 ```bibtex
 @article{Giunto2025AutoEMXSp,
-  author    = {A. Giunto and others},
-  title     = {Harnessing Automated SEM-EDS and Machine Learning to Unlock High-Throughput Compositional Characterization of Powder Materials},
-  journal   = {Submitted},
-  year      = {2025},
-  doi       = {10.21203/rs.3.rs-7837297/v1},
-  url       = {https://doi.org/10.21203/rs.3.rs-7837297/v1}
+  author  = {Giunto, Andrea and Fei, Yuxing and Nevatia, Pragnay and Rendy, Bernardus and Szymanski, Nathan and Ceder, Gerbrand},
+  title   = {Harnessing Automated SEM-EDS and Machine Learning to Unlock High-Throughput Compositional Characterization of Powder Materials},
+  year    = {2025},
+  doi     = {10.21203/rs.3.rs-7837297/v1},
+  url     = {https://doi.org/10.21203/rs.3.rs-7837297/v1}
 }
 ```
 
