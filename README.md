@@ -193,6 +193,7 @@ Here’s what’s planned for future releases of **AutoEMXSp**:
 - 🐍 Upgrade to **Python 3.12** for improved performance, modern syntax features, and better compatibility with the latest scientific libraries
 - 🚀 Integration of a **forked `lmfit`** version accepting `Model.fit(data, fit_kws={'full_output': False})` to avoid covariance computations and speed up fitting
 - 📏 New scripts for **spectral parameter calibration** to extend the `XSp_calibs` library to your own instrument.
+- 🤖 Integration of ML models for particle segmentation and improved size distribution analysis
 
 ---
 
@@ -202,8 +203,8 @@ The repository is organized as follows:
 
 ```text
 AutoEMXSp/
-├── autoemxsp/                   # Main package source code
-│   ├── core/                  # Core objects and source code
+├── autoemxsp/                 # Main package source code
+│   ├── core/                   # Core objects and source code
 │   ├── runners/                # Runner functions calling on core objects
 │   ├── lib/                    # Libraries of X-ray data
 │   ├── tools/                  # Miscellaneous helper functions
@@ -271,8 +272,7 @@ LICENSE — see the LICENSE file for details.
 If you use **AutoEMXSp** in your research, please cite the following publication:
 
 > A. Giunto *et al.*  
-> *Harnessing Automated SEM-EDS and Machine Learning to Unlock High-Throughput Compositional Characterization of Powder Materials*.  
-> 2025.  
+> *Harnessing Automated SEM-EDS and Machine Learning to Unlock High-Throughput Compositional Characterization of Powder Materials*, 2025.  
 > DOI: [https://doi.org/10.21203/rs.3.rs-7837297/v1](https://doi.org/10.21203/rs.3.rs-7837297/v1)
 
 ### BibTeX
