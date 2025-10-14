@@ -66,7 +66,7 @@ def segment_particles(frame_image : np.array,
     
     # Use this code to masked image
     if save_image and EM:
-        filename = f"{EM.microscope_cfg.ID}_fr{EM.current_frame_label}_ml_mask"
+        filename = f"{EM.sample_cfg.ID}_fr{EM.current_frame_label}_ml_mask"
         EM.save_frame_image(filename, frame_image = par_mask)
     
     return par_mask

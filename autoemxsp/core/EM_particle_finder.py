@@ -862,6 +862,72 @@ class EM_Particle_Finder:
             cv2.imwrite(os.path.join(self.results_dir, self._sample_ID + f'_par{self.tot_par_cntr}_fr{self.EM.current_frame_label}_maskXY.png'), eroded_par_mask)
         return thresholded_image, min_area_pixels
 
+
+    def prepare_mask_for_visualization(self, mask: np.ndarray) -> np.ndarray:
+        """
+        Prepare a segmentation mask for visualization by applying intensity scaling 
+        and ensuring adequate contrast.
+    
+        Behavior:
+        - Binary masks (0 and 1) are scaled to [0, 255].
+        - Integer label masks have brightness reversed so higher labels are brighter,
+          with a minimum brightness of 30 for all positive values. Background (0) remains black.
+        - Floating-point masks are normalized to [0, 255] with the same rules for
+          positive values and background.
+    
+        Parameters
+        ----------
+        mask : np.ndarray
+            Input segmentation mask. Can be binary, integer-labeled, or floating-point.
+    
+        Returns
+        -------
+        np.ndarray
+            Processed mask as an 8-bit unsigned integer array suitable for visualization or saving.
+        """
+        mask = np.asarray(mask)
+    
+        unique_vals = np.unique(mask)
+    
+        # --- Binary mask ---
+        if np.array_equal(unique_vals, [0, 1]):
+            return (mask * 255).astype(np.uint8)
+    
+        # --- Integer label masks ---
+        elif np.issubdtype(mask.dtype, np.integer):
+            max_val = mask.max()
+            if max_val > 0:
+                scaled = mask.astype(np.float32)
+                pos_mask = scaled > 0  # positive values only
+    
+                # Reverse intensity so higher labels → brighter
+                scaled[pos_mask] = (max_val - scaled[pos_mask]) * (255.0 / max_val)
+    
+                # Ensure minimum brightness for positive values
+                scaled[pos_mask] = np.clip(scaled[pos_mask], 30, 255)
+    
+                scaled[~pos_mask] = 0  # keep background
+                return scaled.astype(np.uint8)
+            else:
+                return mask.astype(np.uint8)
+    
+        # --- Floating-point masks ---
+        else:
+            min_val = mask.min()
+            max_val = mask.max()
+            if max_val > min_val:
+                scaled = (mask - min_val) / (max_val - min_val) * 255.0
+                scaled = scaled.astype(np.float32)
+    
+                pos_mask = mask > 0
+                scaled[pos_mask] = np.clip(scaled[pos_mask], 30, 255)
+                scaled[~pos_mask] = 0
+    
+                return scaled.astype(np.uint8)
+            else:
+                return np.zeros_like(mask, dtype=np.uint8)
+    
+    
     #%% Selection of spots for X-Ray spectra acquisition
     # =============================================================================
     def get_XS_acquisition_spots_coord_list(
@@ -1449,27 +1515,8 @@ class EM_Particle_Finder:
             self.EM.save_frame_image(filename + '_particles', im_annotations = im_annotations, frame_image = frame_image)
             
             # Save mask image
-            unique_vals = np.unique(par_mask)
-            if np.array_equal(unique_vals, [0, 1]):
-                # Binary mask → scale to 0–255 uint8
-                par_mask = (par_mask * 255).astype(np.uint8)
-            elif np.issubdtype(par_mask.dtype, np.integer):
-                # Label mask → reverse brightness so high labels are bright
-                max_val = par_mask.max()
-                if max_val > 0:
-                    par_mask = ((max_val - par_mask) * (255.0 / max_val)).astype(np.uint8)
-                else:
-                    par_mask = par_mask.astype(np.uint8)
-            else:
-                # For float or other types, normalize to 0–255
-                min_val = par_mask.min()
-                max_val = par_mask.max()
-                if max_val > min_val:  # avoid divide-by-zero
-                    par_mask = ((par_mask - min_val) / (max_val - min_val) * 255).astype(np.uint8)
-                else:
-                    par_mask = np.zeros_like(par_mask, dtype=np.uint8)
-            
-            self.EM.save_frame_image(filename + '_par_mask', im_annotations = im_annotations, frame_image = par_mask)
+            par_mask_to_save = self.prepare_mask_for_visualization(par_mask)
+            self.EM.save_frame_image(filename + '_par_mask', im_annotations = im_annotations, frame_image = par_mask_to_save)
 
         
         # Return True if at least 1 particle was found
