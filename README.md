@@ -214,6 +214,7 @@ AutoEMXSp/
 │   ├── scripts/                # Helper scripts (see Scripts below)
 │   └── Results/                # Example acquired data (used for unit tests)
 │
+├── examples/                  # Example scripts for fitting, quantification and compositional analysis of example data
 ├── tests/                     # Unit tests for fitting, quantification, compositional analysis and image processing
 │                               # (Acquisition tests require proper EM drivers & calibration)
 ├── paper_data/                # Raw paper data uploaded on Git LFS (Dowload instructions in Paper Data section below)
