@@ -13,7 +13,7 @@
 AutoEMXSp is a **fully automated framework** for SEM-EDS workflows — from spectral acquisition and quantification to data filtering and compositional analysis — all in **one click**.
 
 📖 This work is described in:  
-A. Giunto *et al.*, *Harnessing Automated SEM-EDS and Machine Learning to Unlock High-Throughput Compositional Characterization of Powder Materials*, *Submitted*, 2025.  
+A. Giunto *et al.*, *Harnessing Automated SEM-EDS and Machine Learning to Unlock High-Throughput Compositional Characterization of Powder Materials*, 2025.  
 DOI: [https://doi.org/10.21203/rs.3.rs-7837297/v1](https://doi.org/10.21203/rs.3.rs-7837297/v1)
 
 ### ✨ Key Features
@@ -272,7 +272,7 @@ If you use **AutoEMXSp** in your research, please cite the following publication
 
 > A. Giunto *et al.*  
 > *Harnessing Automated SEM-EDS and Machine Learning to Unlock High-Throughput Compositional Characterization of Powder Materials*.  
-> *Submitted*, 2025.  
+> 2025.  
 > DOI: [https://doi.org/10.21203/rs.3.rs-7837297/v1](https://doi.org/10.21203/rs.3.rs-7837297/v1)
 
 ### BibTeX
