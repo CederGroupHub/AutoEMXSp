@@ -418,7 +418,7 @@ class EM_Particle_Finder:
         
         
         # Save frame image annotating it with the identified particles
-        filename = f"{self._sample_ID}_fr{self.EM.frame_labels[self.EM._frame_cntr-1]}_particles"
+        filename = f"{self._sample_ID}_fr{self.EM.current_frame_label}_particles"
         im_annotations = [{self.EM.an_circle_key : (int(rad), center.astype(int), 2)} for rad, center in zip(par_radius_pixels, par_pos_pixels)]
         self.EM.save_frame_image(filename, im_annotations = im_annotations)
         
@@ -502,15 +502,18 @@ class EM_Particle_Finder:
                     
         elif self.powder_meas_cfg.par_segmentation_model in self.powder_meas_cfg.AVAILABLE_PAR_SEGMENTATION_MODELS:
             model_module = par_seg_models.PAR_SEGMENTATION_MODEL_REGISTRY[self.powder_meas_cfg.par_segmentation_model]
-            par_mask = model_module.segment_particles(frame_image, self.powder_meas_cfg)
+            par_mask = model_module.segment_particles(frame_image, self.powder_meas_cfg, save_image, self.EM)
 
         else:
             raise ValueError(f"Unknown error with current particle segmentation model {self.powder_meas_cfg.par_segmentation_model}")
         
         # cv2.imshow('Segmented Particles Mask', par_mask)
-
-        mask_img_path = os.path.join(self.results_dir, self._sample_ID + f'_fr{self.EM.frame_labels[self.EM._frame_cntr -1]}_mask.png')
+        
+        mask_img_path = os.path.join(self.results_dir, self._sample_ID + f'_fr{self.EM.current_frame_label}' + '_mask.png')
+        # Mask is always saved when collecting particles. Avoids double saving
+        save_image = save_image and not self.EM.measurement_cfg.type == self.EM.measurement_cfg.PARTICLE_STATS_MEAS_TYPE_KEY
         if self.development_mode or save_image:
+            draw_scalebar(par_mask, self.EM.pixel_size_um)
             cv2.imwrite(mask_img_path, par_mask)
         
         return par_mask, mask_img_path
@@ -658,7 +661,7 @@ class EM_Particle_Finder:
         return is_par_area_ok
 
 
-    def _get_particle_mask(self, par_image=None, pixel_size=None, results_dir=None, centering=False):
+    def _get_particle_mask(self, par_image=None, pixel_size_um=None, results_dir=None, centering=False):
         '''
         Returns a binary mask of the particle at the center of the image, if the particle is large enough.
         If no particle is present at the center, the function searches for and centers on the next closest 
@@ -669,7 +672,7 @@ class EM_Particle_Finder:
         ----------
         par_image : ndarray, optional
             Grayscale image of the current frame. If not provided and running at the EM, the image is acquired.
-        pixel_size : float, optional
+        pixel_size_um : float, optional
             Pixel size in micrometers. Required if not running at the EM.
         results_dir : str, optional
             Directory to save results. Required for saving the mask in development mode.
@@ -691,11 +694,10 @@ class EM_Particle_Finder:
         # Get particle mask
         if EM_driver.is_at_EM:
             self._check_EM_controller_initialization()
-
             par_image = EM_driver.get_image_data(self._im_width, self._im_height, 1)
-        elif par_image is not None and pixel_size is not None:
+        elif par_image is not None and pixel_size_um is not None:
             self._im_height, self._im_width = par_image.shape
-            self.EM.pixel_size_um = pixel_size
+            self.EM.pixel_size_um = pixel_size_um
             if results_dir:
                 self.results_dir = results_dir
         else:
@@ -726,7 +728,10 @@ class EM_Particle_Finder:
             distances = np.linalg.norm(centroids[1:] - np.array([center_x, center_y]), axis=1)
             sorted_indices = np.argsort(distances) + 1  # Skip background (index 0)
             for label in sorted_indices:
-                if self._is_particle_area_ok(stats[label, cv2.CC_STAT_AREA]):
+                if not EM_driver.is_at_EM:
+                    par_label = label
+                    break
+                elif self._is_particle_area_ok(stats[label, cv2.CC_STAT_AREA]):
                     new_center = self.EM.convert_pixel_pos_to_mm(centroids[label])
                     self.EM.move_to_pos(new_center)
                     par_mask_return = self._get_particle_mask(centering=True)
@@ -734,9 +739,6 @@ class EM_Particle_Finder:
                         par_mask, par_image = par_mask_return
                     else:
                         return None
-                    par_label = label
-                    break
-                elif not EM_driver.is_at_EM:
                     par_label = label
                     break
                 else:
@@ -756,7 +758,7 @@ class EM_Particle_Finder:
             # Save mask, only for development
             cv2.imwrite(os.path.join(
                 self.results_dir,
-                self._sample_ID + f'_par{self.tot_par_cntr}_fr{self.EM.frame_labels[self.EM._frame_cntr -1]}_mask.png'
+                self._sample_ID + f'_par{self.tot_par_cntr}_fr{self.EM.current_frame_label}_mask.png'
             ), par_mask)
         
         return (par_mask, par_image)
@@ -857,14 +859,14 @@ class EM_Particle_Finder:
         min_area_pixels = int(0.1 / self.EM.pixel_size_um ** 2)
         if self.development_mode and self.results_dir:
             eroded_par_mask = draw_scalebar(thresholded_image, self.EM.pixel_size_um)
-            cv2.imwrite(os.path.join(self.results_dir, self._sample_ID + f'_par{self.tot_par_cntr}_fr{self.EM.frame_labels[self.EM._frame_cntr - 1]}_maskXY.png'), eroded_par_mask)
+            cv2.imwrite(os.path.join(self.results_dir, self._sample_ID + f'_par{self.tot_par_cntr}_fr{self.EM.current_frame_label}_maskXY.png'), eroded_par_mask)
         return thresholded_image, min_area_pixels
 
     #%% Selection of spots for X-Ray spectra acquisition
     # =============================================================================
     def get_XS_acquisition_spots_coord_list(
             self, n_tot_sp_collected, 
-            par_image=None, pixel_size=None, results_dir=None):
+            par_image=None, pixel_size_um=None, results_dir=None):
         '''
         Returns a list of coordinates (relative, in the current image) for X-ray spectrum spot collection on a particle.
     
@@ -878,7 +880,7 @@ class EM_Particle_Finder:
             Counter for the total number of spectra collected (used for labeling).
         par_image : ndarray, optional
             Grayscale image of the current frame. If not provided and running at the SEM, the image is acquired.
-        pixel_size : float, optional
+        pixel_size_um : float, optional
             Pixel size in micrometers. Required if not running at the SEM.
         results_dir : str, optional
             Directory to save result images.
@@ -922,10 +924,10 @@ class EM_Particle_Finder:
         # --- 1. Acquire or prepare the particle mask and image ---
         if EM_driver.is_at_EM:
             par_mask_return = self._get_particle_mask()
-        elif par_image is not None and pixel_size is not None:
+        elif par_image is not None and pixel_size_um is not None:
             self._im_height, self._im_width = par_image.shape
-            self.EM.pixel_size_um = pixel_size
-            par_mask_return = self._get_particle_mask(par_image, pixel_size)
+            self.EM.pixel_size_um = pixel_size_um
+            par_mask_return = self._get_particle_mask(par_image, pixel_size_um)
             if results_dir:
                 self.results_dir = results_dir
         else:
@@ -981,7 +983,7 @@ class EM_Particle_Finder:
                 n_tot_sp_collected += 1
             color_image = draw_scalebar(color_image, self.EM.pixel_size_um)
             # cv2.imshow('Selected XS spots', color_image)
-            cv2.imwrite(os.path.join(self.results_dir, self._sample_ID + f'_par{self.tot_par_cntr}_fr{self.EM.frame_labels[self.EM._frame_cntr-1]}_xyspots.png'), color_image)
+            cv2.imwrite(os.path.join(self.results_dir, self._sample_ID + f'_par{self.tot_par_cntr}_fr{self.EM.current_frame_label}_xyspots.png'), color_image)
     
         return pts_rel_coords
 
@@ -1383,7 +1385,7 @@ class EM_Particle_Finder:
                 # Collect image
                 frame_image = EM_driver.get_image_data(self._im_width, self._im_height, 1)
                 if self.development_mode:
-                    cv2.imwrite(os.path.join(self.results_dir, self._sample_ID + f'_fr_{self.EM._frame_cntr}.png'), frame_image)
+                    cv2.imwrite(os.path.join(self.results_dir, self._sample_ID + f'_fr_{self.EM.current_frame_label}.png'), frame_image)
             else:
                 # No more frames are available
                 return None
@@ -1399,7 +1401,7 @@ class EM_Particle_Finder:
         blurred_image = cv2.GaussianBlur(frame_image, (5, 5), 0)
         
         # Get mask of particles on substrate
-        save_mask_img = False
+        save_mask_img = True
         par_mask, mask_img_path = self._get_particles_on_substrate_mask(blurred_image, save_image=save_mask_img)
     
         # Find connected components
@@ -1428,7 +1430,7 @@ class EM_Particle_Finder:
             first_par_n = len(self.par_areas_um2) - par_cntr
             for i, (center, area) in enumerate(zip(par_centroids, par_areas)):
                 ann_dict = {}
-                radius_pixel = int(np.sqrt(area / np.pi))  # Equivalent radius for particle (as a circle)
+                radius_pixel = int(np.sqrt(area / np.pi) * 1.1)  # Equivalent radius for particle (as a circle)
                 
                 ann_dict[self.EM.an_circle_key] = (radius_pixel, center.astype(int), 2)
                 
@@ -1441,7 +1443,7 @@ class EM_Particle_Finder:
                 ann_dict[self.EM.an_text_key] = (str(first_par_n + i), (x_pos_text, y_pos_text))
                 im_annotations.append(ann_dict)
                 
-            filename = f"{self._sample_ID}_fr{self.EM.frame_labels[self.EM._frame_cntr-1]}"
+            filename = f"{self._sample_ID}_fr{self.EM.current_frame_label}"
             self.EM.save_frame_image(filename + '_particles', im_annotations = im_annotations, frame_image = frame_image)
             self.EM.save_frame_image(filename + '_par_mask', im_annotations = im_annotations, frame_image = par_mask)
 

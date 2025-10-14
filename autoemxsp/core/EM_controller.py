@@ -254,7 +254,9 @@ class EM_Controller:
     grid_search_fw_mm : float
         Frame width (in mm) used during initial grid search.
     pixel_size_um : float or None
-        Pixel size in micrometers of current image.    
+        Pixel size in micrometers of current image.
+    current_frame_label : str
+        Label of currently analyzed frame. Initialized as an empty string for testing
     refresh_time : float
         Time in seconds after which autofocus and brightness are refreshed.
     frame_labels : list
@@ -391,6 +393,7 @@ class EM_Controller:
         self.is_initialized = False
         self.pixel_size_um: Optional[float] = None
         self.frame_labels: List[Any] = []
+        self.current_frame_label: str = ''
         self._frame_cntr = 0  # Keeps track of number of frames analysed
         self._current_pos = self._center_pos
         self._bulk_offset_cntr = 0
@@ -1209,6 +1212,7 @@ class EM_Controller:
     
         # Move to frame
         self.move_to_pos(self.frame_pos_mm[self._frame_cntr])
+        self.current_frame_label = self.frame_labels[self._frame_cntr]
     
         # Set frame width
         if self.sample_cfg.type == cnst.S_POWDER_SAMPLE_TYPE:
@@ -1224,7 +1228,7 @@ class EM_Controller:
     
         if self.verbose:
             print_single_separator()
-            print(f"Moved to frame {self.frame_labels[self._frame_cntr]} (#{self._frame_cntr + 1}/{self.num_frames}).")
+            print(f"Moved to frame {self.current_frame_label} (#{self._frame_cntr + 1}/{self.num_frames}).")
     
         # Update counter of particles in current frame
         self._frame_cntr += 1

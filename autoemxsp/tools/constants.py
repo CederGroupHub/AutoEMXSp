@@ -76,8 +76,9 @@ STD_USE_FOR_MEAN_KEY = 'Use_for_mean_calc'
 # Headers of Data.csv and Compositions.csv files, containing the collected spectra and their compositions
 SP_ID_DF_KEY = 'Spectrum #'
 PAR_ID_DF_KEY = 'Particle #'
-PAR_X_COORD_DF_KEY = 'x'
-PAR_Y_COORD_DF_KEY = 'y'
+FRAME_ID_DF_KEY = 'Frame ID'
+SP_X_COORD_DF_KEY = 'x'
+SP_Y_COORD_DF_KEY = 'y'
 SPECTRUM_DF_KEY = 'Spectrum'
 BACKGROUND_DF_KEY = 'Background'
 REAL_TIME_DF_KEY = 'Real_time'
@@ -149,9 +150,10 @@ LIST_SPECTRAL_DATA_KEYS = LIST_SPECTRAL_DATA_QUANT_KEYS + [
 
 LIST_SPECTRUM_COORDINATES_KEYS = [
     SP_ID_DF_KEY,
+    FRAME_ID_DF_KEY,
     PAR_ID_DF_KEY,
-    PAR_X_COORD_DF_KEY,
-    PAR_Y_COORD_DF_KEY
+    SP_X_COORD_DF_KEY,
+    SP_Y_COORD_DF_KEY
     ] # Update this list if adding keys
 # This allows correct loading when quantifying or analysing spectra after acquisition
 

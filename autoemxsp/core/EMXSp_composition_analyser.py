@@ -1139,19 +1139,25 @@ class EMXSp_Composition_Analyzer:
                 break
             
             self.particle_cntr = particle_cntr
+            frame_ID = self.EM_controller.frame_labels[self.EM_controller._frame_cntr-1]
             
             latest_spot_id = None # For image annotations
             for i, (x, y) in enumerate(spots_xy_list):
                 latest_spot_id = i
                 value_map = {
                     cnst.SP_ID_DF_KEY: n_tot_sp_collected,
-                    cnst.PAR_ID_DF_KEY: self.particle_cntr,
-                    cnst.PAR_X_COORD_DF_KEY: f'{x:.3f}',
-                    cnst.PAR_Y_COORD_DF_KEY: f'{y:.3f}'
+                    cnst.FRAME_ID_DF_KEY : frame_ID,
+                    cnst.SP_X_COORD_DF_KEY: f'{x:.3f}',
+                    cnst.SP_Y_COORD_DF_KEY: f'{y:.3f}'
                 }
+                # Add particle ID only if not None
+                if self.particle_cntr is not None:
+                    value_map[cnst.PAR_ID_DF_KEY] = self.particle_cntr
+                    
                 self.sp_coords.append({
                     key: value_map[key]
                     for key in cnst.LIST_SPECTRUM_COORDINATES_KEYS
+                    if key in value_map
                 }) # Ensures any modification of keys is done at the level of LIST_SPECTRUM_COORDINATES_KEYS
                     # This allows correct loading when quantifying or analysing spectra after acquisition
 
@@ -1181,7 +1187,7 @@ class EMXSp_Composition_Analyzer:
             if latest_spot_id is not None:
                 # Prepare save path
                 par_cntr_str = f"_par{self.particle_cntr}" if self.particle_cntr is not None else ''
-                filename = f"{self.sample_cfg.ID}{par_cntr_str}_fr{self.EM_controller.frame_labels[self.EM_controller._frame_cntr-1]}_xyspots"
+                filename = f"{self.sample_cfg.ID}{par_cntr_str}_fr{frame_ID}_xyspots"
                 # Construct annotation dictionary
                 im_annotations = []
                 for i, xy_coords in enumerate(spots_xy_list):

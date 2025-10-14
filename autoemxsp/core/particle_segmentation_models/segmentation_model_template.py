@@ -64,8 +64,9 @@ def segment_particles(frame_image : np.array,
     # Example thresholding to create a binary mask
     _, par_mask = cv2.threshold(frame_image, powder_meas_config.par_brightness_thresh, 255, cv2.THRESH_BINARY)
     
+    # Use this code to masked image
     if save_image and EM:
-        filename = f"fr{EM.frame_labels[EM._frame_cntr-1]}_ml_mask"
+        filename = f"{EM.microscope_cfg.ID}_fr{EM.frame_labels[EM._frame_cntr-1]}_ml_mask"
         EM.save_frame_image(filename, frame_image = par_mask)
     
     return par_mask
