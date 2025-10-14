@@ -1425,6 +1425,7 @@ class EM_Particle_Finder:
                 
         # Save image to visualize selected particles
         text_margin = 20  # pixel margin to determine where to annotate image with particle numbers
+        text_pos_scale = 0.9
         im_annotations = []
         if par_cntr > 0:
             first_par_n = len(self.par_areas_um2) - par_cntr
@@ -1434,17 +1435,40 @@ class EM_Particle_Finder:
                 
                 ann_dict[self.EM.an_circle_key] = (radius_pixel, center.astype(int), 2)
                 
-                x_pos_text = int(center[0] + radius_pixel)  # Number on the top-right of the circle
-                y_pos_text = int(center[1] - radius_pixel)
+                x_pos_text = int(center[0] + radius_pixel * text_pos_scale)  # Number on the top-right of the circle
+                y_pos_text = int(center[1] - radius_pixel * text_pos_scale)
                 if x_pos_text > (self._im_width - text_margin):  # Move number to left if near edge
-                    x_pos_text = int(center[0] - radius_pixel)
+                    x_pos_text = int(center[0] - radius_pixel * text_pos_scale)
                 if y_pos_text < text_margin:  # Move number below if near top edge
-                    y_pos_text = int(center[1] + radius_pixel)
+                    y_pos_text = int(center[1] + radius_pixel * text_pos_scale)
                 ann_dict[self.EM.an_text_key] = (str(first_par_n + i), (x_pos_text, y_pos_text))
                 im_annotations.append(ann_dict)
                 
             filename = f"{self._sample_ID}_fr{self.EM.current_frame_label}"
+            # Save annotated particle image
             self.EM.save_frame_image(filename + '_particles', im_annotations = im_annotations, frame_image = frame_image)
+            
+            # Save mask image
+            unique_vals = np.unique(par_mask)
+            if np.array_equal(unique_vals, [0, 1]):
+                # Binary mask → scale to 0–255 uint8
+                par_mask = (par_mask * 255).astype(np.uint8)
+            elif np.issubdtype(par_mask.dtype, np.integer):
+                # Label mask → reverse brightness so high labels are bright
+                max_val = par_mask.max()
+                if max_val > 0:
+                    par_mask = ((max_val - par_mask) * (255.0 / max_val)).astype(np.uint8)
+                else:
+                    par_mask = par_mask.astype(np.uint8)
+            else:
+                # For float or other types, normalize to 0–255
+                min_val = par_mask.min()
+                max_val = par_mask.max()
+                if max_val > min_val:  # avoid divide-by-zero
+                    par_mask = ((par_mask - min_val) / (max_val - min_val) * 255).astype(np.uint8)
+                else:
+                    par_mask = np.zeros_like(par_mask, dtype=np.uint8)
+            
             self.EM.save_frame_image(filename + '_par_mask', im_annotations = im_annotations, frame_image = par_mask)
 
         

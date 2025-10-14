@@ -1290,7 +1290,12 @@ class EM_Controller:
             frame_image = EM_driver.get_image_data(self.im_width, self.im_height, 1)
     
         # Convert grayscale to RGB for annotation
-        color_image = cv2.cvtColor(frame_image, cv2.COLOR_GRAY2RGB)
+        if len(frame_image.shape) == 2 or frame_image.shape[2] == 1:
+            # Grayscale image
+            color_image = cv2.cvtColor(frame_image, cv2.COLOR_GRAY2RGB)
+        else:
+            # Already color
+            color_image = frame_image
     
         # Draw annotations if provided
         if im_annotations is not None:
