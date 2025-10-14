@@ -4,7 +4,7 @@
 
 [![PyPI version](https://badge.fury.io/py/autoemxsp.svg)](https://pypi.org/project/autoemxsp/)
 [![Python Version](https://img.shields.io/pypi/pyversions/autoemxsp.svg)](https://pypi.org/project/autoemxsp/)
-[![License](https://img.shields.io/github/license/CederGroupHub/AutoEMXSp.svg?style=flat-square)](LICENSE.txt)
+[![License: Custom Non-Commercial](https://img.shields.io/badge/license-Custom%20Non--Commercial-blue.svg)](https://github.com/CederGroupHub/AutoEMXSp/blob/main/LICENSE.txt)
 
 **Automated Electron Microscopy X-Ray Spectroscopy for Compositional Characterization of Materials**
 
