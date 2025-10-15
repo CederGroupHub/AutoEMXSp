@@ -1389,6 +1389,7 @@ class EM_Particle_Finder:
         # ---- Optional verbose output ----
         if self.verbose:
             print_double_separator()
+            print("Computed statistics:\n")
             print(stats_df.T.to_string(header=False))
     
         # ---- Generate and save particle size histogram ----
@@ -1577,9 +1578,8 @@ class EM_Particle_Finder:
                 os.remove(mask_img_path)
             return False
         else:
-            # Re-adjust focus, but only if a particle is actually present
-            if time.time() - self.EM._last_EM_adjustment_time > self.EM.refresh_time:
-                # Adjust EM focus, contrast and brightness
-                self.EM.adjust_BCF()
+            if not self.EM.measurement_cfg.is_manual_navigation and (time.time() - self.EM._last_EM_adjustment_time > self.EM.refresh_time):
+                # Adjust EM focus, contrast and brightness, but only if a particle is actually present
+                    self.EM.adjust_BCF()
             return True
         

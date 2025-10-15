@@ -555,11 +555,17 @@ class EM_Controller:
             self._calc_bulk_grid_acquisition_spots()
             
 
-        elif not self.measurement_cfg.is_manual_navigation:
+        elif self.measurement_cfg.is_manual_navigation:
+            self.frame_pos_mm = None
+            self.frame_labels = None
+            self.num_frames = np.inf
+        
+        else:
             raise NotImplementedError(
                 "Sample type '{}' is not supported for automated composition analysis. "
                 "Use measurement_cfg.is_manual_navigation = True.".format(self.sample_cfg.type)
             )
+            
         # Save image of initial location to show
         initial_image = EM_driver.get_image_data(self.im_width, self.im_height, 1)
         draw_scalebar(initial_image, self.pixel_size_um)
@@ -1206,32 +1212,52 @@ class EM_Controller:
         bool
             True if moved to the next frame, False if no frames remain to be analysed.
         '''
-        # Check if all frames have been analysed in the current sample.
-        if self._frame_cntr >= self.num_frames:
-            # Return False if there are no more frames available
-            return False
+        is_particle_stats_measurement = self.measurement_cfg.type == self.measurement_cfg.PARTICLE_STATS_MEAS_TYPE_KEY
+        if is_particle_stats_measurement and self.measurement_cfg.is_manual_navigation:
+            # Prompt user to select the X-ray acquisition spot
+            prompt = Prompt_User(
+                title="Select next Frame",
+                message="Go to next frame to analyze (#{}).".format(self._frame_cntr)
+            )
+            prompt.run()
     
-        # Move to frame
-        self.move_to_pos(self.frame_pos_mm[self._frame_cntr])
-        self.current_frame_label = self.frame_labels[self._frame_cntr]
+            if prompt.execution_stopped:
+                print("Execution stopped by the user.")
+                return False
     
-        # Set frame width
-        if self.sample_cfg.type == cnst.S_POWDER_SAMPLE_TYPE:
-            min_fw, max_fw = EM_driver.get_range_frame_width()
-            # Check that microscope still accepts the current frame width
-            self.grid_search_fw_mm = np.clip(self.grid_search_fw_mm, min_fw, max_fw)
-            self.set_frame_width(self.grid_search_fw_mm)
-    
-        # Adjust EM settings (focus, contrast, brightness) if too long has passed since last adjustments
-        if time.time() - self._last_EM_adjustment_time > self.refresh_time:
-            self.adjust_BCF()
+            if prompt.ok_pressed:
+                self.current_frame_label = self._frame_cntr
+                frame_width = EM_driver.get_frame_width()
+                self.grid_search_fw_mm = frame_width
+                self.pixel_size_um = frame_width / self.im_width * 1e3  # um
         
-    
+        else:
+            # Check if all frames have been analysed in the current sample.
+            if self._frame_cntr >= self.num_frames:
+                # Return False if there are no more frames available
+                return False
+        
+            # Move to frame
+            self.move_to_pos(self.frame_pos_mm[self._frame_cntr])
+            self.current_frame_label = self.frame_labels[self._frame_cntr]
+        
+            # Set frame width
+            if self.sample_cfg.type == cnst.S_POWDER_SAMPLE_TYPE:
+                min_fw, max_fw = EM_driver.get_range_frame_width()
+                # Check that microscope still accepts the current frame width
+                self.grid_search_fw_mm = np.clip(self.grid_search_fw_mm, min_fw, max_fw)
+                self.set_frame_width(self.grid_search_fw_mm)
+        
+            # Adjust EM settings (focus, contrast, brightness) if too long has passed since last adjustments
+            if time.time() - self._last_EM_adjustment_time > self.refresh_time:
+                self.adjust_BCF()
+            
+        
         if self.verbose:
             print_single_separator()
             print(f"Moved to frame {self.current_frame_label} (#{self._frame_cntr + 1}/{self.num_frames}).")
     
-        # Update counter of particles in current frame
+        # Update frame counter
         self._frame_cntr += 1
     
         return True
