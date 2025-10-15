@@ -16,12 +16,13 @@ import pandas as pd
 
 from autoemxsp.core.EM_particle_finder import EM_Particle_Finder
 import autoemxsp.tools.constants as cnst
+from autoemxsp.tools.utils import get_sample_dir
 
 # --------------------------
 # Define sample
 # --------------------------
-sample_ID = 'example_particle_stats'
-input_dir = 'input'
+sample_ID = 'example_particle_stats' # Name of folder where data has been saved
+input_dir = 'input' # Base directory where data is saved. It can find sample_ID also within its subdirectories
 
 # --------------------------
 # Define particles and frames to filter out
@@ -34,7 +35,7 @@ frame_IDs_to_filter = ["A1"]       # Example frame IDs to remove (strings match 
 # Code
 # --------------------------
 # Check if sample exists
-sample_dir = os.path.join(input_dir, sample_ID)
+sample_dir = get_sample_dir(input_dir, sample_ID)
 if not os.path.exists(sample_dir):
     raise FileNotFoundError(f"Could not find sample at {sample_dir}. Please check 'sample_ID' and 'input_dir'.")
 
