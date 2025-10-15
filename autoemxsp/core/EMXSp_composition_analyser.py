@@ -4626,18 +4626,19 @@ class EMXSp_Composition_Analyzer:
             ]
             # Select corrected PB ratios that should be used for calculating the mean (i.e., PB ratios computed from the mean)
             list_PB_for_mean = [std[cnst.COR_PB_DF_KEY] for std in std_el_line_entries if std[cnst.STD_USE_FOR_MEAN_KEY]]
-            mean_PB = float(np.mean(list_PB_for_mean)) if list_PB_for_mean else float("nan")
-            stddev_mean_PB = float(np.std(list_PB_for_mean)) if list_PB_for_mean else float("nan")
-            error_mean_PB = (stddev_mean_PB / mean_PB * 100) if mean_PB else float("nan")
-    
-            std_dict_mean = {
-                cnst.STD_ID_KEY: cnst.STD_MEAN_ID_KEY,
-                cnst.DATETIME_KEY: now.strftime("%Y-%m-%d %H:%M:%S"),
-                cnst.COR_PB_DF_KEY: mean_PB,
-                cnst.STDEV_PB_DF_KEY: stddev_mean_PB,
-                cnst.REL_ER_PERCENT_PB_DF_KEY: error_mean_PB
-            }
-            std_el_line_entries.append(std_dict_mean)
+            if len(list_PB_for_mean) > 0: 
+                mean_PB = float(np.mean(list_PB_for_mean)) if list_PB_for_mean else float("nan")
+                stddev_mean_PB = float(np.std(list_PB_for_mean)) if list_PB_for_mean else float("nan")
+                error_mean_PB = (stddev_mean_PB / mean_PB * 100) if mean_PB else float("nan")
+        
+                std_dict_mean = {
+                    cnst.STD_ID_KEY: cnst.STD_MEAN_ID_KEY,
+                    cnst.DATETIME_KEY: now.strftime("%Y-%m-%d %H:%M:%S"),
+                    cnst.COR_PB_DF_KEY: mean_PB,
+                    cnst.STDEV_PB_DF_KEY: stddev_mean_PB,
+                    cnst.REL_ER_PERCENT_PB_DF_KEY: error_mean_PB
+                }
+                std_el_line_entries.append(std_dict_mean)
             std_lib[el_line] = std_el_line_entries
     
         # Save updated file with standards
