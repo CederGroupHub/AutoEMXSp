@@ -1365,7 +1365,7 @@ class EM_Particle_Finder:
     
         # ---- Compute descriptive statistics ----
         par_size_distr = {
-            'measurement': 'Equivalent particle diameter in μm',
+            'Measure': 'Equivalent particle diameter in μm',
             'n_par_analysed': n_par_analysed,
             'mean': np.mean(eq_diam_um),
             'stdev': np.std(eq_diam_um),
@@ -1389,7 +1389,7 @@ class EM_Particle_Finder:
         # ---- Optional verbose output ----
         if self.verbose:
             print_double_separator()
-            print(stats_df.T)
+            print(stats_df.T.to_string(header=False))
     
         # ---- Generate and save particle size histogram ----
         self._save_particle_size_histogram(
