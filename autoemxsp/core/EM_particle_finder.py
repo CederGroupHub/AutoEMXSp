@@ -1281,12 +1281,19 @@ class EM_Particle_Finder:
                 if self.verbose: print("No particle was found in this frame")
                 par_not_found_cntr +=1
             elif par_were_found:
-                n_par_found = len(self.analyzed_pars) - previous_n_par
-                if n_par_found > 1:
-                    par_string = 'particles were'
-                else:
-                    par_string = 'particle was'
-                if self.verbose: print(f"{n_par_found} {par_string} found in this frame") 
+                if self.verbose:
+                    tot_n_par_found = len(self.analyzed_pars)
+                    n_par_found_frame = tot_n_par_found - previous_n_par
+                    plural_frame = n_par_found_frame != 1
+                    plural_total = tot_n_par_found != 1
+                    print(
+                        f"{n_par_found_frame} particle{'s' if plural_frame else ''} "
+                        f"{'were' if plural_frame else 'was'} found in this frame"
+                    )
+                    print(
+                        f"A total of {tot_n_par_found} particle{'s' if plural_total else ''} "
+                        f"{'have' if plural_total else 'has'} now been analyzed."
+                    )
                 par_not_found_cntr = 0
         
         # Number of analysed particles
