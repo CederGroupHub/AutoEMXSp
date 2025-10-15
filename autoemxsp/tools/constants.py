@@ -98,6 +98,10 @@ AT_FR_DF_KEY = '_at%' # Added to elements
 W_FR_DF_KEY = '_w%' # Added to elements
 STDEV_DF_KEY = '_std' # Added to elements
 
+# Particle statistics keys
+PAR_AREA_UM_KEY = 'Area (μm²)'
+PAR_EQ_D_KEY = 'Equivalent Diameter (μm)'
+
 
 
 ### FILES AND DIRECTORIES
@@ -119,6 +123,9 @@ PAR_SEGMENTATION_MODELS_DIR = 'particle_segmentation_models'
 STD_FILENAME = 'Stds'
 ACQUISITION_INFO_FILENAME = 'Comp_analysis_configs'
 DATA_FILENAME = 'Data'
+PARTICLE_STATS_FILENAME = 'Par_size_stats'
+PARTICLE_SIZES_FILENAME = 'Par_sizes'
+PARTICLE_STAT_HIST_FILENAME = 'Par_size_distribution_hist'
 STDS_MEAS_FILENAME = 'Std_measurements'
 STDS_RESULT_FILENAME = 'Std_results'
 DATA_FILEEXT = '.csv'

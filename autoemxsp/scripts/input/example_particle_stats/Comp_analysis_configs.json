@@ -1,0 +1,64 @@
+{
+  "datetime": "2025-10-14 18:03:52",
+  "sample_cfg": {
+    "ID": "example",
+    "elements": [],
+    "type": "powder",
+    "w_frs": null,
+    "center_pos": [
+      37.5,
+      37.5
+    ],
+    "half_width_mm": 2.4
+  },
+  "microscope_cfg": {
+    "ID": "PhenomXL",
+    "type": "SEM",
+    "detector_type": "BSD",
+    "is_auto_BC": true,
+    "brightness": "0.4107",
+    "contrast": "0.4221",
+    "energy_zero": null,
+    "bin_width": null
+  },
+  "measurement_cfg": {
+    "type": "particle_stats",
+    "mode": "point",
+    "working_distance": 5.0,
+    "beam_energy_keV": 15.0,
+    "beam_current": null,
+    "emergence_angle": null,
+    "is_manual_navigation": false,
+    "max_acquisition_time": 30.0,
+    "target_acquisition_counts": 50000,
+    "min_n_spectra": 30,
+    "max_n_spectra": 100
+  },
+  "sample_substrate_cfg": {
+    "elements": [
+      "C",
+      "O",
+      "Al"
+    ],
+    "type": "Ctape",
+    "shape": "circle",
+    "auto_detection": false,
+    "stub_w_mm": 12
+  },
+  "powder_meas_cfg": {
+    "is_manual_particle_selection": false,
+    "is_known_powder_mixture_meas": false,
+    "par_search_frame_width_um": 50.0,
+    "max_n_par_per_frame": Infinity,
+    "max_spectra_per_par": 3,
+    "max_area_par": 19.634954084936208,
+    "min_area_par": 0.19634954084936207,
+    "par_mask_margin": 1.0,
+    "xsp_spots_distance_um": 1.0,
+    "par_segmentation_model": "Rettenberger2024",
+    "par_brightness_thresh": 100,
+    "par_xy_spots_thresh": 100,
+    "par_feature_selection": "random",
+    "par_spot_spacing": "random"
+  }
+}
