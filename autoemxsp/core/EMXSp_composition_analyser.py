@@ -303,6 +303,7 @@ class EMXSp_Composition_Analyzer:
 
         if is_XSp_measurement:
             # --- Variable initialization
+            self.XSp_std_dict = None
             self.sp_coords = [] # List containing particle number + relative coordinates on the image to retrieve exact position where spectra were collected
             self.particle_cntr = -1 # Counter to save particle number
             
@@ -312,9 +313,6 @@ class EMXSp_Composition_Analyzer:
             # List containing the quantification results of each of the collected spectra (composition and analytical error)
             self.spectra_quant = []
             
-            # Initialise dictionary of standards to (optionally) pass onto XSp_Quantifier. Only used with known powder mixtures
-            self._initialise_std_dict()
-        
         
         # --- Save configurations
         # Save spectrum collection info when class is used to collect spectra
@@ -2727,6 +2725,7 @@ class EMXSp_Composition_Analyzer:
         is_analysis_successful = False
         is_acquisition_successful = True
         is_exp_std_measurement = self.exp_stds_cfg.is_exp_std_measurement
+        self._initialise_std_dict() # Initialise dictionary of standards to (optionally) pass onto XSp_Quantifier. Only used with known powder mixtures
         
         if quantify:
             if is_exp_std_measurement:
@@ -2949,6 +2948,7 @@ class EMXSp_Composition_Analyzer:
         - The arguments (None, None) to _save_collected_data indicate that all spectra are to be saved.
         - Assumes that spectra have been correctly saved in self.quant_results
         """
+        self._initialise_std_dict() # Initialise dictionary of standards to (optionally) pass onto XSp_Quantifier. Only used with known powder mixtures
         self._fit_and_quantify_spectra()
         self._save_collected_data(None, None, backup_previous_data=True, include_spectral_data=True)
         
@@ -3332,7 +3332,7 @@ class EMXSp_Composition_Analyzer:
                          marker='o', linestyle='none', ecolor='black')
         
         # Mean point (highest zorder, plotted last)
-        ax_left.scatter(0, mean, c=yellow_cmap(0.9), marker='o', s=50,
+        ax_left.scatter(0, mean, color=yellow_cmap(0.9), marker='o', s=50,
                         edgecolors='k', linewidths=1, label='Mean', zorder=10)
     
         ax_left = plt.gca()
@@ -4086,7 +4086,8 @@ class EMXSp_Composition_Analyzer:
         std_dict_all_lines = std_dict_all_modes[self.measurement_cfg.mode]
         ref_lines = XSp_Quantifier.xray_quant_ref_lines
         ref_formulae = self.clustering_cfg.ref_formulae
-    
+        
+        filtered_std_dict = {}
         for el in self.detectable_els_sample:
             for line in ref_lines:
                 el_line = f"{el}_{line}"
@@ -4101,13 +4102,13 @@ class EMXSp_Composition_Analyzer:
                             std_comp = Composition(std_dict[cnst.STD_FORMULA_KEY])
                             for ref_formula in ref_formulae:
                                 if std_comp.reduced_formula == Composition(ref_formula).reduced_formula:
-                                    ref_entries.append(i)
+                                    ref_entries += [i]
                         except Exception as e:
                             warnings.warn(
                                 f"Could not parse formula '{std_dict[cnst.STD_FORMULA_KEY]}' "
                                 f"or compare with reference formulas {ref_formulae}. Error: {e}"
                             )
-    
+
                 if len(ref_entries) < 1 and not self.exp_stds_cfg.is_exp_std_measurement:
                     text_line = "provided standards" if std_dir == "" else f"standards file at: {std_dir}"
                     warnings.warn(
@@ -4118,16 +4119,16 @@ class EMXSp_Composition_Analyzer:
                     continue
     
                 # Compute mean PB value from all available references
-                new_std_ref_list = std_dict_all_lines[el_line]
+                new_std_ref_list = [std_d for i, std_d in enumerate(std_dict_all_lines[el_line]) if i in ref_entries]
                 list_PB = [ref_line[cnst.COR_PB_DF_KEY] for ref_line in new_std_ref_list]
     
                 std_dict_mean = {
                     cnst.STD_ID_KEY: cnst.STD_MEAN_ID_KEY,
                     cnst.COR_PB_DF_KEY: float(np.mean(list_PB)),
                 }
-                std_dict_all_lines[el_line] = [std_dict_mean]
-
-        return std_dict_all_lines
+                filtered_std_dict[el_line] = [std_dict_mean]
+                
+        return filtered_std_dict
 
     
     def _fit_stds_and_save_results(self, backup_previous_data: bool = True) -> Union[Tuple, None]:
@@ -4521,7 +4522,7 @@ class EMXSp_Composition_Analyzer:
         else:
             standards = self.standards_dict
             std_dir = ''
-            
+
         # Ensure measurement mode exists in the standards dictionary, otherwise create it
         if meas_mode not in standards:
             standards[meas_mode] = {}
