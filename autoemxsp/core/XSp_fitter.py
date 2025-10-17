@@ -87,12 +87,83 @@ from scipy.special import erfc
 from scipy.signal import find_peaks, peak_prominences
 from scipy.integrate import quad, trapezoid
 from scipy.optimize import root_scalar
-from lmfit import Model, Parameters, Parameter
-from lmfit.models import GaussianModel
 from pymatgen.core import Element
 
+
 # =============================================================================
-# Local module imports
+# lmfit import and patching
+# =============================================================================
+# lmfit does not support full_output=False to prevent calculation of uncertainties
+# To make fits considerabl faster, we patch lmfit to prevent uncertainty calculation
+
+from lmfit.minimizer import Minimizer
+
+def patch_lmfit_fast_mode():
+    """Disable all covariance/uncertainty computations globally in lmfit.
+    
+    Works for lmfit >=1.0. If internal methods change in future releases,
+    prints a warning so the user knows the patch isn't effective.
+    """
+    if getattr(Minimizer, "_fastmode_patched", False):
+        return  # already patched
+
+    patched_something = False
+
+    # ---- Patch whichever uncertainty method exists ----
+    if hasattr(Minimizer, "_calculate_uncertainties_correlations"):
+        def dummy_uncertainties(self):
+            if hasattr(self, "result"):
+                res = self.result
+                res.errorbars = False
+                res.uvars = None
+                res.covar = None
+                for p in res.params.values():
+                    p.stderr = None
+                    p.correl = None
+            return None
+        Minimizer._calculate_uncertainties_correlations = dummy_uncertainties
+        patched_something = True
+
+    elif hasattr(Minimizer, "_calculate_uncertainties"):
+        def dummy_uncertainties(self):
+            if hasattr(self, "result"):
+                res = self.result
+                res.errorbars = False
+                res.uvars = None
+                res.covar = None
+                for p in res.params.values():
+                    p.stderr = None
+                    p.correl = None
+            return None
+        Minimizer._calculate_uncertainties = dummy_uncertainties
+        patched_something = True
+    else:
+        warnings.warn(
+            "⚠️ lmfit fast mode patch could not find uncertainty calculation method. "
+            "This probably means lmfit internals changed. Patch may be ineffective."
+        )
+
+    # ---- Patch the covariance transform too (optional for speed) ----
+    if hasattr(Minimizer, "_int2ext_cov_x"):
+        Minimizer._int2ext_cov_x = lambda self, cov_int, fvars: cov_int
+    else:
+        warnings.warn(
+            "⚠️ Covariance transform method '_int2ext_cov_x' not found in Minimizer. "
+            "Future lmfit versions may require patch updates."
+        )
+
+    Minimizer._fastmode_patched = True
+
+    if patched_something:
+        print("✅ lmfit patched for speed: uncertainties/covariance will NOT be calculated")
+
+patch_lmfit_fast_mode()
+
+from lmfit import Model, Parameters, Parameter
+from lmfit.models import GaussianModel
+
+# =============================================================================
+# Package imports
 # =============================================================================
 from autoemxsp.tools.utils import (
     RefLineError, print_single_separator, print_double_separator,
@@ -745,26 +816,14 @@ class XSp_Fitter:
         if initial_par_vals:
             for par, val in initial_par_vals.items():
                 self.spectrum_pars[par].value = val
-    
-        # Setting full_output=False prevents calculation of uncertainties for faster fitting, but throws error in original versiopn of lmfit
-        try:
-            fit_result = self.spectrum_mod.fit(
-                self.spectrum_vals,
-                params,
-                x=self.energy_vals,
-                iter_cb=self._iteration_callback,
-                verbose=True,
-                fit_kws={'ftol': function_tolerance, 'full_output': False}
-            )
-        except:
-            # main lmfit branch does not accept 'full_output': False
-            fit_result = self.spectrum_mod.fit(
-                self.spectrum_vals,
-                params,
-                x=self.energy_vals,
-                iter_cb=self._iteration_callback,
-                verbose=True,
-                fit_kws={'ftol': function_tolerance}
+                
+        fit_result = self.spectrum_mod.fit(
+            self.spectrum_vals,
+            params,
+            x=self.energy_vals,
+            iter_cb=self._iteration_callback,
+            verbose=True,
+            fit_kws={'ftol': function_tolerance}
             )
     
         if self.verbose:

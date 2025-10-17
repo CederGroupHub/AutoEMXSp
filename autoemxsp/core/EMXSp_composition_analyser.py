@@ -1874,6 +1874,9 @@ class EMXSp_Composition_Analyzer:
         compositions_df, compositions_df_other_fr = self._prepare_composition_dataframes(compositions_list_at, compositions_list_w)
 
         # 4. Perform clustering
+        if k is None:
+            # Extract k value from configurations (None if not provided)
+            k = self.clustering_cfg.k
         if self.clustering_cfg.method == 'kmeans':
             k = self._find_optimal_k(compositions_df, k, compute_k_only_once)
             kmeans, labels, sil_score = self._run_kmeans_clustering(k, compositions_df)

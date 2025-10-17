@@ -332,8 +332,9 @@ def fit_and_quantify_spectrum(
             annotate_peaks='main'
         )
 
-    total_process_time = (time.time() - sample_processing_time_start) / 60
+    total_process_time = (time.time() - sample_processing_time_start)
     print_double_separator()
-    logging.info(f"Sample '{sample_ID}' successfully quantified in {total_process_time:.1f} min.")
+    time_str = f"{total_process_time/60:.1f} min" if total_process_time > 100 else f"{total_process_time:.1f} sec"
+    logging.info(f"Sample '{sample_ID}' successfully quantified in {time_str}.")
         
     return quantifier
