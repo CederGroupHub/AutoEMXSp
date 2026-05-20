@@ -3963,11 +3963,16 @@ class EMXSp_Composition_Analyzer:
         self._th_peak_energies = {} # Initialise
         self.run_collection_and_quantification(quantify=fit_during_collection)
         
-        # Save standards fit outputs. If fitting already happened during collection,
-        # only aggregate/save from existing records and do not rerun spectrum fitting.
+        self.run_exp_std_fit(run_fitting=not fit_during_collection, update_std_library=update_std_library)
+
+    def run_exp_std_fit(self, run_fitting: bool = True, update_std_library: bool = True) -> None:
+        """
+        Fit experimental standards and optionally update the standards library.
+        If run_fitting is False, only aggregate/save from existing records.
+        """
         fit_results = StandardsModule._fit_stds_and_save_results(
             self,
-            run_fitting=not fit_during_collection,
+            run_fitting=run_fitting,
         )
 
         if fit_results is not None and fit_results.lines:
@@ -3983,8 +3988,7 @@ class EMXSp_Composition_Analyzer:
                 )
         else:
             logger.info("⚠️ No valid fitted peaks were produced for sample '%s'.", self.sample_id)
-        
-        # Update the standards library with the new results if requested
+
         if update_std_library and fit_results is not None and fit_results.lines:
             StandardsModule._update_standard_library(self, fit_results)
         

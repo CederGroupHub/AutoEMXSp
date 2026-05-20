@@ -61,21 +61,19 @@ class StandardsModule:
                     if peak.pb_ratio is None:
                         continue
                     if peak.line in ref_lines:
-                        fit_pb_data[peak_key] = float(peak.pb_ratio)
+                        fit_pb_data[peak_key] = peak.pb_ratio
 
             data_row.update(fit_pb_data)
 
             if record is not None and record.fit_result is not None:
+                if record.quant_flag is not None:
+                    data_row[cnst.QUANT_FLAG_DF_KEY] = record.quant_flag
+                if record.comment is not None:
+                    data_row[cnst.COMMENTS_DF_KEY] = record.comment
                 if record.fit_result.r_squared is not None:
                     data_row[cnst.R_SQ_KEY] = float(f"{record.fit_result.r_squared:.5f}")
                 if record.fit_result.reduced_chi_squared is not None:
                     data_row[cnst.REDCHI_SQ_KEY] = float(f"{record.fit_result.reduced_chi_squared:.1f}")
-
-            try:
-                data_row[cnst.COMMENTS_DF_KEY] = self.spectral_data[cnst.COMMENTS_DF_KEY][i]
-                data_row[cnst.QUANT_FLAG_DF_KEY] = self.spectral_data[cnst.QUANT_FLAG_DF_KEY][i]
-            except Exception:
-                pass
 
             rows.append(data_row)
 
@@ -369,17 +367,27 @@ class StandardsModule:
             means_pb.append(float(line_result.measured_pb))
             stdevs_pb.append(float(line_result.stdev_pb))
             el = el_line.split('_')[0]
-            at_percent_values.append(at_percent_by_el.get(el, float("nan")))
-            w_percent_values.append(w_percent_by_el.get(el, float("nan")))
+            at_percent = at_percent_by_el.get(el, float("nan"))
+            w_percent = w_percent_by_el.get(el, float("nan"))
+            if not np.isnan(at_percent):
+                at_percent = round(at_percent, 3)
+            if not np.isnan(w_percent):
+                w_percent = round(w_percent, 3)
+            at_percent_values.append(at_percent)
+            w_percent_values.append(w_percent)
             pb_ratios = line_result.pb_ratios
             n_spectra_used = sum((x is not None) and (not (isinstance(x, float) and np.isnan(x))) for x in pb_ratios)
             n_spectra_per_line.append(n_spectra_used)
             corrected_value = float(pb_corrected[index])
+            corrected_value = round(corrected_value, 1) if not np.isnan(corrected_value) else corrected_value
             corrected_pb_values.append(corrected_value)
 
             mean_pb = float(line_result.measured_pb)
+            mean_pb = round(mean_pb, 1) if not np.isnan(mean_pb) else mean_pb
             stdev_pb = float(line_result.stdev_pb)
+            stdev_pb = round(stdev_pb, 1) if not np.isnan(stdev_pb) else stdev_pb
             rel_error = (stdev_pb / mean_pb * 100) if mean_pb else float("nan")
+            rel_error = round(rel_error, 2) if not np.isnan(rel_error) else rel_error
             rel_errors_percent.append(rel_error)
 
             fit_lines[el_line] = StandardFitLineResult.model_validate({
