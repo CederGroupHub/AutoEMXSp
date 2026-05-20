@@ -13,26 +13,57 @@ import autoemx.utils.constants as cnst
 from autoemx.utils.legacy.legacy_standards import normalize_standards_file_payload
 
 
+
 class StandardMeanZ(BaseModel):
     """Mean atomic number metrics stored for one standard measurement."""
-
-    mass_averaged: float = Field(alias=cnst.Z_MEAN_W_KEY)
-    atomic_averaged: float = Field(alias=cnst.Z_MEAN_AT_KEY)
     statham2016: float = Field(alias=cnst.Z_MEAN_STATHAM_KEY)
     markowicz1984: float = Field(alias=cnst.Z_MEAN_MARKOWICZ_KEY)
+    mass_averaged: float = Field(alias=cnst.Z_MEAN_W_KEY)
+    atomic_averaged: float = Field(alias=cnst.Z_MEAN_AT_KEY)
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    @field_validator("mass_averaged", "atomic_averaged", "statham2016", "markowicz1984", mode="before")
+    @classmethod
+    def round_to_2_decimals(cls, value):
+        if value is None:
+            return value
+        try:
+            return round(float(value), 2)
+        except Exception:
+            return value
+
 
 
 class StandardPbSummary(BaseModel):
     """Shared PB summary fields used by fit results and persisted entries."""
 
     corrected_pb: float = Field(alias=cnst.COR_PB_DF_KEY)
-    stdev_pb: float = Field(alias=cnst.STDEV_PB_DF_KEY)
     rel_stdev_pb_percent: float = Field(alias=cnst.REL_ER_PERCENT_PB_DF_KEY)
     measured_pb: Optional[float] = Field(default=None, alias=cnst.MEAS_PB_DF_KEY)
+    stdev_pb: float = Field(alias=cnst.STDEV_PB_DF_KEY)
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    @field_validator("corrected_pb", "stdev_pb", "measured_pb", mode="before")
+    @classmethod
+    def round_to_1_decimal(cls, value):
+        if value is None:
+            return value
+        try:
+            return round(float(value), 1)
+        except Exception:
+            return value
+
+    @field_validator("rel_stdev_pb_percent", mode="before")
+    @classmethod
+    def round_to_2_decimals(cls, value):
+        if value is None:
+            return value
+        try:
+            return round(float(value), 2)
+        except Exception:
+            return value
 
 
 class StandardEntry(StandardPbSummary):
