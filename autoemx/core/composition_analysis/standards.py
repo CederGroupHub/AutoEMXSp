@@ -61,7 +61,7 @@ class StandardsModule:
                     if peak.pb_ratio is None:
                         continue
                     if peak.line in ref_lines:
-                        fit_pb_data[peak_key] = peak.pb_ratio
+                        fit_pb_data[peak_key] = round(peak.pb_ratio,1)
 
             data_row.update(fit_pb_data)
 

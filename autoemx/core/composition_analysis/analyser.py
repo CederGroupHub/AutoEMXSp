@@ -3965,6 +3965,7 @@ class EMXSp_Composition_Analyzer:
         
         self.run_exp_std_fit(run_fitting=not fit_during_collection, update_std_library=update_std_library)
 
+
     def run_exp_std_fit(self, run_fitting: bool = True, update_std_library: bool = True) -> None:
         """
         Fit experimental standards and optionally update the standards library.
