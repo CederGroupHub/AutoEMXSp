@@ -274,7 +274,7 @@ class PlottingModule:
 
             return low, high
 
-        def _plot_clustering_scene(ax: Any, title_suffix: str = "") -> None:
+        def _plot_clustering_scene(ax: Any, title_suffix: str = "", show_legend: bool = True) -> None:
             ax.scatter(*els_comps_list, c=labels, cmap='viridis', marker='o')
             ax.scatter(*centroids.T, c='red', marker='x', s=100, label='Centroids')
 
@@ -333,7 +333,7 @@ class PlottingModule:
                 ax.set_zticklabels(ticks_labels)
             ax.set_title(f'{self.clustering_cfg.method} clustering {self.sample_id}{title_suffix}')
 
-            if getattr(self.plot_cfg, 'show_legend_clustering', None):
+            if show_legend and getattr(self.plot_cfg, 'show_legend_clustering', None):
                 ax.legend(fontsize=fontsize)
 
         fig = plt.figure(figsize=(6, 6))
@@ -348,7 +348,7 @@ class PlottingModule:
             ax.view_init(elev=full_view_elev, azim=full_view_azim)
         else:
             ax: Any = fig.add_subplot(111)
-        _plot_clustering_scene(ax)
+        _plot_clustering_scene(ax, show_legend=True)
         if self.plot_cfg.show_plots:
             plt.show()
         fig.savefig(
@@ -363,7 +363,7 @@ class PlottingModule:
             ax_zoomed: Any = fig_zoomed.add_subplot(111, projection='3d')
         else:
             ax_zoomed: Any = fig_zoomed.add_subplot(111)
-        _plot_clustering_scene(ax_zoomed, title_suffix=' (zoomed)')
+        _plot_clustering_scene(ax_zoomed, title_suffix=' (zoomed)', show_legend=False)
 
         # Zoom includes most of total sample points, including discarded compositions.
         zoom_points = [np.asarray(els_comps_list, dtype=float).T]
