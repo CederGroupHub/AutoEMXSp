@@ -42,6 +42,7 @@ from autoemx.runners.batch_fit_spectra import batch_fit_spectra
 from autoemx.data.Xray_lines import get_el_xray_lines
 import autoemx.calibrations as calibs
 import autoemx.utils.constants as cnst
+from autoemx.utils import print_double_separator
 
 
 # =============================================================================
@@ -143,69 +144,104 @@ exp_stds_meas_cfg_kwargs = dict(
 calibs.load_microscope_calibrations(microscope_ID, measurement_mode, load_detector_channel_params=True)
 eds_calibration_path = os.path.join(calibs.calibration_files_dir, cnst.SDD_CALIBS_MEAS_DIR, now_formatted)
 
-# --- Acquire and save spectra
-exp_std_maker = batch_acquire_experimental_stds(
-    stds=std_list,
-    microscope_ID=microscope_ID,
-    microscope_type=microscope_type,
-    measurement_type=measurement_type,
-    measurement_mode=measurement_mode,
-    sample_halfwidth=sample_halfwidth,
-    sample_substrate_type=sample_substrate_type,
-    sample_substrate_shape=sample_substrate_shape,
-    working_distance = working_distance,
-    beam_energy=beam_energy,
-    spectrum_lims=spectrum_lims,
-    use_instrument_background=use_instrument_background,
-    min_bckgrnd_cnts=min_bckgrnd_cnts,
-    fit_during_collection= fit_during_collection,
-    update_std_library = update_std_library,
-    is_auto_substrate_detection=is_auto_substrate_detection,
-    auto_adjust_brightness_contrast=auto_adjust_brightness_contrast,
-    contrast=contrast,
-    brightness=brightness,
-    saved_images_extension=saved_images_extension,
-    save_raw_images=save_raw_images,
-    min_n_spectra=n_target_spectra,
-    max_n_spectra=max_n_spectra,
-    target_Xsp_counts=target_Xsp_counts,
-    max_XSp_acquisition_time=max_XSp_acquisition_time,
-    els_substrate=els_substrate,
-    powder_meas_cfg_kwargs=powder_meas_cfg_kwargs,
-    bulk_meas_cfg_kwargs=bulk_meas_cfg_kwargs,
-    exp_stds_meas_cfg_kwargs=exp_stds_meas_cfg_kwargs,
-    output_filename_suffix=output_filename_suffix,
-    development_mode=False,
-    verbose=True,
-    exp_std_dir = eds_calibration_path
-)
+# # --- Acquire and save spectra
+# analyzers = batch_acquire_experimental_stds(
+#     stds=std_list,
+#     microscope_ID=microscope_ID,
+#     microscope_type=microscope_type,
+#     measurement_type=measurement_type,
+#     measurement_mode=measurement_mode,
+#     sample_halfwidth=sample_halfwidth,
+#     sample_substrate_type=sample_substrate_type,
+#     sample_substrate_shape=sample_substrate_shape,
+#     working_distance = working_distance,
+#     beam_energy=beam_energy,
+#     spectrum_lims=spectrum_lims,
+#     use_instrument_background=use_instrument_background,
+#     min_bckgrnd_cnts=min_bckgrnd_cnts,
+#     fit_during_collection= fit_during_collection,
+#     update_std_library = update_std_library,
+#     is_auto_substrate_detection=is_auto_substrate_detection,
+#     auto_adjust_brightness_contrast=auto_adjust_brightness_contrast,
+#     contrast=contrast,
+#     brightness=brightness,
+#     saved_images_extension=saved_images_extension,
+#     save_raw_images=save_raw_images,
+#     min_n_spectra=n_target_spectra,
+#     max_n_spectra=max_n_spectra,
+#     target_Xsp_counts=target_Xsp_counts,
+#     max_XSp_acquisition_time=max_XSp_acquisition_time,
+#     els_substrate=els_substrate,
+#     powder_meas_cfg_kwargs=powder_meas_cfg_kwargs,
+#     bulk_meas_cfg_kwargs=bulk_meas_cfg_kwargs,
+#     exp_stds_meas_cfg_kwargs=exp_stds_meas_cfg_kwargs,
+#     output_filename_suffix=output_filename_suffix,
+#     development_mode=False,
+#     verbose=True,
+#     exp_std_dir = eds_calibration_path
+# )
 
-# --- Fit spectra and extract values of fitting parameters
-sample_IDs = list(std_d['ID'] for std_d in std_list)
-spectrum_IDs = 'all'
-fit_params_vals_to_extract = list(f"{std_d['ref_el']}_{std_d['ref_peak']}_center" for std_d in std_list)
-extracted_par_vals = batch_fit_spectra(sample_IDs,
-                spectrum_IDs,
-                is_standard = True,
-                fit_params_vals_to_extract = fit_params_vals_to_extract,
-                spectrum_lims = None,
-                output_path = os.path.join(eds_calibration_path, 'Fitting output'),
-                samples_path = eds_calibration_path,
-                use_instrument_background = False,
-                quantify_plot = False,
-                plot_signal = False,
-                zoom_plot = False,
-                line_to_plot = '',
-                els_substrate = els_substrate,
-                fit_tol = 1e-4,
-                is_particle = True,
-                max_undetectable_w_fr = 0,
-                force_single_iteration = False,
-                interrupt_fits_bad_spectra = False,
-                print_results = False,
-                quant_verbose = True,
-                fitting_verbose = False
-)
+# std_paths = [an.sample_result_dir for an in analyzers]
+std_paths = [
+    '/Users/Andrea_1/Desktop/Work/Codes/Repositories/AutoEMXSp/autoemx/calibrations/PhenomXL/Detector_channel_params_calibs/SDD calibrations/20260521_09h22m/Cu',
+    '/Users/Andrea_1/Desktop/Work/Codes/Repositories/AutoEMXSp/autoemx/calibrations/PhenomXL/Detector_channel_params_calibs/SDD calibrations/20260521_09h22m/Al'
+]
+
+# --- Ensure fit results exist in ledgers, launch fit if missing
+from autoemx.config.ledger_io import load_sample_ledger
+import numpy as np
+
+def ledger_has_fit_results(ledger, ref_peak):
+    for spectrum in getattr(ledger, 'spectra', []):
+        for quant_result in getattr(spectrum, 'quantification_results', []):
+            fit_result = getattr(quant_result, 'fit_result', None)
+            if fit_result and ref_peak in getattr(fit_result, 'fitted_peaks', {}):
+                return True
+    return False
+
+extracted_par_vals = {}
+sample_IDs = [std_d['ID'] for std_d in std_list]
+fit_params_vals_to_extract = [f"{std_d['ref_el']}_{std_d['ref_peak']}_center" for std_d in std_list]
+
+for std, sample_path in zip(std_list, std_paths):
+    sample_ID = std['ID']
+    ref_peak = f"{std['ref_el']}_{std['ref_peak']}"
+    ledger_path = os.path.join(sample_path, cnst.LEDGER_FILENAME + cnst.LEDGER_FILEEXT)
+    ledger = load_sample_ledger(ledger_path)
+    if not ledger_has_fit_results(ledger, ref_peak):
+        batch_fit_spectra(
+            [sample_ID],
+            'all',
+            is_standard=True,
+            fit_params_vals_to_extract=fit_params_vals_to_extract,
+            samples_path=eds_calibration_path,
+            use_instrument_background=False,
+            plot_signal=False,
+            zoom_plot=False,
+            line_to_plot='',
+            els_substrate=els_substrate,
+            fit_tol=1e-4,
+            is_particle=True,
+            max_undetectable_w_fr=0,
+            force_single_iteration=False,
+            interrupt_fits_bad_spectra=False,
+            print_results=False,
+            quant_verbose=True,
+            fitting_verbose=False
+        )
+        ledger = load_sample_ledger(ledger_path)
+    # Collect fit parameter values for this sample, only if quant_flag == 0
+    centers = []
+    for spectrum in getattr(ledger, 'spectra', []):
+        for quant_result in getattr(spectrum, 'quantification_results', []):
+            if getattr(quant_result, 'quant_flag', None) == 0:
+                fit_result = getattr(quant_result, 'fit_result', None)
+                if fit_result and ref_peak in getattr(fit_result, 'fitted_peaks', {}):
+                    center = fit_result.fitted_peaks[ref_peak].center
+                    if center is not None:
+                        centers.append(center)
+    extracted_par_vals[sample_ID] = centers
+
 
 # --- Calculate new SDD calibration values
 meas_modes_calibs = calibs.detector_channel_params
@@ -213,14 +249,19 @@ current_energy_zero = meas_modes_calibs[measurement_mode][cnst.OFFSET_KEY]
 current_bin_width = meas_modes_calibs[measurement_mode][cnst.SCALE_KEY]
 
 # Extract mean measured energies for standards
+print_double_separator()
 measured_means = {}
 for std in std_list:
     el = std['ref_el']
     ref_peak = std['ref_peak']
     param_name = f"{el}_{ref_peak}_center"
-    sample_df = pd.DataFrame(extracted_par_vals[std['ID']])  # DataFrame for this sample
-
-    meas_mean = sample_df.loc[sample_df['sp_id'] == 'mean', param_name].values[0]
+    centers = extracted_par_vals[std['ID']]
+    valid_centers = [c for c in centers if c is not None and not np.isnan(c)]
+    if len(valid_centers) > 0:
+        meas_mean = float(np.mean(valid_centers))
+        print(f"Center of {std['ID']} was calibrated over {len(valid_centers)} spectra")
+    else:
+        raise RuntimeError(f"No valid fitted center values found for standard '{std['ID']}' ({param_name})")
     measured_means[param_name] = meas_mean
 
 # Assign to calibration variables
@@ -241,6 +282,7 @@ Dy = y_th_en - y_measured_en
 new_scale = (Dx - Dy + x_measured_en - y_measured_en) / (i_x - i_y)
 new_offset = Dy + y_measured_en - i_y * new_scale
 
+print_double_separator
 print(f"Current scale: {current_bin_width:.6f}")
 print(f"Current offset: {current_energy_zero:.6f}")
 print(f"New scale: {new_scale:.6f}")

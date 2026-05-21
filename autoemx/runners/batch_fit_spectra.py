@@ -52,9 +52,7 @@ def batch_fit_spectra(sample_IDs,
                       fit_params_vals_to_extract: Optional[List[str]] = None,
                       spectrum_lims: tuple = None,
                       samples_path: str = None,
-                      output_path: str = 'Fitting output',
                       use_instrument_background: bool = dflt.use_instrument_background,
-                      quantify_plot: bool = True,
                       plot_signal: bool = True,
                       zoom_plot: bool = False,
                       line_to_plot: str = '',
@@ -88,8 +86,6 @@ def batch_fit_spectra(sample_IDs,
         Directory where the extracted values of fitted parameters are saved. Default: /Fitting output 
     use_instrument_background : bool, optional
         Whether to use instrument background if present.
-    quantify_plot : bool, optional
-        Whether to plot quantification results.
     plot_signal : bool, optional
         Whether to plot the signal.
     zoom_plot : bool, optional
@@ -205,30 +201,9 @@ def batch_fit_spectra(sample_IDs,
                     sample_fit_results.append(None)
                     
         if fit_params_vals_to_extract:
-            # Create DataFrame from current sample_fit_results
-            filtered_results = [item for item in sample_fit_results if item is not None] # Remove None entries
-            temp_df = pd.DataFrame(filtered_results)
-            
-            # Calculate mean and std for numeric columns (excluding sp_id)
-            mean_vals = temp_df.drop(columns=['sp_id']).mean(numeric_only=True).to_dict()
-            std_vals = temp_df.drop(columns=['sp_id']).std(numeric_only=True).to_dict()
-            
-            # Append mean and std rows directly to sample_fit_results
-            sample_fit_results.append({'sp_id': 'mean', **mean_vals})
-            sample_fit_results.append({'sp_id': 'std', **std_vals})
-            
-            # Now create final DataFrame
-            results_df = pd.DataFrame(sample_fit_results)
-            
-            # Save without index
-            if not os.path.exists(output_path):
-                os.makedirs(output_path)
-            now = datetime.now()
-            now_formatted = now.strftime("%Y%m%d_%Hh%Mm")
-            file_path = os.path.join(output_path, f"{now_formatted}_{sample_ID}_FitParamVals.csv")
-            results_df.to_csv(file_path, index=False)
-            
-            extracted_par_vals[sample_ID] = sample_fit_results 
+            # Only keep the list of fit results (filtered for None)
+            filtered_results = [item for item in sample_fit_results if item is not None]
+            extracted_par_vals[sample_ID] = filtered_results
         else:
             extracted_par_vals[sample_ID] = None
                     

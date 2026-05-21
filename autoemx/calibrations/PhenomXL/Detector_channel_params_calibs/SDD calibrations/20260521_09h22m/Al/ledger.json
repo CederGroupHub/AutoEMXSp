@@ -1,0 +1,1315 @@
+{
+  "sample_id": "Al",
+  "sample_path": "/Users/Andrea_1/Desktop/Work/Codes/Repositories/AutoEMXSp/autoemx/calibrations/PhenomXL/Detector_channel_params_calibs/SDD calibrations/20260521_09h22m/Al",
+  "configs": {
+    "microscope_cfg": {
+      "ID": "PhenomXL",
+      "type": "SEM",
+      "detector_type": "BSD",
+      "is_auto_BC": true,
+      "brightness": null,
+      "contrast": null,
+      "energy_zero": -0.032459,
+      "bin_width": 0.009934
+    },
+    "sample_cfg": {
+      "elements": [
+        "Al"
+      ],
+      "type": "bulk",
+      "w_frs": null,
+      "center_pos": [
+        43.61,
+        38.853
+      ],
+      "half_width_mm": 1.0,
+      "is_powder_sample": false,
+      "is_surface_rough": false,
+      "is_grid_acquisition": true,
+      "is_particle_acquisition": false
+    },
+    "measurement_cfg": {
+      "type": "EDS",
+      "mode": "point",
+      "working_distance": 8.5,
+      "working_distance_tolerance": 1.0,
+      "beam_energy_keV": 15.0,
+      "beam_current": 4.3,
+      "emergence_angle": 28.5,
+      "is_manual_navigation": false,
+      "max_acquisition_time": 25.0,
+      "target_acquisition_counts": 50000,
+      "min_n_spectra": 5,
+      "max_n_spectra": 10,
+      "powder_meas_cfg": {
+        "is_manual_particle_selection": false,
+        "is_known_powder_mixture_meas": true,
+        "img_shift_tracking": true,
+        "par_search_frame_width_um": 500.0,
+        "max_n_par_per_frame": 30,
+        "max_spectra_per_par": 3,
+        "max_area_par": 10000.0,
+        "min_area_par": 10.0,
+        "par_mask_margin": 1.0,
+        "xsp_spots_distance_um": 1.0,
+        "par_segmentation_model": "threshold_bright",
+        "par_brightness_thresh": 100,
+        "par_xy_spots_thresh": 100,
+        "par_feature_selection": "peaks",
+        "par_spot_spacing": "random"
+      },
+      "bulk_meas_cfg": {
+        "grid_spot_spacing_um": 10.0,
+        "min_xsp_spots_distance_um": 2.5,
+        "image_frame_width_um": 100.0,
+        "randomize_frames": false,
+        "exclude_sample_margin": false
+      },
+      "exp_stds_cfg": {
+        "is_exp_std_measurement": true,
+        "formula": "Al",
+        "els_to_use_for_mean_PB_calc": null,
+        "generate_separate_std_dict": false,
+        "min_acceptable_PB_ratio": 10.0,
+        "quant_flags_accepted": [
+          0
+        ],
+        "w_frs": {
+          "Al": 1.0
+        }
+      },
+      "saved_images_extension": "png",
+      "save_raw_images": false
+    },
+    "sample_substrate_cfg": {
+      "elements": [
+        "C",
+        "O",
+        "Al"
+      ],
+      "type": "None",
+      "shape": "circle",
+      "auto_detection": false,
+      "stub_w_mm": 12.0
+    },
+    "plot_cfg": {
+      "show_unused_comps_clust": true,
+      "els_excluded_clust_plot": [],
+      "show_legend_clustering": true,
+      "save_plots": true,
+      "show_plots": false,
+      "use_custom_plots": false,
+      "custom_plot_file": null
+    }
+  },
+  "spectra": [
+    {
+      "spectrum_id": "0",
+      "total_counts": 66531,
+      "live_acquisition_time": 1.0,
+      "acquisition_details": {
+        "frame_id": "CX101",
+        "particle_id": null,
+        "spot_coordinates": {
+          "machine_coordinates": {
+            "x": 43.61,
+            "y": 38.853
+          },
+          "pixel_coordinates": [
+            960,
+            600
+          ]
+        }
+      },
+      "spectrum_relpath": "spectra/spectrum_0.msa",
+      "instrument_background_relpath": null,
+      "quantification_results": [
+        {
+          "quantification_id": 0,
+          "quant_flag": 0,
+          "comment": "",
+          "composition_atomic_fractions": null,
+          "composition_weight_fractions": null,
+          "analytical_error": null,
+          "fit_result": {
+            "r_squared": 0.9996268908489105,
+            "reduced_chi_squared": 88.89022634355752,
+            "fitted_peaks": {
+              "Al_Ka1": {
+                "element": "Al",
+                "line": "Ka1",
+                "area": 348.09540708060086,
+                "sigma": 0.030952248687292922,
+                "center": 1.486460257417206,
+                "fwhm": 0.07289254565857484,
+                "peak_intensity": 35376.08538036414,
+                "background_intensity": 4.38513913589852,
+                "theoretical_energy": 1.4869,
+                "height": 4463.211009469138,
+                "pb_ratio": 8067.266347551259
+              },
+              "Al_Ka1_pileup": {
+                "element": "Al",
+                "line": "Ka1_pileup",
+                "area": 0.3217324850312935,
+                "sigma": 0.04025178469337476,
+                "center": 2.973360257417206,
+                "fwhm": 0.09479295295289755,
+                "peak_intensity": 32.387002721088535,
+                "background_intensity": 1.4191770268926425,
+                "theoretical_energy": 2.9738,
+                "height": 3.1715753628478804,
+                "pb_ratio": 22.820974485474487
+              },
+              "C_Ka1": {
+                "element": "C",
+                "line": "Ka1",
+                "area": 0.6367401073497254,
+                "sigma": 0.020562659034733418,
+                "center": 0.2734380998131227,
+                "fwhm": 0.0484250620267972,
+                "peak_intensity": 71.24312849230206,
+                "background_intensity": 0.6644858929646227,
+                "theoretical_energy": 0.28176999999999996,
+                "height": 13.141075169038299,
+                "pb_ratio": 107.21541156344016
+              },
+              "C_Ka1_pileup": {
+                "element": "C",
+                "line": "Ka1_pileup",
+                "area": 0.003247205379897741,
+                "sigma": 0.023425207025311513,
+                "center": 0.5552080998131227,
+                "fwhm": 0.05516636254460861,
+                "peak_intensity": 0.3268779323432396,
+                "background_intensity": 2.9465584184632454,
+                "theoretical_energy": 0.5635399999999999,
+                "height": 0.05517876863948347,
+                "pb_ratio": 0.11093550030944922
+              },
+              "O_Ka1": {
+                "element": "O",
+                "line": "Ka1",
+                "area": 0.5822272109873199,
+                "sigma": 0.023034788147033258,
+                "center": 0.5228430737153502,
+                "fwhm": 0.054246926086263324,
+                "peak_intensity": 65.09092513614935,
+                "background_intensity": 2.681446959158073,
+                "theoretical_energy": 0.52295,
+                "height": 10.75225788293022,
+                "pb_ratio": 24.274552555977742
+              },
+              "O_Ka1_pileup": {
+                "element": "O",
+                "line": "Ka1_pileup",
+                "area": 0.0042438643683074114,
+                "sigma": 0.027645928470187143,
+                "center": 1.0457930737153502,
+                "fwhm": 0.06510616154729072,
+                "peak_intensity": 0.4272059964070276,
+                "background_intensity": 5.071739583156078,
+                "theoretical_energy": 1.0459,
+                "height": 0.06041549874125277,
+                "pb_ratio": 0.08423263643619155
+              },
+              "Al_Ka2": {
+                "element": "Al",
+                "line": "Ka2",
+                "area": 176.48437138986463,
+                "sigma": 0.030949371009982803,
+                "center": 1.486060257417206,
+                "fwhm": 0.0728857687285095,
+                "peak_intensity": 17935.688962641056,
+                "background_intensity": 4.385974667234172,
+                "theoretical_energy": 1.4865,
+                "height": 2261.774617628491,
+                "pb_ratio": 4089.327988287592
+              },
+              "Al_Ka2_pileup": {
+                "element": "Al",
+                "line": "Ka2_pileup",
+                "area": 0.16311836991086578,
+                "sigma": 0.040247358984520636,
+                "center": 2.972560257417206,
+                "fwhm": 0.09478253040854609,
+                "peak_intensity": 16.42021037959189,
+                "background_intensity": 1.4194413925158977,
+                "theoretical_energy": 2.973,
+                "height": 1.604682904399006,
+                "pb_ratio": 11.56807915153706
+              },
+              "O_Ka2_pileup": {
+                "element": "O",
+                "line": "Ka2_pileup",
+                "area": 0.0021219321841537057,
+                "sigma": 0.027645928470187143,
+                "center": 1.0457930737153502,
+                "fwhm": 0.06510616154729072,
+                "peak_intensity": 0.2136029982035138,
+                "background_intensity": 5.071739583156078,
+                "theoretical_energy": 1.0459,
+                "height": 0.030207749370626386,
+                "pb_ratio": 0.04211631821809578
+              },
+              "O_Ka2": {
+                "element": "O",
+                "line": "Ka2",
+                "area": 0.29111360549365994,
+                "sigma": 0.023034788147033258,
+                "center": 0.5228430737153502,
+                "fwhm": 0.054246926086263324,
+                "peak_intensity": 32.545462568074676,
+                "background_intensity": 2.681446959158073,
+                "theoretical_energy": 0.52295,
+                "height": 5.37612894146511,
+                "pb_ratio": 12.137276277988871
+              },
+              "Al_Kb1": {
+                "element": "Al",
+                "line": "Kb1",
+                "area": 9.120099665511743,
+                "sigma": 0.031424165196356636,
+                "center": 1.552560257417206,
+                "fwhm": 0.07400390903741988,
+                "peak_intensity": 926.7715895653065,
+                "background_intensity": 4.22910294795035,
+                "theoretical_energy": 1.553,
+                "height": 114.10453118600758,
+                "pb_ratio": 219.1414115408256
+              },
+              "C_Ka2": {
+                "element": "C",
+                "line": "Ka2",
+                "area": 0.3183700536748627,
+                "sigma": 0.020562659034733418,
+                "center": 0.2734380998131227,
+                "fwhm": 0.0484250620267972,
+                "peak_intensity": 35.62156424615103,
+                "background_intensity": 0.6644858929646227,
+                "theoretical_energy": 0.28176999999999996,
+                "height": 6.570537584519149,
+                "pb_ratio": 53.60770578172008
+              },
+              "Al_Ll": {
+                "element": "Al",
+                "line": "Ll",
+                "area": 17.252435166536973,
+                "sigma": 0.0,
+                "center": 0.0685,
+                "fwhm": 0.0,
+                "peak_intensity": 0.0,
+                "background_intensity": 0.0,
+                "theoretical_energy": 0.0685,
+                "height": 0.0,
+                "pb_ratio": 0.0
+              },
+              "C_Ka2_pileup": {
+                "element": "C",
+                "line": "Ka2_pileup",
+                "area": 0.0016236026899488704,
+                "sigma": 0.023425207025311513,
+                "center": 0.5552080998131227,
+                "fwhm": 0.05516636254460861,
+                "peak_intensity": 0.1634389661716198,
+                "background_intensity": 2.9465584184632454,
+                "theoretical_energy": 0.5635399999999999,
+                "height": 0.027589384319741735,
+                "pb_ratio": 0.05546775015472461
+              }
+            }
+          },
+          "diagnostics": {
+            "iterations_run": null,
+            "converged": null,
+            "interrupted": true,
+            "min_background_ref_lines": 29.6,
+            "missing_reference_peaks": []
+          }
+        }
+      ]
+    },
+    {
+      "spectrum_id": "1",
+      "total_counts": 52620,
+      "live_acquisition_time": 1.0,
+      "acquisition_details": {
+        "frame_id": "CX100",
+        "particle_id": null,
+        "spot_coordinates": {
+          "machine_coordinates": {
+            "x": 43.61,
+            "y": 38.843
+          },
+          "pixel_coordinates": [
+            960,
+            600
+          ]
+        }
+      },
+      "spectrum_relpath": "spectra/spectrum_1.msa",
+      "instrument_background_relpath": null,
+      "quantification_results": [
+        {
+          "quantification_id": 0,
+          "quant_flag": 0,
+          "comment": "",
+          "composition_atomic_fractions": null,
+          "composition_weight_fractions": null,
+          "analytical_error": null,
+          "fit_result": {
+            "r_squared": 0.9991979101940381,
+            "reduced_chi_squared": 95.61377106552078,
+            "fitted_peaks": {
+              "Al_Ka1": {
+                "element": "Al",
+                "line": "Ka1",
+                "area": 244.29222329216086,
+                "sigma": 0.0309252037165921,
+                "center": 1.4868784746305013,
+                "fwhm": 0.07282885475257439,
+                "peak_intensity": 24826.82166983203,
+                "background_intensity": 3.959850817934809,
+                "theoretical_energy": 1.4869,
+                "height": 3136.300765185787,
+                "pb_ratio": 6269.635602782638
+              },
+              "Al_Ka1_pileup": {
+                "element": "Al",
+                "line": "Ka1_pileup",
+                "area": 0.13367073506231977,
+                "sigma": 0.040216614119866954,
+                "center": 2.9737784746305014,
+                "fwhm": 0.09471012625228668,
+                "peak_intensity": 13.455882329607388,
+                "background_intensity": 1.4659816168690212,
+                "theoretical_energy": 2.9738,
+                "height": 1.3201954350538032,
+                "pb_ratio": 9.178752430979229
+              },
+              "C_Ka1": {
+                "element": "C",
+                "line": "Ka1",
+                "area": 1.374391091339203,
+                "sigma": 0.020562659034733418,
+                "center": 0.2667118266515224,
+                "fwhm": 0.0484250620267972,
+                "peak_intensity": 153.77444738763063,
+                "background_intensity": 0.28902232107202586,
+                "theoretical_energy": 0.28176999999999996,
+                "height": 28.618764172375975,
+                "pb_ratio": 532.0504202487158
+              },
+              "C_Ka1_pileup": {
+                "element": "C",
+                "line": "Ka1_pileup",
+                "area": 0.004546087531856837,
+                "sigma": 0.023425207025311513,
+                "center": 0.5484818266515223,
+                "fwhm": 0.05516636254460861,
+                "peak_intensity": 0.45762910528053535,
+                "background_intensity": 1.88404366494213,
+                "theoretical_energy": 0.5635399999999999,
+                "height": 0.07583419564257372,
+                "pb_ratio": 0.24289729256067524
+              },
+              "O_Ka1": {
+                "element": "O",
+                "line": "Ka1",
+                "area": 7.494164489178228,
+                "sigma": 0.023007818459654196,
+                "center": 0.5201872929389105,
+                "fwhm": 0.054183412472485634,
+                "peak_intensity": 837.8208542565101,
+                "background_intensity": 1.6541766968565481,
+                "theoretical_energy": 0.52295,
+                "height": 136.44224316386334,
+                "pb_ratio": 506.48812539109707
+              },
+              "O_Ka1_pileup": {
+                "element": "O",
+                "line": "Ka1_pileup",
+                "area": 0.0,
+                "sigma": 0.0,
+                "center": 1.0459,
+                "fwhm": 0.0,
+                "peak_intensity": 0.0,
+                "background_intensity": 0.0,
+                "theoretical_energy": 1.0459,
+                "height": 0.0,
+                "pb_ratio": 0.0
+              },
+              "O_Ka2_pileup": {
+                "element": "O",
+                "line": "Ka2_pileup",
+                "area": 0.0,
+                "sigma": 0.0,
+                "center": 1.0459,
+                "fwhm": 0.0,
+                "peak_intensity": 0.0,
+                "background_intensity": 0.0,
+                "theoretical_energy": 1.0459,
+                "height": 0.0,
+                "pb_ratio": 0.0
+              },
+              "C_Ka2_pileup": {
+                "element": "C",
+                "line": "Ka2_pileup",
+                "area": 0.0022730437659284185,
+                "sigma": 0.023425207025311513,
+                "center": 0.5484818266515223,
+                "fwhm": 0.05516636254460861,
+                "peak_intensity": 0.22881455264026768,
+                "background_intensity": 1.88404366494213,
+                "theoretical_energy": 0.5635399999999999,
+                "height": 0.03791709782128686,
+                "pb_ratio": 0.12144864628033762
+              },
+              "Al_Ka2": {
+                "element": "Al",
+                "line": "Ka2",
+                "area": 123.85615720912556,
+                "sigma": 0.030922328553693753,
+                "center": 1.486478474630501,
+                "fwhm": 0.07282208374394879,
+                "peak_intensity": 12587.208183663846,
+                "background_intensity": 3.9603371731358026,
+                "theoretical_energy": 1.4865,
+                "height": 1589.6273338355109,
+                "pb_ratio": 3178.3173081945624
+              },
+              "Al_Ka2_pileup": {
+                "element": "Al",
+                "line": "Ka2_pileup",
+                "area": 0.06777106267659612,
+                "sigma": 0.04021219227803935,
+                "center": 2.972978474630501,
+                "fwhm": 0.09469971281478266,
+                "peak_intensity": 6.8221323411109465,
+                "background_intensity": 1.4661979185425726,
+                "theoretical_energy": 2.973,
+                "height": 0.6680342428412079,
+                "pb_ratio": 4.6529409534916475
+              },
+              "Al_Ll": {
+                "element": "Al",
+                "line": "Ll",
+                "area": 0.6971486833801508,
+                "sigma": 0.0,
+                "center": 0.0685,
+                "fwhm": 0.0,
+                "peak_intensity": 0.0,
+                "background_intensity": 0.0,
+                "theoretical_energy": 0.0685,
+                "height": 0.0,
+                "pb_ratio": 0.0
+              },
+              "C_Ka2": {
+                "element": "C",
+                "line": "Ka2",
+                "area": 0.6871955456696015,
+                "sigma": 0.020562659034733418,
+                "center": 0.2667118266515224,
+                "fwhm": 0.0484250620267972,
+                "peak_intensity": 76.88722369381532,
+                "background_intensity": 0.28902232107202586,
+                "theoretical_energy": 0.28176999999999996,
+                "height": 14.309382086187988,
+                "pb_ratio": 266.0252101243579
+              },
+              "O_Ka2": {
+                "element": "O",
+                "line": "Ka2",
+                "area": 3.747082244589114,
+                "sigma": 0.023007818459654196,
+                "center": 0.5201872929389105,
+                "fwhm": 0.054183412472485634,
+                "peak_intensity": 418.91042712825504,
+                "background_intensity": 1.6541766968565481,
+                "theoretical_energy": 0.52295,
+                "height": 68.22112158193167,
+                "pb_ratio": 253.24406269554854
+              },
+              "Al_Kb1": {
+                "element": "Al",
+                "line": "Kb1",
+                "area": 6.4004562502546145,
+                "sigma": 0.03139670788184552,
+                "center": 1.552978474630501,
+                "fwhm": 0.0739392470617462,
+                "peak_intensity": 650.405286601825,
+                "background_intensity": 3.8602910760040907,
+                "theoretical_energy": 1.553,
+                "height": 80.29623844342115,
+                "pb_ratio": 168.4860736654812
+              }
+            }
+          },
+          "diagnostics": {
+            "iterations_run": null,
+            "converged": null,
+            "interrupted": true,
+            "min_background_ref_lines": 27.0,
+            "missing_reference_peaks": []
+          }
+        }
+      ]
+    },
+    {
+      "spectrum_id": "2",
+      "total_counts": 65687,
+      "live_acquisition_time": 1.0,
+      "acquisition_details": {
+        "frame_id": "CY101",
+        "particle_id": null,
+        "spot_coordinates": {
+          "machine_coordinates": {
+            "x": 43.62,
+            "y": 38.853
+          },
+          "pixel_coordinates": [
+            960,
+            600
+          ]
+        }
+      },
+      "spectrum_relpath": "spectra/spectrum_2.msa",
+      "instrument_background_relpath": null,
+      "quantification_results": [
+        {
+          "quantification_id": 0,
+          "quant_flag": 0,
+          "comment": "",
+          "composition_atomic_fractions": null,
+          "composition_weight_fractions": null,
+          "analytical_error": null,
+          "fit_result": {
+            "r_squared": 0.9995659195796341,
+            "reduced_chi_squared": 97.17368435498173,
+            "fitted_peaks": {
+              "Al_Ka1": {
+                "element": "Al",
+                "line": "Ka1",
+                "area": 336.4846787646192,
+                "sigma": 0.030812556151998603,
+                "center": 1.4862261266233172,
+                "fwhm": 0.0725635697379567,
+                "peak_intensity": 34196.116111747826,
+                "background_intensity": 4.430544759754419,
+                "theoretical_energy": 1.4869,
+                "height": 4332.47455020118,
+                "pb_ratio": 7718.26444963921
+              },
+              "Al_Ka1_pileup": {
+                "element": "Al",
+                "line": "Ka1_pileup",
+                "area": 0.4997340866358585,
+                "sigma": 0.040070121838738704,
+                "center": 2.9731261266233173,
+                "fwhm": 0.09436513693022965,
+                "peak_intensity": 50.305424465055225,
+                "background_intensity": 1.4551781678833424,
+                "theoretical_energy": 2.9738,
+                "height": 4.945269483521911,
+                "pb_ratio": 34.56994172626157
+              },
+              "C_Ka1": {
+                "element": "C",
+                "line": "Ka1",
+                "area": 2.0557756018348026,
+                "sigma": 0.020562659034733418,
+                "center": 0.2701668928367747,
+                "fwhm": 0.0484250620267972,
+                "peak_intensity": 230.01353428441666,
+                "background_intensity": 0.5966466116349681,
+                "theoretical_energy": 0.28176999999999996,
+                "height": 42.09792817155609,
+                "pb_ratio": 385.51050118950525
+              },
+              "C_Ka1_pileup": {
+                "element": "C",
+                "line": "Ka1_pileup",
+                "area": 0.006819131297785256,
+                "sigma": 0.023425207025311513,
+                "center": 0.5519368928367747,
+                "fwhm": 0.05516636254460861,
+                "peak_intensity": 0.6864436579208031,
+                "background_intensity": 2.840771419816271,
+                "theoretical_energy": 0.5635399999999999,
+                "height": 0.11582396078728402,
+                "pb_ratio": 0.24163987751087673
+              },
+              "O_Ka1": {
+                "element": "O",
+                "line": "Ka1",
+                "area": 4.974360943193605,
+                "sigma": 0.02437770592970745,
+                "center": 0.51720997808989,
+                "fwhm": 0.05740949746446104,
+                "peak_intensity": 556.1157960594072,
+                "background_intensity": 2.5704696895369987,
+                "theoretical_energy": 0.52295,
+                "height": 86.6602318029664,
+                "pb_ratio": 216.3479298445167
+              },
+              "O_Ka1_pileup": {
+                "element": "O",
+                "line": "Ka1_pileup",
+                "area": 0.016854204205563716,
+                "sigma": 0.029257673658559306,
+                "center": 1.04015997808989,
+                "fwhm": 0.06890182146590716,
+                "peak_intensity": 1.696618100016481,
+                "background_intensity": 5.061756797587972,
+                "theoretical_energy": 1.0459,
+                "height": 0.2298064879904588,
+                "pb_ratio": 0.33518364628362896
+              },
+              "Al_Ka2_pileup": {
+                "element": "Al",
+                "line": "Ka2_pileup",
+                "area": 0.2533651819243803,
+                "sigma": 0.040065716103828856,
+                "center": 2.972326126623317,
+                "fwhm": 0.09435476142451696,
+                "peak_intensity": 25.504850203783008,
+                "background_intensity": 1.4554434202739706,
+                "theoretical_energy": 2.973,
+                "height": 2.505382903734535,
+                "pb_ratio": 17.523766192836277
+              },
+              "C_Ka2_pileup": {
+                "element": "C",
+                "line": "Ka2_pileup",
+                "area": 0.003409565648892628,
+                "sigma": 0.023425207025311513,
+                "center": 0.5519368928367747,
+                "fwhm": 0.05516636254460861,
+                "peak_intensity": 0.34322182896040154,
+                "background_intensity": 2.840771419816271,
+                "theoretical_energy": 0.5635399999999999,
+                "height": 0.05791198039364201,
+                "pb_ratio": 0.12081993875543837
+              },
+              "Al_Kb1": {
+                "element": "Al",
+                "line": "Kb1",
+                "area": 8.815898583633023,
+                "sigma": 0.031282342825060275,
+                "center": 1.552326126623317,
+                "fwhm": 0.07366991735301695,
+                "peak_intensity": 895.8591203813788,
+                "background_intensity": 4.278225174199971,
+                "theoretical_energy": 1.553,
+                "height": 110.66218062211789,
+                "pb_ratio": 209.39971224139802
+              },
+              "Al_Ll": {
+                "element": "Al",
+                "line": "Ll",
+                "area": 4.151303678476654,
+                "sigma": 0.0,
+                "center": 0.0685,
+                "fwhm": 0.0,
+                "peak_intensity": 0.0,
+                "background_intensity": 0.0,
+                "theoretical_energy": 0.0685,
+                "height": 0.0,
+                "pb_ratio": 0.0
+              },
+              "C_Ka2": {
+                "element": "C",
+                "line": "Ka2",
+                "area": 1.0278878009174013,
+                "sigma": 0.020562659034733418,
+                "center": 0.2701668928367747,
+                "fwhm": 0.0484250620267972,
+                "peak_intensity": 115.00676714220833,
+                "background_intensity": 0.5966466116349681,
+                "theoretical_energy": 0.28176999999999996,
+                "height": 21.048964085778046,
+                "pb_ratio": 192.75525059475262
+              },
+              "O_Ka2": {
+                "element": "O",
+                "line": "Ka2",
+                "area": 2.4871804715968024,
+                "sigma": 0.024377705929707446,
+                "center": 0.51720997808989,
+                "fwhm": 0.057409497464461036,
+                "peak_intensity": 278.0578980297036,
+                "background_intensity": 2.5704696895369987,
+                "theoretical_energy": 0.52295,
+                "height": 43.330115901483204,
+                "pb_ratio": 108.17396492225835
+              },
+              "Al_Ka2": {
+                "element": "Al",
+                "line": "Ka2",
+                "area": 170.59773213366194,
+                "sigma": 0.03080969146211448,
+                "center": 1.485826126623317,
+                "fwhm": 0.0725568233932796,
+                "peak_intensity": 17337.444087941265,
+                "background_intensity": 4.431354026109233,
+                "theoretical_energy": 1.4865,
+                "height": 2195.2953302626142,
+                "pb_ratio": 3912.44842677661
+              },
+              "O_Ka2_pileup": {
+                "element": "O",
+                "line": "Ka2_pileup",
+                "area": 0.008427102102781858,
+                "sigma": 0.029257673658559306,
+                "center": 1.04015997808989,
+                "fwhm": 0.06890182146590716,
+                "peak_intensity": 0.8483090500082405,
+                "background_intensity": 5.061756797587972,
+                "theoretical_energy": 1.0459,
+                "height": 0.1149032439952294,
+                "pb_ratio": 0.16759182314181448
+              }
+            }
+          },
+          "diagnostics": {
+            "iterations_run": null,
+            "converged": null,
+            "interrupted": true,
+            "min_background_ref_lines": 29.9,
+            "missing_reference_peaks": []
+          }
+        }
+      ]
+    },
+    {
+      "spectrum_id": "3",
+      "total_counts": 66871,
+      "live_acquisition_time": 1.0,
+      "acquisition_details": {
+        "frame_id": "CX102",
+        "particle_id": null,
+        "spot_coordinates": {
+          "machine_coordinates": {
+            "x": 43.61,
+            "y": 38.863
+          },
+          "pixel_coordinates": [
+            960,
+            600
+          ]
+        }
+      },
+      "spectrum_relpath": "spectra/spectrum_3.msa",
+      "instrument_background_relpath": null,
+      "quantification_results": [
+        {
+          "quantification_id": 0,
+          "quant_flag": 0,
+          "comment": "",
+          "composition_atomic_fractions": null,
+          "composition_weight_fractions": null,
+          "analytical_error": null,
+          "fit_result": {
+            "r_squared": 0.9997300531531167,
+            "reduced_chi_squared": 64.07985114548542,
+            "fitted_peaks": {
+              "Al_Ka1": {
+                "element": "Al",
+                "line": "Ka1",
+                "area": 346.7591821007621,
+                "sigma": 0.03087479811298422,
+                "center": 1.4863163860780682,
+                "fwhm": 0.07271014955607784,
+                "peak_intensity": 35240.28848604028,
+                "background_intensity": 4.49468349388614,
+                "theoretical_energy": 1.4869,
+                "height": 4456.3677474209535,
+                "pb_ratio": 7840.438272010836
+              },
+              "Al_Ka1_pileup": {
+                "element": "Al",
+                "line": "Ka1_pileup",
+                "area": 0.22036933206814416,
+                "sigma": 0.04015106426194672,
+                "center": 2.973216386078068,
+                "fwhm": 0.09455575633688452,
+                "peak_intensity": 22.183343272412348,
+                "background_intensity": 1.4546279070400876,
+                "theoretical_energy": 2.9738,
+                "height": 2.1769210269888504,
+                "pb_ratio": 15.25018402647833
+              },
+              "C_Ka1": {
+                "element": "C",
+                "line": "Ka1",
+                "area": 1.7342893910827457,
+                "sigma": 0.020562659034733418,
+                "center": 0.265230428444301,
+                "fwhm": 0.0484250620267972,
+                "peak_intensity": 194.04102436774207,
+                "background_intensity": 0.6810905851512478,
+                "theoretical_energy": 0.28176999999999996,
+                "height": 36.07010099364718,
+                "pb_ratio": 284.8975284611399
+              },
+              "C_Ka1_pileup": {
+                "element": "C",
+                "line": "Ka1_pileup",
+                "area": 0.007143851835775029,
+                "sigma": 0.023425207025311513,
+                "center": 0.547000428444301,
+                "fwhm": 0.05516636254460861,
+                "peak_intensity": 0.719131451155127,
+                "background_intensity": 3.0201748448610193,
+                "theoretical_energy": 0.5635399999999999,
+                "height": 0.12047098262630686,
+                "pb_ratio": 0.23810921158381465
+              },
+              "O_Ka1": {
+                "element": "O",
+                "line": "Ka1",
+                "area": 1.235719020040246,
+                "sigma": 0.023034788147033258,
+                "center": 0.520605309320582,
+                "fwhm": 0.054246926086263324,
+                "peak_intensity": 138.1489779752104,
+                "background_intensity": 2.748440898372243,
+                "theoretical_energy": 0.52295,
+                "height": 22.54627430497895,
+                "pb_ratio": 50.26448924443993
+              },
+              "O_Ka1_pileup": {
+                "element": "O",
+                "line": "Ka1_pileup",
+                "area": 0.007760209130619265,
+                "sigma": 0.027645928470187143,
+                "center": 1.043555309320582,
+                "fwhm": 0.06510616154729072,
+                "peak_intensity": 0.781176679144279,
+                "background_intensity": 5.198439763322785,
+                "theoretical_energy": 1.0459,
+                "height": 0.11126202069954291,
+                "pb_ratio": 0.15027137270221239
+              },
+              "O_Ka2": {
+                "element": "O",
+                "line": "Ka2",
+                "area": 0.617859510020123,
+                "sigma": 0.023034788147033258,
+                "center": 0.520605309320582,
+                "fwhm": 0.054246926086263324,
+                "peak_intensity": 69.0744889876052,
+                "background_intensity": 2.748440898372243,
+                "theoretical_energy": 0.52295,
+                "height": 11.273137152489475,
+                "pb_ratio": 25.132244622219964
+              },
+              "Al_Kb1": {
+                "element": "Al",
+                "line": "Kb1",
+                "area": 9.085090571039967,
+                "sigma": 0.03134553376423622,
+                "center": 1.552416386078068,
+                "fwhm": 0.07381873201477629,
+                "peak_intensity": 923.2140226196412,
+                "background_intensity": 4.334749059303896,
+                "theoretical_energy": 1.553,
+                "height": 113.8672218894436,
+                "pb_ratio": 212.97980805557802
+              },
+              "Al_Ka2_pileup": {
+                "element": "Al",
+                "line": "Ka2_pileup",
+                "area": 0.11172725135854909,
+                "sigma": 0.040146649627366915,
+                "center": 2.972416386078068,
+                "fwhm": 0.09454535987244908,
+                "peak_intensity": 11.24695503911306,
+                "background_intensity": 1.4548988768420663,
+                "theoretical_energy": 2.973,
+                "height": 1.1023162118355536,
+                "pb_ratio": 7.730403272786326
+              },
+              "Al_Ll": {
+                "element": "Al",
+                "line": "Ll",
+                "area": 17.62770512758522,
+                "sigma": 0.0,
+                "center": 0.0685,
+                "fwhm": 0.0,
+                "peak_intensity": 0.0,
+                "background_intensity": 0.0,
+                "theoretical_energy": 0.0685,
+                "height": 0.0,
+                "pb_ratio": 0.0
+              },
+              "Al_Ll_pileup": {
+                "element": "Al",
+                "line": "Ll_pileup",
+                "area": 0.03,
+                "sigma": 0.018924273538994937,
+                "center": 0.13776101141254307,
+                "fwhm": 0.044566664184333075,
+                "peak_intensity": 2.9390688735431008,
+                "background_intensity": 0.0759595781315379,
+                "theoretical_energy": 0.137,
+                "height": 0.6308412584304823,
+                "pb_ratio": 38.69253813460582
+              },
+              "C_Ka2_pileup": {
+                "element": "C",
+                "line": "Ka2_pileup",
+                "area": 0.0035719259178875144,
+                "sigma": 0.023425207025311513,
+                "center": 0.547000428444301,
+                "fwhm": 0.05516636254460861,
+                "peak_intensity": 0.3595657255775635,
+                "background_intensity": 3.0201748448610193,
+                "theoretical_energy": 0.5635399999999999,
+                "height": 0.06023549131315343,
+                "pb_ratio": 0.11905460579190733
+              },
+              "O_Ka2_pileup": {
+                "element": "O",
+                "line": "Ka2_pileup",
+                "area": 0.0038801045653096325,
+                "sigma": 0.027645928470187143,
+                "center": 1.043555309320582,
+                "fwhm": 0.06510616154729072,
+                "peak_intensity": 0.3905883395721395,
+                "background_intensity": 5.198439763322785,
+                "theoretical_energy": 1.0459,
+                "height": 0.055631010349771456,
+                "pb_ratio": 0.07513568635110619
+              },
+              "Al_Ka2": {
+                "element": "Al",
+                "line": "Ka2",
+                "area": 175.80690532508638,
+                "sigma": 0.030871927636370977,
+                "center": 1.485916386078068,
+                "fwhm": 0.07270338958365365,
+                "peak_intensity": 17866.839885075726,
+                "background_intensity": 4.495539899674742,
+                "theoretical_energy": 1.4865,
+                "height": 2258.1642594891828,
+                "pb_ratio": 3974.347972391128
+              },
+              "C_Ka2": {
+                "element": "C",
+                "line": "Ka2",
+                "area": 0.8671446955413729,
+                "sigma": 0.020562659034733418,
+                "center": 0.265230428444301,
+                "fwhm": 0.0484250620267972,
+                "peak_intensity": 97.02051218387103,
+                "background_intensity": 0.6810905851512478,
+                "theoretical_energy": 0.28176999999999996,
+                "height": 18.03505049682359,
+                "pb_ratio": 142.44876423056996
+              }
+            }
+          },
+          "diagnostics": {
+            "iterations_run": null,
+            "converged": null,
+            "interrupted": true,
+            "min_background_ref_lines": 30.3,
+            "missing_reference_peaks": []
+          }
+        }
+      ]
+    },
+    {
+      "spectrum_id": "4",
+      "total_counts": 66231,
+      "live_acquisition_time": 1.0,
+      "acquisition_details": {
+        "frame_id": "CW101",
+        "particle_id": null,
+        "spot_coordinates": {
+          "machine_coordinates": {
+            "x": 43.6,
+            "y": 38.853
+          },
+          "pixel_coordinates": [
+            960,
+            600
+          ]
+        }
+      },
+      "spectrum_relpath": "spectra/spectrum_4.msa",
+      "instrument_background_relpath": null,
+      "quantification_results": [
+        {
+          "quantification_id": 0,
+          "quant_flag": 0,
+          "comment": "",
+          "composition_atomic_fractions": null,
+          "composition_weight_fractions": null,
+          "analytical_error": null,
+          "fit_result": {
+            "r_squared": 0.9996432710861792,
+            "reduced_chi_squared": 84.25832857528859,
+            "fitted_peaks": {
+              "Al_Ka1": {
+                "element": "Al",
+                "line": "Ka1",
+                "area": 346.66110032927446,
+                "sigma": 0.03095711006123422,
+                "center": 1.4862691536906654,
+                "fwhm": 0.07290399419420658,
+                "peak_intensity": 35230.320242709495,
+                "background_intensity": 4.351498358516593,
+                "theoretical_energy": 1.4869,
+                "height": 4443.011989856734,
+                "pb_ratio": 8096.135477968872
+              },
+              "Al_Ka1_pileup": {
+                "element": "Al",
+                "line": "Ka1_pileup",
+                "area": 0.34312126928905096,
+                "sigma": 0.04025810665657607,
+                "center": 2.9731691536906655,
+                "fwhm": 0.09480784117623665,
+                "peak_intensity": 34.54009153302305,
+                "background_intensity": 1.4270636425373022,
+                "theoretical_energy": 2.9738,
+                "height": 3.380190724954029,
+                "pb_ratio": 24.203609778475737
+              },
+              "C_Ka1": {
+                "element": "C",
+                "line": "Ka1",
+                "area": 0.8105558909089745,
+                "sigma": 0.020562659034733418,
+                "center": 0.2652956473732263,
+                "fwhm": 0.0484250620267972,
+                "peak_intensity": 90.68908957093007,
+                "background_intensity": 0.5926971165936472,
+                "theoretical_energy": 0.28176999999999996,
+                "height": 16.860768250466545,
+                "pb_ratio": 153.01084994666246
+              },
+              "C_Ka1_pileup": {
+                "element": "C",
+                "line": "Ka1_pileup",
+                "area": 0.002922484841907967,
+                "sigma": 0.023425207025311513,
+                "center": 0.5470656473732263,
+                "fwhm": 0.05516636254460861,
+                "peak_intensity": 0.29419013910891567,
+                "background_intensity": 2.8031144424721965,
+                "theoretical_energy": 0.5635399999999999,
+                "height": 0.04926414066054069,
+                "pb_ratio": 0.1049511695460624
+              },
+              "O_Ka1": {
+                "element": "O",
+                "line": "Ka1",
+                "area": 0.8143322369713131,
+                "sigma": 0.023034788147033258,
+                "center": 0.5138024622415301,
+                "fwhm": 0.054246926086263324,
+                "peak_intensity": 91.03943862740952,
+                "background_intensity": 2.5378007796129554,
+                "theoretical_energy": 0.52295,
+                "height": 15.07281471603351,
+                "pb_ratio": 35.87335907481836
+              },
+              "O_Ka1_pileup": {
+                "element": "O",
+                "line": "Ka1_pileup",
+                "area": 0.006790182989291857,
+                "sigma": 0.027645928470187143,
+                "center": 1.0367524622415303,
+                "fwhm": 0.06510616154729072,
+                "peak_intensity": 0.683529594251244,
+                "background_intensity": 4.977610830489384,
+                "theoretical_energy": 1.0459,
+                "height": 0.09712999672167286,
+                "pb_ratio": 0.13732081866754564
+              },
+              "C_Ka2_pileup": {
+                "element": "C",
+                "line": "Ka2_pileup",
+                "area": 0.0014612424209539834,
+                "sigma": 0.023425207025311513,
+                "center": 0.5470656473732263,
+                "fwhm": 0.05516636254460861,
+                "peak_intensity": 0.14709506955445784,
+                "background_intensity": 2.8031144424721965,
+                "theoretical_energy": 0.5635399999999999,
+                "height": 0.024632070330270345,
+                "pb_ratio": 0.0524755847730312
+              },
+              "Al_Kb1": {
+                "element": "Al",
+                "line": "Kb1",
+                "area": 9.082520828626992,
+                "sigma": 0.03142910068971468,
+                "center": 1.5523691536906652,
+                "fwhm": 0.07401553212427808,
+                "peak_intensity": 922.9528805420257,
+                "background_intensity": 4.201364173391584,
+                "theoretical_energy": 1.553,
+                "height": 113.51343150517809,
+                "pb_ratio": 219.67933329544363
+              },
+              "C_Ka2": {
+                "element": "C",
+                "line": "Ka2",
+                "area": 0.40527794545448725,
+                "sigma": 0.020562659034733418,
+                "center": 0.2652956473732263,
+                "fwhm": 0.0484250620267972,
+                "peak_intensity": 45.34454478546503,
+                "background_intensity": 0.5926971165936472,
+                "theoretical_energy": 0.28176999999999996,
+                "height": 8.430384125233273,
+                "pb_ratio": 76.50542497333123
+              },
+              "Al_Ka2": {
+                "element": "Al",
+                "line": "Ka2",
+                "area": 175.75717786694216,
+                "sigma": 0.030954231931954825,
+                "center": 1.4858691536906652,
+                "fwhm": 0.07289721619975362,
+                "peak_intensity": 17861.785981454203,
+                "background_intensity": 4.352296667353152,
+                "theoretical_energy": 1.4865,
+                "height": 2251.3589372607453,
+                "pb_ratio": 4103.990914828157
+              },
+              "O_Ka2_pileup": {
+                "element": "O",
+                "line": "Ka2_pileup",
+                "area": 0.0033950914946459286,
+                "sigma": 0.027645928470187143,
+                "center": 1.0367524622415303,
+                "fwhm": 0.06510616154729072,
+                "peak_intensity": 0.341764797125622,
+                "background_intensity": 4.977610830489384,
+                "theoretical_energy": 1.0459,
+                "height": 0.04856499836083643,
+                "pb_ratio": 0.06866040933377282
+              },
+              "Al_Ll": {
+                "element": "Al",
+                "line": "Ll",
+                "area": 11.400114962030901,
+                "sigma": 0.0,
+                "center": 0.0685,
+                "fwhm": 0.0,
+                "peak_intensity": 0.0,
+                "background_intensity": 0.0,
+                "theoretical_energy": 0.0685,
+                "height": 0.0,
+                "pb_ratio": 0.0
+              },
+              "Al_Ka2_pileup": {
+                "element": "Al",
+                "line": "Ka2_pileup",
+                "area": 0.17396248352954885,
+                "sigma": 0.040253680252618156,
+                "center": 2.972369153690665,
+                "fwhm": 0.09479741699491576,
+                "peak_intensity": 17.51182640724269,
+                "background_intensity": 1.4273243571617327,
+                "theoretical_energy": 2.973,
+                "height": 1.7120777763563284,
+                "pb_ratio": 12.26898869859221
+              },
+              "O_Ka2": {
+                "element": "O",
+                "line": "Ka2",
+                "area": 0.40716611848565654,
+                "sigma": 0.023034788147033258,
+                "center": 0.5138024622415301,
+                "fwhm": 0.054246926086263324,
+                "peak_intensity": 45.51971931370476,
+                "background_intensity": 2.5378007796129554,
+                "theoretical_energy": 0.52295,
+                "height": 7.536407358016755,
+                "pb_ratio": 17.93667953740918
+              }
+            }
+          },
+          "diagnostics": {
+            "iterations_run": null,
+            "converged": null,
+            "interrupted": true,
+            "min_background_ref_lines": 29.4,
+            "missing_reference_peaks": []
+          }
+        }
+      ]
+    }
+  ],
+  "active_quant": 0,
+  "quantifications": [
+    {
+      "quantification_id": 0,
+      "label": "Quant 0 _20260521_09h22m_50kcnts_20260521_09h22m_50kcnts",
+      "sample_elements": [
+        "Al"
+      ],
+      "substrate_elements": [
+        "C",
+        "O",
+        "Al"
+      ],
+      "els_w_fr": {
+        "Al": 1.0
+      },
+      "options": {
+        "method": "PB",
+        "spectrum_lims": [
+          14,
+          1100
+        ],
+        "fit_tolerance": 0.0001,
+        "use_instrument_background": false,
+        "is_particle": false,
+        "beam_energy_keV": 15.0,
+        "emergence_angle": 28.5,
+        "det_ch_offset": -0.032459,
+        "det_ch_width": 0.009934
+      },
+      "reference_values_by_el_line": {
+        "Al_Ka1": 10258.1,
+        "C_Ka1": 5544.8,
+        "O_Ka1": 7701.9
+      },
+      "reference_lines_by_element": {
+        "Al": "Al_Ka1",
+        "C": "C_Ka1",
+        "O": "O_Ka1"
+      },
+      "active_clustering_analysis_index": 0,
+      "clustering_analyses": [
+        {
+          "config": {
+            "clustering_id": 0,
+            "method": "kmeans",
+            "features": "at_fr",
+            "k_forced": null,
+            "k_resolved": null,
+            "k_finding_method": "silhouette",
+            "max_k": 6,
+            "ref_formulae": [],
+            "do_matrix_decomposition": true,
+            "max_analytical_error_percent": 5.0,
+            "min_bckgrnd_cnts": 3.0,
+            "quant_flags_accepted": [
+              0,
+              -1
+            ]
+          },
+          "result": null
+        }
+      ]
+    }
+  ]
+}
