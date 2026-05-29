@@ -199,6 +199,7 @@ def fit_and_quantify_spectrum_from_ledger(
         sample_substrate_cfg= configs[cnst.SAMPLESUBSTRATE_CFG_KEY]
         quant_cfg           = configs[cnst.QUANTIFICATION_CFG_KEY]
         clustering_cfg      = configs.get(cnst.CLUSTERING_CFG_KEY)
+        exp_stds_cfg         = configs.get(cnst.EXP_STD_MEASUREMENT_CFG_KEY, None)
     except KeyError as e:
         logging.warning(f"Missing configuration '{e.args[0]}' in {spectral_info_f_path}. Skipping sample '{sample_ID}'.")
         return
@@ -310,11 +311,25 @@ def fit_and_quantify_spectrum_from_ledger(
     if els_w_frs is None and is_standard:
         if hasattr(sample_cfg, 'w_frs') and sample_cfg.w_frs is not None:
             els_w_frs = sample_cfg.w_frs
+        elif exp_stds_cfg is not None and exp_stds_cfg.w_frs is not None:
+            els_w_frs = exp_stds_cfg.w_frs
         else:
-            raise ValueError(
-                "No 'w_frs' (element weight fractions) found in sample_cfg for standard sample. "
-                "You must pass 'els_w_frs' directly, or modify the ledger to include 'w_frs'."
+            exp_stds_cfg_from_ledger = getattr(
+                ledger.configs.measurement_cfg, "exp_stds_cfg", None
             )
+            if exp_stds_cfg_from_ledger is None:
+                logging.warning(
+                    f"No ExpStandardsConfig found in ledger for '{std_id}'. "
+                    f"Skipping — cannot fit a standard without a reference formula."
+                )
+            if exp_stds_cfg_from_ledger.w_frs is None:
+                raise ValueError(
+                    f"No 'w_frs' (element weight fractions) found for standard '{std_id}'. "
+                    f"Checked sample_cfg, exp_stds_cfg, and ledger's exp_stds_cfg. "
+                    f"You must pass 'els_w_frs' directly, or modify the ledger to include 'w_frs'."
+                )
+            configs[cnst.EXP_STD_MEASUREMENT_CFG_KEY] = exp_stds_cfg_from_ledger
+            els_w_frs = exp_stds_cfg_from_ledger.w_frs
             
     quantifier = fit_and_quantify_spectrum(
         spectrum_vals = spectrum,
