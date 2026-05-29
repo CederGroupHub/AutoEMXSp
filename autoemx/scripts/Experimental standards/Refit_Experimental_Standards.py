@@ -32,19 +32,18 @@ min_bckgrnd_cnts = 10
 output_filename_suffix = ''
 
 exp_std_dir = None # Defines directory where measurements are saved. If None, uses default path.
-exp_std_dir = '/Users/Andrea_1/Desktop/Work/Projects/SEM EDX automation/EDX standards/Auto measurements'  # Default directory for saving experimental standards
 # =============================================================================
 # Sample Definitions
 # =============================================================================
 
-std_ids = ['NdF3']
+std_ids = ['Al']
 
 #TODO ensure that you can modify all the necessary parameters from here instead of having to open the stdanrd ledger.json file in the standard folder
 # els_to_use_for_mean_PB_calc: elements to include as standards; default is ["all"] if sample is "bulk", None otherwise. (all elements/lines). Use ["Fe", "O"] for specific elements, []/["none"] for none.
 
 # =============================================================================
 
-update_std_library = True
+update_std_library = False
 # If True, writes fitted corrected PB reference values into EDS_Stds_{voltage}keV.json.
 # If False, acquisition/fitting still runs and CSV outputs are saved, but the standards
 # dictionary JSON is left unchanged.
