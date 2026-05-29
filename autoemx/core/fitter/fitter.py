@@ -630,7 +630,7 @@ class XSp_Fitter:
     
         if plot_result and self.verbose:
             self.plot_result()
-    
+
         if print_result or self.verbose:
             self.print_result(print_only_independent_params=False, extended=print_result_extended)
     
@@ -679,11 +679,11 @@ class XSp_Fitter:
         print_double_separator()
         if extended:
             if print_only_independent_params:
-                logger.debug('Parameter           Value')
+                logger.info('Parameter           Value')
                 for name, param in self.fit_result.params.items():
-                    logger.debug(f'{name:20s} {param.value:11.10f}')
+                    logger.info(f'{name:20s} {param.value:11.10f}')
             else:
-                logger.debug(self.fit_result.fit_report())
+                logger.info(self.fit_result.fit_report())
         else:
             reduced_chi_square = self.fit_result.redchi
             r_squared = 1 - self.fit_result.residual.var() / np.var(self.spectrum_vals)

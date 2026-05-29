@@ -178,11 +178,12 @@ class StandardsModule:
     def _fit_stds_and_save_results(
         self: Any,
         run_fitting: bool = True,
+        force_refitting: bool = False,
     ) -> Optional[StandardsFitResults]:
         fit_results = None
 
         if run_fitting:
-            self._fit_and_quantify_spectra(quantify=False)
+            self._fit_and_quantify_spectra(quantify=False, force_requantification=force_refitting)
         StandardsModule._save_std_measurements_from_records(self)
 
         std_ref_lines = StandardsModule._assemble_std_PB_data_from_records(self)
@@ -251,6 +252,37 @@ class StandardsModule:
             })
 
         return std_ref_lines
+
+    def _print_pb_summary(
+            self: Any,
+            fit_results: StandardsFitResults,
+            sample_id: Optional[str] = None,
+        ) -> None:
+        """
+        Print a summary of measured PB ratios for a sample using the provided fit_results object.
+
+        Parameters
+        ----------
+        fit_results : object
+            Object with a 'lines' attribute (dict) mapping peak names to results with measured_pb, stdev_pb, n_spectra_used.
+        sample_id : str, optional
+            Identifier for the sample.
+        """
+        sample_str = f"sample '{sample_id}'" if sample_id else "the sample"
+
+        lines = [f"📈 Measured PB summary for {sample_str}:"]
+        for peak_name in sorted(fit_results.lines.keys()):
+            peak_result = fit_results.lines[peak_name]
+            lines.append(
+                "  %s: measured PB=%.1f ± %.1f (n=%d)" % (
+                    peak_name,
+                    float(getattr(peak_result, 'measured_pb', float('nan'))),
+                    float(getattr(peak_result, 'stdev_pb', float('nan'))),
+                    int(getattr(peak_result, 'n_spectra_used', 0)),
+                )
+            )
+        message = "\n".join(lines)
+        print_double_separator(message)
 
     def _evaluate_exp_std_fit(self: Any, tot_n_spectra: int) -> Tuple[int, bool, bool]:
         is_fit_successful = False

@@ -384,15 +384,15 @@ def print_single_separator(message: Optional[str] = None):
     _safe_autoemx_log_info('-' * 50)
     if message:
         print(message)
-# print_single_separator()
 
 
 
 
-def print_double_separator():
+def print_double_separator(message: Optional[str] = None):
     """Log a double-line separator (50 equals signs) for visual clarity."""
     _safe_autoemx_log_info('=' * 50)
-# print_double_separator()
+    if message:
+        print(message)
 
 
 class AlphabetMapper:

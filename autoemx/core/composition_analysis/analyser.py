@@ -3966,7 +3966,7 @@ class EMXSp_Composition_Analyzer:
         self.run_exp_std_fit(run_fitting=not fit_during_collection, update_std_library=update_std_library)
 
 
-    def run_exp_std_fit(self, run_fitting: bool = True, update_std_library: bool = True) -> None:
+    def run_exp_std_fit(self, run_fitting: bool = True, force_refitting: bool = False, update_std_library: bool = True) -> None:
         """
         Fit experimental standards and optionally update the standards library.
         If run_fitting is False, only aggregate/save from existing records.
@@ -3974,19 +3974,11 @@ class EMXSp_Composition_Analyzer:
         fit_results = StandardsModule._fit_stds_and_save_results(
             self,
             run_fitting=run_fitting,
+            force_refitting=force_refitting
         )
 
         if fit_results is not None and fit_results.lines:
-            logger.info("📈 Measured PB summary for sample '%s':", self.sample_id)
-            for peak_name in sorted(fit_results.lines.keys()):
-                peak_result = fit_results.lines[peak_name]
-                logger.info(
-                    "  %s: measured PB=%.1f ± %.1f (n=%d)",
-                    peak_name,
-                    float(peak_result.measured_pb),
-                    float(peak_result.stdev_pb),
-                    int(peak_result.n_spectra_used),
-                )
+            StandardsModule._print_pb_summary(self, fit_results, sample_id=self.sample_id)
         else:
             logger.info("⚠️ No valid fitted peaks were produced for sample '%s'.", self.sample_id)
 

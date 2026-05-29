@@ -61,6 +61,7 @@ def fit_and_quantify_spectrum_from_ledger(
     sample_ID: str,
     spectrum_ID: int,
     els_sample: Optional[List[str]] = None,
+    els_w_frs: Optional[List[str]] = None,
     els_substrate: Optional[List[str]] = None,
     is_standard: bool = False,
     spectrum_lims: Optional[tuple] = None,
@@ -79,7 +80,7 @@ def fit_and_quantify_spectrum_from_ledger(
     print_results: bool = True,
     quant_verbose: bool = True,
     fitting_verbose: bool = True
-):
+):  
     """
     Fit and (optionally) quantify a single spectrum.
 
@@ -198,8 +199,6 @@ def fit_and_quantify_spectrum_from_ledger(
         sample_substrate_cfg= configs[cnst.SAMPLESUBSTRATE_CFG_KEY]
         quant_cfg           = configs[cnst.QUANTIFICATION_CFG_KEY]
         clustering_cfg      = configs.get(cnst.CLUSTERING_CFG_KEY)
-        powder_meas_cfg     = configs.get(cnst.POWDER_MEASUREMENT_CFG_KEY, None)  # Optional
-        exp_stds_cfg     = configs.get(cnst.EXP_STD_MEASUREMENT_CFG_KEY, None)  # Optional
     except KeyError as e:
         logging.warning(f"Missing configuration '{e.args[0]}' in {spectral_info_f_path}. Skipping sample '{sample_ID}'.")
         return
@@ -307,6 +306,15 @@ def fit_and_quantify_spectrum_from_ledger(
         els_sample = []
     if els_substrate is None:
         els_substrate = []
+
+    if els_w_frs is None and is_standard:
+        if hasattr(sample_cfg, 'w_frs') and sample_cfg.w_frs is not None:
+            els_w_frs = sample_cfg.w_frs
+        else:
+            raise ValueError(
+                "No 'w_frs' (element weight fractions) found in sample_cfg for standard sample. "
+                "You must pass 'els_w_frs' directly, or modify the ledger to include 'w_frs'."
+            )
             
     quantifier = fit_and_quantify_spectrum(
         spectrum_vals = spectrum,
@@ -321,6 +329,7 @@ def fit_and_quantify_spectrum_from_ledger(
         sp_collection_time = sp_collection_time,
         sample_ID = sample_ID,
         els_sample = els_sample,
+        els_w_frs = els_w_frs,
         els_substrate = els_substrate,
         background_vals=background,
         fit_tol = fit_tol,

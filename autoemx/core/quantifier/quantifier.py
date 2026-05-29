@@ -413,7 +413,7 @@ class XSp_Quantifier:
     
         # Initialize the fitter (no fitting performed yet)
         self._initialize_spectrum_fitter()
-    
+
         # Now perform the fit and store results
         self._fit_spectrum(
             params=params,
