@@ -2113,7 +2113,6 @@ class EMXSp_Composition_Analyzer:
             # passed via runners as sample['cnd']) may have changed for this run.
             self._ensure_current_clustering_run(
                 self.current_quant_config,
-                replace_if_unused=not active_quant_has_results,
             )
             self._apply_active_clustering_config(self.current_quant_config)
             return
@@ -2132,7 +2131,6 @@ class EMXSp_Composition_Analyzer:
                     self.current_quantification_id = candidate_config.quantification_id
                     self._ensure_current_clustering_run(
                         self.current_quant_config,
-                        replace_if_unused=True,
                     )
                     self._apply_active_clustering_config(self.current_quant_config)
                     return
@@ -2370,43 +2368,33 @@ class EMXSp_Composition_Analyzer:
     def _ensure_current_clustering_run(
         self,
         quant_config: QuantificationConfig,
-        replace_if_unused: bool = False,
     ) -> None:
         """Ensure active quantification config tracks clustering run history and active config."""
         candidate_clustering_config = self._build_clustering_config_descriptor(
             clustering_id=self._next_clustering_config_id(quant_config)
         )
+        matching_index: Optional[int] = None
+        runtime_clustering_id = getattr(self.clustering_cfg, "clustering_id", None)
+        for idx, analysis in enumerate(quant_config.clustering_analyses):
+            if not self._clustering_configs_match(analysis.config, candidate_clustering_config):
+                continue
+            if runtime_clustering_id is not None and analysis.config.clustering_id == runtime_clustering_id:
+                matching_index = idx
+                break
+            if matching_index is None:
+                matching_index = idx
+
+        if matching_index is not None:
+            quant_config.active_clustering_analysis_index = matching_index
+            return
+
         active_clustering_analysis = quant_config.get_active_clustering_analysis()
         active_clustering_config = (
             active_clustering_analysis.config if active_clustering_analysis is not None else None
         )
-
-        if (
-            active_clustering_config is not None
-            and self._clustering_configs_match(active_clustering_config, candidate_clustering_config)
-        ):
-            return
-
         if active_clustering_config is not None:
             changes = active_clustering_config.fingerprint_differences(candidate_clustering_config)
             if changes:
-                if replace_if_unused:
-                    replacement_config = candidate_clustering_config.model_copy(
-                        update={"clustering_id": active_clustering_config.clustering_id}
-                    )
-                    replace_index = quant_config.active_clustering_analysis_index
-                    if replace_index is None:
-                        replace_index = len(quant_config.clustering_analyses) - 1
-                    quant_config.clustering_analyses[replace_index] = ClusteringAnalysis(
-                        config=replacement_config,
-                        result=None,
-                    )
-                    quant_config.active_clustering_analysis_index = replace_index
-                    warnings.warn(
-                        "Clustering scientific inputs changed; replacing unused active clustering config.",
-                        UserWarning,
-                    )
-                    return
                 changed_summary = self._format_quantification_config_changes(changes)
                 warnings.warn(
                     "Clustering scientific inputs changed; appending a new clustering config to the active "
@@ -2516,11 +2504,17 @@ class EMXSp_Composition_Analyzer:
             return
 
         # Check if an equivalent quantification config already exists in the ledger
-        for config in ledger.quantifications:
+        for idx, config in enumerate(ledger.quantifications):
             if self._quantification_configs_match(config, self.current_quant_config):
-                # Equivalent config found, set current_quantification_id to its id
-                self.current_quantification_id = config.quantification_id
-                ledger.active_quant = config.quantification_id
+                # Equivalent quantification inputs found: preserve the existing quantification_id
+                # while updating clustering history and active clustering index from current runtime state.
+                merged_config = self.current_quant_config.model_copy(
+                    update={"quantification_id": config.quantification_id}
+                )
+                ledger.quantifications[idx] = merged_config
+                self.current_quant_config = merged_config
+                self.current_quantification_id = merged_config.quantification_id
+                ledger.active_quant = merged_config.quantification_id
                 return
 
         # Otherwise, upsert by quantification_id as before
@@ -2547,6 +2541,13 @@ class EMXSp_Composition_Analyzer:
 
         ledger = self._load_or_create_ledger()
         self._upsert_current_quantification_config_on_ledger(ledger)
+
+        # Ensure the full current config payload (including clustering history/index)
+        # is written for the active quantification id.
+        for idx, config in enumerate(ledger.quantifications):
+            if config.quantification_id == self.current_quantification_id:
+                ledger.quantifications[idx] = self.current_quant_config.model_copy(deep=True)
+                break
 
         ledger.active_quant = self.current_quantification_id
         ledger.to_json_file(self._get_ledger_path())
@@ -3369,6 +3370,10 @@ class EMXSp_Composition_Analyzer:
         if active_quant_config is None:
             return
 
+        # Ensure the current runtime clustering settings map to a concrete analysis entry
+        # on the same ledger object being persisted.
+        self._ensure_current_clustering_run(active_quant_config)
+
         active_quant_config.set_active_clustering_result(clustering_result.model_copy(deep=True))
 
         if (
@@ -3423,6 +3428,17 @@ class EMXSp_Composition_Analyzer:
             if self.current_quantification_id is None and existing_ledger is not None:
                 if existing_ledger.active_quant is not None:
                     self.current_quantification_id = existing_ledger.active_quant
+
+            # Analysis-only runs must also register the current clustering inputs on the
+            # active quantification config so clustering history/index stays in sync.
+            active_quant_config = self._get_active_quantification_config(existing_ledger)
+            if active_quant_config is not None:
+                self.current_quant_config = active_quant_config
+                self.current_quantification_id = active_quant_config.quantification_id
+                self._ensure_current_clustering_run(self.current_quant_config)
+                self._persist_current_quantification_config()
+                self._apply_active_clustering_config(self.current_quant_config)
+
             tot = len(existing_ledger.spectra) if existing_ledger is not None else 0
             if tot > 0:
                 self._ensure_quant_tracking_length(tot)

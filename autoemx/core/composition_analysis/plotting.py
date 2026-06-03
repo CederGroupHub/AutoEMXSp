@@ -328,16 +328,19 @@ class PlottingModule:
             ax.set_yticklabels(ticks_labels)
             if len(elements) == 3:
                 ax.set_zlabel(elements[2] + axis_label_add, labelpad=labelpad * 0.95)
+                # Keep (0,0,0) at the back while preserving the chosen camera angle.
+                ax.set_xlim(1, 0)
+                ax.set_ylim(1, 0)
                 ax.set_zlim(0, 1)
                 ax.set_zticks(ticks)
                 ax.set_zticklabels(ticks_labels)
             ax.set_title(f'{self.clustering_cfg.method} clustering {self.sample_id}{title_suffix}')
 
             if show_legend and getattr(self.plot_cfg, 'show_legend_clustering', None):
-                ax.legend(fontsize=fontsize)
+                ax.legend(fontsize=fontsize, loc='best')
 
         fig = plt.figure(figsize=(6, 6))
-        full_view_elev = 24.0
+        full_view_elev = 5.0
         full_view_azim = None
         if len(elements) == 3:
             ax: Any = fig.add_subplot(111, projection='3d')
@@ -392,8 +395,12 @@ class PlottingModule:
         y_low, y_high = _compute_zoom_limits(all_points[:, 1] if all_points.size > 0 else np.array([]))
         x_low, x_high = expand_limits(x_low, x_high)
         y_low, y_high = expand_limits(y_low, y_high)
-        ax_zoomed.set_xlim(x_low, x_high)
-        ax_zoomed.set_ylim(y_low, y_high)
+        if len(elements) == 3:
+            ax_zoomed.set_xlim(x_high, x_low)
+            ax_zoomed.set_ylim(y_high, y_low)
+        else:
+            ax_zoomed.set_xlim(x_low, x_high)
+            ax_zoomed.set_ylim(y_low, y_high)
 
         int_percent_formatter = FuncFormatter(lambda value, _: f"{int(round(value * 100.0))}")
         ax_zoomed.xaxis.set_major_locator(MaxNLocator(nbins=6))

@@ -106,6 +106,7 @@ def analyze_sample(
     do_matrix_decomposition: bool = True,
     max_analytical_error_percent: float = 5,
     quant_flags_accepted: Optional[List[int]] = None,
+    show_plots: bool = True,
     plot_custom_plots: bool = False,
     show_unused_compositions_cluster_plot: bool = True,
 ) -> Optional[EMXSp_Composition_Analyzer]:
@@ -252,7 +253,7 @@ def analyze_sample(
         clustering_cfg.do_matrix_decomposition = do_matrix_decomposition
     
     # --- Modify Plot Configuration
-    plot_cfg.show_plots = True # show plots by default, but can be turned off for batch processing
+    plot_cfg.show_plots = show_plots # show plots by default, but can be turned off for batch processing
     plot_cfg.show_unused_comps_clust = show_unused_compositions_cluster_plot
     plot_cfg.use_custom_plots = plot_custom_plots
     if els_excluded_clust_plot is not None:
