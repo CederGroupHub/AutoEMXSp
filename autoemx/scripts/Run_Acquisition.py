@@ -27,7 +27,7 @@ sample_substrate_type = 'Ctape' # Supported types: Ctape, None
 sample_substrate_shape = 'circle' # Supported types: square, circle
 sample_substrate_width_mm = 12 # Al stub diameter, in mm
 
-working_distance = 5 #mm. Approximate WD at which sample is in focus. AutoEMX limits autofocus around this value to avoid gross msitakes in autofocus functions
+working_distance = 8.5 #mm. Approximate WD at which sample is in focus. AutoEMX limits autofocus around this value to avoid gross msitakes in autofocus functions
 
 samples = [
     {'ID': 'Anorthite_mineral', 'els': ['Ca', 'Al', 'Si', 'O'], 'pos': (-37.5, -37.5), 'cnd': ['CaAl2Si2O8']},
@@ -55,8 +55,8 @@ is_auto_substrate_detection = True # Whether to activate automated detection of 
                                     # C tape must appear black on a brighter support stub, e.g. aluminum
 
 auto_adjust_brightness_contrast = True # Use automatic adjustments of brightness and contrast
-contrast = 4.3877  # Used if auto_adjust_brightness_contrast = False
-brightness = 0.4504  # Used if auto_adjust_brightness_contrast = False
+contrast = None  # Used if auto_adjust_brightness_contrast = False
+brightness = None  # Used if auto_adjust_brightness_contrast = False
 saved_images_extension = 'png' # Default lightweight output. Set 'tif' for higher-resolution/larger files.
 save_raw_images = False # Default saves only the annotated image. Set True to also save raw images.
 
