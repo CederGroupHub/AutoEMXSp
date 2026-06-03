@@ -25,7 +25,8 @@ Created on Tue Jul 29 13:18:16 2025
 # sample_ID = 'Wulfenite_example'
 sample_ID = 'K-412_NISTstd_example'
 
-results_path = None # Looks in default Results folder if left unspecified
+import os
+results_dir = os.path.dirname(os.path.abspath(__file__)) # Default: save and load results in the same folder as this script. Set to None to use the current working directory, or replace with another path.
 
 # =============================================================================
 # Clustering options
@@ -72,7 +73,7 @@ from autoemx.runners.analyze_sample import analyze_sample
 
 comp_analyzer = analyze_sample(
     sample_ID=sample_ID,
-    results_path=results_path,
+    results_path=results_dir,
     ref_formulae=ref_formulae,
     k_forced = k_forced,
     clustering_features = clustering_features,

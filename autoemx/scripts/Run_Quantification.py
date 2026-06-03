@@ -31,7 +31,8 @@ sample_IDs = [
 
 is_known_precursor_mixture = None # Loads value from config file, if unspecified. Otherwise set to True or False.
 
-results_path = None # Relative path to folder where results are stored. Looks in default Results folder if left unspecified
+import os
+results_dir = os.path.dirname(os.path.abspath(__file__)) # Default: save and load results in the same folder as this script. Set to None to use the current working directory, or replace with another path.
 
 # =============================================================================
 # Options
@@ -59,7 +60,7 @@ comp_analyzer = batch_quantify_and_analyze(
     sample_IDs=sample_IDs,
     quantification_method = 'PB',
     min_bckgrnd_cnts = min_bckgrnd_cnts,
-    results_path=results_path,
+    results_path=results_dir,
     output_filename_suffix=output_filename_suffix,
     max_analytical_error=max_analytical_error,
     num_CPU_cores = num_CPU_cores,

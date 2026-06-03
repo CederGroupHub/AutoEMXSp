@@ -27,18 +27,19 @@ sample_substrate_type = 'Ctape' # Supported types: Ctape, None
 sample_substrate_shape = 'circle' # Supported types: square, circle
 sample_substrate_width_mm = 12 # Al stub diameter, in mm
 
-working_distance = 8.5 #mm. Approximate WD at which sample is in focus. AutoEMX limits autofocus around this value to avoid gross msitakes in autofocus functions
+working_distance = 8.5 # mm. Approximate working distance at which the sample is in focus. AutoEMX constrains autofocus around this value to avoid gross mistakes.
 
 samples = [
     {'ID': 'Anorthite_mineral', 'els': ['Ca', 'Al', 'Si', 'O'], 'pos': (-37.5, -37.5), 'cnd': ['CaAl2Si2O8']},
 ]
-# ID: Sample ID. All data will be saved in results_dir, in a folder named after 'ID'
+# ID: Sample ID. All data will be saved under results_dir in a folder named after 'ID'.
 # els: Elements to include during EDS spectral quantification
 # pos: Position of center of sample. Does not require precise position of carbon tape if is_auto_substrate_detection = True
-# cnd: Candidate phases that may be present in the sample. Only relevant during clustering analaysi, not for quantification.
-#        Can be added or modified later when performing clustering analysis
+# cnd: Candidate phases that may be present in the sample. Only relevant during clustering analysis, not for quantification.
+#      Can be added or modified later when performing clustering analysis.
 
-results_dir = '' # Uses default directory if set to None. Otherwise creates a new folder at specified path.
+import os
+results_dir = os.path.dirname(os.path.abspath(__file__)) # Default: save and load results in the same folder as this script. Set to None to use the current working directory, or replace with another path.
 
 # Elements present in the substrate (may depend on target_Xsp_counts). These are ignored during quantification, unless present in the sample.
 els_substrate = ['C', 'O', 'Al']  # N and F may also be detectable with >100k counts
@@ -64,7 +65,7 @@ min_n_spectra = 50 # Min number of spectra after which AutoEMX checks for conver
 max_n_spectra = 100 # Number of spectra collected if quantify_spectra = False. If quantify_spectra = True, this indicates the max number of spectra collected when convergence is not achieved.
 
 target_Xsp_counts = 50000 # Target number of counts in each spectrum
-max_XSp_acquisition_time = target_Xsp_counts / 10000 * 5 # Maximum acquisition time. Empyrically determined to stop when spectra are wrongfully acquired from C tape.
+max_XSp_acquisition_time = target_Xsp_counts / 10000 * 5 # Maximum acquisition time. Empirically chosen to stop runs when spectra are incorrectly acquired from C tape.
 
 
 # =============================================================================
@@ -72,13 +73,13 @@ max_XSp_acquisition_time = target_Xsp_counts / 10000 * 5 # Maximum acquisition t
 # =============================================================================
 quantify_spectra = False # Whether to quantify spectra during acquisition. Not recommended if microscope computer is slow
 
-use_project_specific_std_dict = False # If True, loads standards from project folder (i.e. results_dir) during quantification.
+use_project_specific_std_dict = False # If True, loads standards from the project folder (i.e. results_dir) during quantification.
 
 interrupt_fits_bad_spectra = True # Whether to interrupt the quantification of spectra expected to lead to gross quantification errors. Tested extensively. Speeds up quantification.
 
 max_analytical_error_percent = 5 # Maximum analytical error to employ to filter out compositions during clustering. Can be modified later. Does not influence quantification
-min_bckgrnd_cnts = 5 # Minimum number of counts under a reference peak necesary for a spectrum to be accepted for clustering. Can be modified later, but required re-running quantification.
-quant_flags_accepted = [0, -1] # Quantification flags accepted during clsutering (see docs). Can be modified later. Does not influence quantification
+min_bckgrnd_cnts = 5 # Minimum number of counts under a reference peak necessary for a spectrum to be accepted for clustering. Can be modified later, but requires re-running quantification.
+quant_flags_accepted = [0, -1] # Quantification flags accepted during clustering (see docs). Can be modified later. Does not influence quantification.
 
 max_n_clusters = 6 # Max number of clusters. Can be modified later. Does not influence quantification
 show_unused_comps_clust = True # Whether to show discarded compositions in clustering plot. Can be modified later. Does not influence quantification
