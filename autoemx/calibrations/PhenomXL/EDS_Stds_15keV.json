@@ -273,13 +273,30 @@
               "mass-averaged": 25.98,
               "atomic-averaged": 16.8
             }
+          },
+          {
+            "Corrected_PB": 8223.8,
+            "Rel_stdev_PB (%)": 7.34,
+            "Measured_PB": 895.7,
+            "Stdev_PB": 65.7,
+            "ID": "PrPO4",
+            "datetime": "2026-06-05 12:03:04",
+            "Formula": "Pr0.991Pb0.009PO4",
+            "Std_type": "bulk",
+            "Use_for_mean_calc": false,
+            "Mean_Z": {
+              "Statham2016": 31.91,
+              "Markowicz1984": 37.58,
+              "mass-averaged": 39.62,
+              "atomic-averaged": 17.7
+            }
           }
         ],
         "reference_mean": {
           "Corrected_PB": 7701.9,
           "Rel_stdev_PB (%)": 2.35,
           "Stdev_PB": 181.3,
-          "datetime": "2026-05-28 19:49:39"
+          "datetime": "2026-06-05 12:03:04"
         }
       },
       "F_Ka1": {
@@ -537,13 +554,30 @@
               "mass-averaged": 47.1,
               "atomic-averaged": 19.17
             }
+          },
+          {
+            "Corrected_PB": 10597.7,
+            "Rel_stdev_PB (%)": 2.82,
+            "Measured_PB": 818.0,
+            "Stdev_PB": 23.1,
+            "ID": "PrPO4",
+            "datetime": "2026-06-05 12:03:04",
+            "Formula": "Pr0.991Pb0.009PO4",
+            "Std_type": "bulk",
+            "Use_for_mean_calc": false,
+            "Mean_Z": {
+              "Statham2016": 31.91,
+              "Markowicz1984": 37.58,
+              "mass-averaged": 39.62,
+              "atomic-averaged": 17.7
+            }
           }
         ],
         "reference_mean": {
           "Corrected_PB": 10151.5,
           "Rel_stdev_PB (%)": 0.0,
           "Stdev_PB": 0.0,
-          "datetime": "2026-05-28 19:41:11"
+          "datetime": "2026-06-05 12:03:04"
         }
       },
       "S_Ka1": {
@@ -2099,6 +2133,87 @@
           "datetime": "2025-06"
         }
       },
+      "Pr_La1": {
+        "entries": [
+          {
+            "Corrected_PB": 2069.0,
+            "Rel_stdev_PB (%)": 3.13,
+            "Measured_PB": 1556.8,
+            "Stdev_PB": 48.8,
+            "ID": "PrPO4",
+            "datetime": "2026-06-05 12:03:04",
+            "Formula": "Pr0.991Pb0.009PO4",
+            "Std_type": "bulk",
+            "Use_for_mean_calc": true,
+            "Mean_Z": {
+              "Statham2016": 31.91,
+              "Markowicz1984": 37.58,
+              "mass-averaged": 39.62,
+              "atomic-averaged": 17.7
+            }
+          }
+        ],
+        "reference_mean": {
+          "Corrected_PB": 2069.0,
+          "Rel_stdev_PB (%)": 0.0,
+          "Stdev_PB": 0.0,
+          "datetime": "2026-06-05 12:03:04"
+        }
+      },
+      "Pr_Ma1": {
+        "entries": [
+          {
+            "Corrected_PB": 317.0,
+            "Rel_stdev_PB (%)": 10.35,
+            "Measured_PB": 181.6,
+            "Stdev_PB": 18.8,
+            "ID": "PrPO4",
+            "datetime": "2026-06-05 12:03:04",
+            "Formula": "Pr0.991Pb0.009PO4",
+            "Std_type": "bulk",
+            "Use_for_mean_calc": true,
+            "Mean_Z": {
+              "Statham2016": 31.91,
+              "Markowicz1984": 37.58,
+              "mass-averaged": 39.62,
+              "atomic-averaged": 17.7
+            }
+          }
+        ],
+        "reference_mean": {
+          "Corrected_PB": 317.0,
+          "Rel_stdev_PB (%)": 0.0,
+          "Stdev_PB": 0.0,
+          "datetime": "2026-06-05 12:03:04"
+        }
+      },
+      "Pr_Mz1": {
+        "entries": [
+          {
+            "Corrected_PB": 412.9,
+            "Rel_stdev_PB (%)": 13.72,
+            "Measured_PB": 231.8,
+            "Stdev_PB": 31.8,
+            "ID": "PrPO4",
+            "datetime": "2026-06-05 12:03:04",
+            "Formula": "Pr0.991Pb0.009PO4",
+            "Std_type": "bulk",
+            "Use_for_mean_calc": true,
+            "Mean_Z": {
+              "Statham2016": 31.91,
+              "Markowicz1984": 37.58,
+              "mass-averaged": 39.62,
+              "atomic-averaged": 17.7
+            }
+          }
+        ],
+        "reference_mean": {
+          "Corrected_PB": 412.9,
+          "Rel_stdev_PB (%)": 0.0,
+          "Stdev_PB": 0.0,
+          "datetime": "2026-06-05 12:03:04"
+        }
+      },
       "Nd_La1": {
         "entries": [
           {
@@ -2998,13 +3113,30 @@
               "mass-averaged": 43.87,
               "atomic-averaged": 18.52
             }
+          },
+          {
+            "Corrected_PB": 1131.0,
+            "Rel_stdev_PB (%)": 100.0,
+            "Measured_PB": 15.8,
+            "Stdev_PB": 15.8,
+            "ID": "PrPO4",
+            "datetime": "2026-06-05 12:03:04",
+            "Formula": "Pr0.991Pb0.009PO4",
+            "Std_type": "bulk",
+            "Use_for_mean_calc": false,
+            "Mean_Z": {
+              "Statham2016": 31.91,
+              "Markowicz1984": 37.58,
+              "mass-averaged": 39.62,
+              "atomic-averaged": 17.7
+            }
           }
         ],
         "reference_mean": {
           "Corrected_PB": 262.2,
           "Rel_stdev_PB (%)": 0.0,
           "Stdev_PB": 0.0,
-          "datetime": "2025-06"
+          "datetime": "2026-06-05 12:03:04"
         }
       },
       "Pb_Ma1": {
@@ -3042,13 +3174,30 @@
               "mass-averaged": 43.87,
               "atomic-averaged": 18.52
             }
+          },
+          {
+            "Corrected_PB": 1027.3,
+            "Rel_stdev_PB (%)": 37.86,
+            "Measured_PB": 10.3,
+            "Stdev_PB": 3.9,
+            "ID": "PrPO4",
+            "datetime": "2026-06-05 12:03:04",
+            "Formula": "Pr0.991Pb0.009PO4",
+            "Std_type": "bulk",
+            "Use_for_mean_calc": false,
+            "Mean_Z": {
+              "Statham2016": 31.91,
+              "Markowicz1984": 37.58,
+              "mass-averaged": 39.62,
+              "atomic-averaged": 17.7
+            }
           }
         ],
         "reference_mean": {
           "Corrected_PB": 1103.1,
           "Rel_stdev_PB (%)": 0.0,
           "Stdev_PB": 0.0,
-          "datetime": "2025-06"
+          "datetime": "2026-06-05 12:03:04"
         }
       },
       "Pb_Mz1": {
@@ -3068,6 +3217,23 @@
               "Markowicz1984": 41.32,
               "mass-averaged": 43.87,
               "atomic-averaged": 18.52
+            }
+          },
+          {
+            "Corrected_PB": 31.3,
+            "Rel_stdev_PB (%)": 33.33,
+            "Measured_PB": 0.3,
+            "Stdev_PB": 0.1,
+            "ID": "PrPO4",
+            "datetime": "2026-06-05 12:03:04",
+            "Formula": "Pr0.991Pb0.009PO4",
+            "Std_type": "bulk",
+            "Use_for_mean_calc": false,
+            "Mean_Z": {
+              "Statham2016": 31.91,
+              "Markowicz1984": 37.58,
+              "mass-averaged": 39.62,
+              "atomic-averaged": 17.7
             }
           }
         ]
