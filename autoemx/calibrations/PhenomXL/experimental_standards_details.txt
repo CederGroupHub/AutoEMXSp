@@ -2,15 +2,14 @@
 Experimental standards summary
 --------------------------------------------------------------------------------
 Microscope ID: PhenomXL
-Standards source: custom_project_file
-Custom standards file: /Users/Andrea_1/Desktop/Work/Projects/SEM EDX automation/EDX standards/Auto measurements/EDS_Stds_15keV.json
+Standards source: default_calibrations
 Voltage filter: all
 Standards files found: 1
 
 Coverage by voltage and current
 --------------------------------------------------------------------------------
 Voltage 15 keV (EDS_Stds_15keV.json)
-  - Mode=point; current=4.3; n_elements=52; n_peaks=99; elements=[B, C, N, O, F, Na, Mg, Al, Si, P, S, Cl, K, Ca, Sc, Ti, V, Cr, Mn, Fe, Co, Ni, Cu, Zn, Ga, Ge, Se, Br, Sr, Y, Zr, Nb, Mo, Ag, Cd, In, Sn, Sb, Ba, La, Nd, Eu, Gd, Dy, Lu, Hf, Ta, W, Re, Ir, Pb, Bi]
+  - Mode=point; current=4.3; n_elements=54; n_peaks=105; elements=[B, C, N, O, F, Na, Mg, Al, Si, P, S, Cl, K, Ca, Sc, Ti, V, Cr, Mn, Fe, Co, Ni, Cu, Zn, Ga, Ge, Se, Br, Sr, Y, Zr, Nb, Mo, Ag, Cd, In, Sn, Sb, Ba, La, Pr, Nd, Eu, Gd, Dy, Er, Lu, Hf, Ta, W, Re, Ir, Pb, Bi]
   - Mode=map; current=5.1; n_elements=0; n_peaks=0; elements=[none]
 
 
@@ -20,33 +19,35 @@ Per-peak standards at 15 keV (EDS_Stds_15keV.json)
 Measurement type: EDS
 Mode: point | current: 4.3
   Peak B_Ka1
-    - ID=LaB6; Corrected_PB=5682.63; Use_for_mean_calc=True
-    - ID=BN; Corrected_PB=2123.06; Use_for_mean_calc=True
-    - Mean Corrected_PB=3902.85
+    - ID=LaB6; Corrected_PB=5682.6; Use_for_mean_calc=True
+    - ID=BN; Corrected_PB=2123.1; Use_for_mean_calc=True
+    - Mean Corrected_PB=3902.8
   Peak C_Ka1
-    - ID=C; Corrected_PB=5544.82; Use_for_mean_calc=True
-    - Mean Corrected_PB=5544.82
+    - ID=C; Corrected_PB=5544.8; Use_for_mean_calc=True
+    - Mean Corrected_PB=5544.8
   Peak N_Ka1
-    - ID=GaN; Corrected_PB=4802.74; Use_for_mean_calc=True
-    - ID=BN; Corrected_PB=4464.17; Use_for_mean_calc=True
-    - Mean Corrected_PB=4633.46
+    - ID=GaN; Corrected_PB=4802.7; Use_for_mean_calc=True
+    - ID=BN; Corrected_PB=4464.2; Use_for_mean_calc=True
+    - Mean Corrected_PB=4633.5
   Peak O_Ka1
-    - ID=BaSO4; Corrected_PB=7520.57; Use_for_mean_calc=True
-    - ID=MgO; Corrected_PB=7883.18; Use_for_mean_calc=True
-    - ID=SrTiO3; Corrected_PB=3964.4; Use_for_mean_calc=False
-    - ID=LuPO4; Corrected_PB=6891.81; Use_for_mean_calc=False
-    - ID=Ir; Corrected_PB=360.517; Use_for_mean_calc=False
-    - ID=EuPO4; Corrected_PB=7025.61; Use_for_mean_calc=False
+    - ID=BaSO4; Corrected_PB=7520.6; Use_for_mean_calc=True
+    - ID=MgO; Corrected_PB=7883.2; Use_for_mean_calc=True
+    - ID=LuPO4; Corrected_PB=6891.8; Use_for_mean_calc=False
+    - ID=Ir; Corrected_PB=360.5; Use_for_mean_calc=False
+    - ID=EuPO4; Corrected_PB=7025.6; Use_for_mean_calc=False
     - ID=DyPO4; Corrected_PB=7053; Use_for_mean_calc=False
-    - ID=GdPO4; Corrected_PB=7167.29; Use_for_mean_calc=False
-    - Mean Corrected_PB=7701.87
+    - ID=GdPO4; Corrected_PB=7167.3; Use_for_mean_calc=False
+    - ID=ErPO4; Corrected_PB=7279.6; Use_for_mean_calc=False
+    - ID=SrTiO3; Corrected_PB=4055.1; Use_for_mean_calc=False
+    - ID=PrPO4; Corrected_PB=8223.8; Use_for_mean_calc=False
+    - Mean Corrected_PB=7701.9
   Peak F_Ka1
-    - ID=CaF2; Corrected_PB=7333.98; Use_for_mean_calc=True
-    - ID=NdF3; Corrected_PB=8203.74; Use_for_mean_calc=False
-    - Mean Corrected_PB=7333.98
+    - ID=CaF2; Corrected_PB=7334; Use_for_mean_calc=True
+    - ID=NdF3; Corrected_PB=8211.4; Use_for_mean_calc=False
+    - Mean Corrected_PB=7334
   Peak Na_Ka1
-    - ID=NaCl; Corrected_PB=9575.87; Use_for_mean_calc=True
-    - Mean Corrected_PB=9575.87
+    - ID=NaCl; Corrected_PB=9575.9; Use_for_mean_calc=True
+    - Mean Corrected_PB=9575.9
   Peak Mg_Ka1
     - ID=MgO; Corrected_PB=10324.2; Use_for_mean_calc=True
     - Mean Corrected_PB=10324.2
@@ -58,10 +59,12 @@ Mode: point | current: 4.3
     - Mean Corrected_PB=10630.3
   Peak P_Ka1
     - ID=InP; Corrected_PB=10151.5; Use_for_mean_calc=True
-    - ID=LuPO4; Corrected_PB=8879.27; Use_for_mean_calc=False
+    - ID=LuPO4; Corrected_PB=8879.3; Use_for_mean_calc=False
     - ID=EuPO4; Corrected_PB=10549; Use_for_mean_calc=False
     - ID=DyPO4; Corrected_PB=11804.5; Use_for_mean_calc=False
     - ID=GdPO4; Corrected_PB=10058.4; Use_for_mean_calc=False
+    - ID=ErPO4; Corrected_PB=10995.7; Use_for_mean_calc=False
+    - ID=PrPO4; Corrected_PB=10597.7; Use_for_mean_calc=False
     - Mean Corrected_PB=10151.5
   Peak S_Ka1
     - ID=BaSO4; Corrected_PB=10777.3; Use_for_mean_calc=True
@@ -73,269 +76,290 @@ Mode: point | current: 4.3
     - ID=KBr; Corrected_PB=9729.1; Use_for_mean_calc=True
     - Mean Corrected_PB=9729.1
   Peak Ca_Ka1
-    - ID=CaF2; Corrected_PB=8756.58; Use_for_mean_calc=True
-    - Mean Corrected_PB=8756.58
+    - ID=CaF2; Corrected_PB=8756.6; Use_for_mean_calc=True
+    - Mean Corrected_PB=8756.6
   Peak Ca_La1
-    - ID=CaF2; Corrected_PB=87.6725; Use_for_mean_calc=True
-    - Mean Corrected_PB=87.6725
+    - ID=CaF2; Corrected_PB=87.7; Use_for_mean_calc=True
+    - Mean Corrected_PB=87.7
   Peak Sc_Ka1
     - ID=Sc; Corrected_PB=8509.3; Use_for_mean_calc=True
     - Mean Corrected_PB=8509.3
   Peak Sc_La1
-    - ID=Sc; Corrected_PB=140.838; Use_for_mean_calc=True
-    - Mean Corrected_PB=140.838
+    - ID=Sc; Corrected_PB=140.8; Use_for_mean_calc=True
+    - Mean Corrected_PB=140.8
   Peak Ti_Ka1
-    - ID=Ti; Corrected_PB=8062.94; Use_for_mean_calc=True
-    - ID=SrTiO3; Corrected_PB=8461.49; Use_for_mean_calc=False
-    - Mean Corrected_PB=8062.94
+    - ID=Ti; Corrected_PB=8062.9; Use_for_mean_calc=True
+    - ID=SrTiO3; Corrected_PB=8418; Use_for_mean_calc=False
+    - Mean Corrected_PB=8062.9
   Peak Ti_La1
-    - ID=Ti; Corrected_PB=178.352; Use_for_mean_calc=True
-    - ID=SrTiO3; Corrected_PB=150.852; Use_for_mean_calc=False
-    - Mean Corrected_PB=178.352
+    - ID=Ti; Corrected_PB=178.4; Use_for_mean_calc=True
+    - ID=SrTiO3; Corrected_PB=161.4; Use_for_mean_calc=False
+    - Mean Corrected_PB=178.4
   Peak V_Ka1
-    - ID=V; Corrected_PB=7556.28; Use_for_mean_calc=True
-    - Mean Corrected_PB=7556.28
+    - ID=V; Corrected_PB=7556.3; Use_for_mean_calc=True
+    - Mean Corrected_PB=7556.3
   Peak V_La1
-    - ID=V; Corrected_PB=352.03; Use_for_mean_calc=True
-    - Mean Corrected_PB=352.03
+    - ID=V; Corrected_PB=352; Use_for_mean_calc=True
+    - Mean Corrected_PB=352
   Peak Cr_Ka1
-    - ID=Cr; Corrected_PB=7118.08; Use_for_mean_calc=True
-    - Mean Corrected_PB=7118.08
+    - ID=Cr; Corrected_PB=7118.1; Use_for_mean_calc=True
+    - Mean Corrected_PB=7118.1
   Peak Cr_La1
     - ID=Cr; Corrected_PB=1435.8; Use_for_mean_calc=True
     - Mean Corrected_PB=1435.8
   Peak Mn_Ka1
-    - ID=Mn; Corrected_PB=6802.41; Use_for_mean_calc=True
-    - Mean Corrected_PB=6802.41
+    - ID=Mn; Corrected_PB=6802.4; Use_for_mean_calc=True
+    - Mean Corrected_PB=6802.4
   Peak Mn_La1
-    - ID=Mn; Corrected_PB=445.763; Use_for_mean_calc=True
-    - Mean Corrected_PB=445.763
+    - ID=Mn; Corrected_PB=445.8; Use_for_mean_calc=True
+    - Mean Corrected_PB=445.8
   Peak Fe_Ka1
-    - ID=Fe; Corrected_PB=7567.76; Use_for_mean_calc=True
-    - Mean Corrected_PB=7567.76
+    - ID=Fe; Corrected_PB=7567.8; Use_for_mean_calc=True
+    - Mean Corrected_PB=7567.8
   Peak Fe_La1
-    - ID=Fe; Corrected_PB=670.792; Use_for_mean_calc=True
-    - Mean Corrected_PB=670.792
+    - ID=Fe; Corrected_PB=670.8; Use_for_mean_calc=True
+    - Mean Corrected_PB=670.8
   Peak Co_Ka1
-    - ID=Co; Corrected_PB=7110.28; Use_for_mean_calc=True
-    - Mean Corrected_PB=7110.28
+    - ID=Co; Corrected_PB=7110.3; Use_for_mean_calc=True
+    - Mean Corrected_PB=7110.3
   Peak Co_La1
-    - ID=Co; Corrected_PB=1210.25; Use_for_mean_calc=True
-    - Mean Corrected_PB=1210.25
+    - ID=Co; Corrected_PB=1210.2; Use_for_mean_calc=True
+    - Mean Corrected_PB=1210.2
   Peak Ni_Ka1
-    - ID=Ni; Corrected_PB=5937.39; Use_for_mean_calc=True
-    - Mean Corrected_PB=5937.39
+    - ID=Ni; Corrected_PB=5937.4; Use_for_mean_calc=True
+    - Mean Corrected_PB=5937.4
   Peak Ni_La1
-    - ID=Ni; Corrected_PB=1416.18; Use_for_mean_calc=True
-    - Mean Corrected_PB=1416.18
+    - ID=Ni; Corrected_PB=1416.2; Use_for_mean_calc=True
+    - Mean Corrected_PB=1416.2
   Peak Cu_Ka1
-    - ID=Cu; Corrected_PB=4188.99; Use_for_mean_calc=True
-    - Mean Corrected_PB=4188.99
+    - ID=Cu; Corrected_PB=4189; Use_for_mean_calc=True
+    - Mean Corrected_PB=4189
   Peak Cu_La1
-    - ID=Cu; Corrected_PB=3112.44; Use_for_mean_calc=True
-    - Mean Corrected_PB=3112.44
+    - ID=Cu; Corrected_PB=3112.4; Use_for_mean_calc=True
+    - Mean Corrected_PB=3112.4
   Peak Zn_Ka1
-    - ID=Zn; Corrected_PB=3187.63; Use_for_mean_calc=True
-    - Mean Corrected_PB=3187.63
+    - ID=Zn; Corrected_PB=3187.6; Use_for_mean_calc=True
+    - Mean Corrected_PB=3187.6
   Peak Zn_La1
-    - ID=Zn; Corrected_PB=3574.14; Use_for_mean_calc=True
-    - Mean Corrected_PB=3574.14
+    - ID=Zn; Corrected_PB=3574.1; Use_for_mean_calc=True
+    - Mean Corrected_PB=3574.1
   Peak Ga_Ka1
-    - ID=GaN; Corrected_PB=2510.56; Use_for_mean_calc=True
-    - Mean Corrected_PB=2510.56
+    - ID=GaN; Corrected_PB=2510.6; Use_for_mean_calc=True
+    - Mean Corrected_PB=2510.6
   Peak Ga_La1
-    - ID=GaN; Corrected_PB=3759.43; Use_for_mean_calc=True
-    - Mean Corrected_PB=3759.43
+    - ID=GaN; Corrected_PB=3759.4; Use_for_mean_calc=True
+    - Mean Corrected_PB=3759.4
   Peak Ge_Ka1
-    - ID=Ge; Corrected_PB=2099.38; Use_for_mean_calc=True
-    - Mean Corrected_PB=2099.38
+    - ID=Ge; Corrected_PB=2099.4; Use_for_mean_calc=True
+    - Mean Corrected_PB=2099.4
   Peak Ge_La1
-    - ID=Ge; Corrected_PB=3045.24; Use_for_mean_calc=True
-    - Mean Corrected_PB=3045.24
+    - ID=Ge; Corrected_PB=3045.2; Use_for_mean_calc=True
+    - Mean Corrected_PB=3045.2
   Peak Se_Ka1
-    - ID=Se; Corrected_PB=1024.19; Use_for_mean_calc=True
-    - Mean Corrected_PB=1024.19
+    - ID=Se; Corrected_PB=1024.2; Use_for_mean_calc=True
+    - Mean Corrected_PB=1024.2
   Peak Se_La1
-    - ID=Se; Corrected_PB=3323.24; Use_for_mean_calc=True
-    - Mean Corrected_PB=3323.24
+    - ID=Se; Corrected_PB=3323.2; Use_for_mean_calc=True
+    - Mean Corrected_PB=3323.2
   Peak Br_La1
-    - ID=KBr; Corrected_PB=3926.39; Use_for_mean_calc=True
-    - Mean Corrected_PB=3926.39
+    - ID=KBr; Corrected_PB=3926.4; Use_for_mean_calc=True
+    - Mean Corrected_PB=3926.4
   Peak Sr_La1
-    - ID=SrTiO3; Corrected_PB=3379.55; Use_for_mean_calc=True
-    - Mean Corrected_PB=3379.55
+    - ID=SrTiO3; Corrected_PB=3382.2; Use_for_mean_calc=True
+    - Mean Corrected_PB=3382.2
   Peak Y_La1
-    - ID=Y; Corrected_PB=3441.84; Use_for_mean_calc=True
-    - Mean Corrected_PB=3441.84
+    - ID=Y; Corrected_PB=3441.8; Use_for_mean_calc=True
+    - Mean Corrected_PB=3441.8
   Peak Y_Mz1
-    - ID=Y; Corrected_PB=137.352; Use_for_mean_calc=True
-    - Mean Corrected_PB=137.352
+    - ID=Y; Corrected_PB=137.4; Use_for_mean_calc=True
+    - Mean Corrected_PB=137.4
   Peak Zr_La1
-    - ID=Zr; Corrected_PB=3433.45; Use_for_mean_calc=True
-    - Mean Corrected_PB=3433.45
+    - ID=Zr; Corrected_PB=3433.5; Use_for_mean_calc=True
+    - Mean Corrected_PB=3433.5
   Peak Zr_Mz1
-    - ID=Zr; Corrected_PB=270.138; Use_for_mean_calc=True
-    - Mean Corrected_PB=270.138
+    - ID=Zr; Corrected_PB=270.1; Use_for_mean_calc=True
+    - Mean Corrected_PB=270.1
   Peak Nb_La1
-    - ID=Nb; Corrected_PB=3522.32; Use_for_mean_calc=True
-    - Mean Corrected_PB=3522.32
+    - ID=Nb; Corrected_PB=3522.3; Use_for_mean_calc=True
+    - Mean Corrected_PB=3522.3
   Peak Nb_Mz1
-    - ID=Nb; Corrected_PB=199.188; Use_for_mean_calc=True
-    - Mean Corrected_PB=199.188
+    - ID=Nb; Corrected_PB=199.2; Use_for_mean_calc=True
+    - Mean Corrected_PB=199.2
   Peak Mo_La1
-    - ID=Mo; Corrected_PB=3628.31; Use_for_mean_calc=True
-    - Mean Corrected_PB=3628.31
+    - ID=Mo; Corrected_PB=3628.3; Use_for_mean_calc=True
+    - Mean Corrected_PB=3628.3
   Peak Mo_Mz1
-    - ID=Mo; Corrected_PB=271.346; Use_for_mean_calc=True
-    - Mean Corrected_PB=271.346
+    - ID=Mo; Corrected_PB=271.3; Use_for_mean_calc=True
+    - Mean Corrected_PB=271.3
   Peak Ag_La1
-    - ID=Ag; Corrected_PB=3469.28; Use_for_mean_calc=True
-    - Mean Corrected_PB=3469.28
+    - ID=Ag; Corrected_PB=3469.3; Use_for_mean_calc=True
+    - Mean Corrected_PB=3469.3
   Peak Ag_Mz1
-    - ID=Ag; Corrected_PB=124.762; Use_for_mean_calc=True
-    - Mean Corrected_PB=124.762
+    - ID=Ag; Corrected_PB=124.8; Use_for_mean_calc=True
+    - Mean Corrected_PB=124.8
   Peak Cd_La1
-    - ID=Cd; Corrected_PB=3189.84; Use_for_mean_calc=True
-    - Mean Corrected_PB=3189.84
+    - ID=Cd; Corrected_PB=3189.8; Use_for_mean_calc=True
+    - Mean Corrected_PB=3189.8
   Peak Cd_Mz1
-    - ID=Cd; Corrected_PB=115.673; Use_for_mean_calc=True
-    - Mean Corrected_PB=115.673
+    - ID=Cd; Corrected_PB=115.7; Use_for_mean_calc=True
+    - Mean Corrected_PB=115.7
   Peak In_La1
     - ID=InP; Corrected_PB=3274.4; Use_for_mean_calc=True
-    - ID=In; Corrected_PB=3236.75; Use_for_mean_calc=True
-    - Mean Corrected_PB=3255.58
+    - ID=In; Corrected_PB=3236.8; Use_for_mean_calc=True
+    - Mean Corrected_PB=3255.6
   Peak In_Mz1
-    - ID=InP; Corrected_PB=182.562; Use_for_mean_calc=True
-    - ID=In; Corrected_PB=180.931; Use_for_mean_calc=True
-    - Mean Corrected_PB=181.747
+    - ID=InP; Corrected_PB=182.6; Use_for_mean_calc=True
+    - ID=In; Corrected_PB=180.9; Use_for_mean_calc=True
+    - Mean Corrected_PB=181.7
   Peak Sn_La1
-    - ID=Sn; Corrected_PB=3100.67; Use_for_mean_calc=True
-    - Mean Corrected_PB=3100.67
+    - ID=Sn; Corrected_PB=3100.7; Use_for_mean_calc=True
+    - Mean Corrected_PB=3100.7
   Peak Sn_Mz1
-    - ID=Sn; Corrected_PB=120.902; Use_for_mean_calc=True
-    - Mean Corrected_PB=120.902
+    - ID=Sn; Corrected_PB=120.9; Use_for_mean_calc=True
+    - Mean Corrected_PB=120.9
   Peak Sb_La1
-    - ID=Sb; Corrected_PB=2978.33; Use_for_mean_calc=True
-    - Mean Corrected_PB=2978.33
+    - ID=Sb; Corrected_PB=2978.3; Use_for_mean_calc=True
+    - Mean Corrected_PB=2978.3
   Peak Sb_Mz1
-    - ID=Sb; Corrected_PB=198.15; Use_for_mean_calc=True
-    - Mean Corrected_PB=198.15
+    - ID=Sb; Corrected_PB=198.2; Use_for_mean_calc=True
+    - Mean Corrected_PB=198.2
   Peak Ba_La1
-    - ID=BaSO4; Corrected_PB=2658.09; Use_for_mean_calc=True
-    - Mean Corrected_PB=2658.09
+    - ID=BaSO4; Corrected_PB=2658.1; Use_for_mean_calc=True
+    - Mean Corrected_PB=2658.1
   Peak Ba_Mz1
-    - ID=BaSO4; Corrected_PB=273.29; Use_for_mean_calc=True
-    - Mean Corrected_PB=273.29
+    - ID=BaSO4; Corrected_PB=273.3; Use_for_mean_calc=True
+    - Mean Corrected_PB=273.3
   Peak La_La1
-    - ID=LaB6; Corrected_PB=2304.88; Use_for_mean_calc=True
-    - Mean Corrected_PB=2304.88
+    - ID=LaB6; Corrected_PB=2304.9; Use_for_mean_calc=True
+    - Mean Corrected_PB=2304.9
   Peak La_Mz1
-    - ID=LaB6; Corrected_PB=289.814; Use_for_mean_calc=True
-    - Mean Corrected_PB=289.814
+    - ID=LaB6; Corrected_PB=289.8; Use_for_mean_calc=True
+    - Mean Corrected_PB=289.8
+  Peak Pr_La1
+    - ID=PrPO4; Corrected_PB=2069; Use_for_mean_calc=True
+    - Mean Corrected_PB=2069
+  Peak Pr_Ma1
+    - ID=PrPO4; Corrected_PB=317; Use_for_mean_calc=True
+    - Mean Corrected_PB=317
+  Peak Pr_Mz1
+    - ID=PrPO4; Corrected_PB=412.9; Use_for_mean_calc=True
+    - Mean Corrected_PB=412.9
   Peak Nd_La1
-    - ID=NdF3; Corrected_PB=2026.03; Use_for_mean_calc=True
-    - Mean Corrected_PB=2026.03
+    - ID=NdF3; Corrected_PB=2030.3; Use_for_mean_calc=True
+    - Mean Corrected_PB=2030.3
   Peak Nd_Ma1
-    - ID=NdF3; Corrected_PB=255.369; Use_for_mean_calc=True
-    - Mean Corrected_PB=255.369
+    - ID=NdF3; Corrected_PB=253.2; Use_for_mean_calc=True
+    - Mean Corrected_PB=253.2
   Peak Nd_Mz1
-    - ID=NdF3; Corrected_PB=142.84; Use_for_mean_calc=True
-    - Mean Corrected_PB=142.84
+    - ID=NdF3; Corrected_PB=141.3; Use_for_mean_calc=True
+    - Mean Corrected_PB=141.3
   Peak Eu_La1
-    - ID=EuPO4; Corrected_PB=1610.58; Use_for_mean_calc=True
-    - Mean Corrected_PB=1610.58
+    - ID=EuPO4; Corrected_PB=1610.6; Use_for_mean_calc=True
+    - Mean Corrected_PB=1610.6
   Peak Eu_Ma1
-    - ID=EuPO4; Corrected_PB=695.717; Use_for_mean_calc=True
-    - Mean Corrected_PB=695.717
+    - ID=EuPO4; Corrected_PB=695.7; Use_for_mean_calc=True
+    - Mean Corrected_PB=695.7
   Peak Eu_Mz1
-    - ID=EuPO4; Corrected_PB=73.3515; Use_for_mean_calc=True
-    - Mean Corrected_PB=73.3515
+    - ID=EuPO4; Corrected_PB=73.4; Use_for_mean_calc=True
+    - Mean Corrected_PB=73.4
   Peak Gd_La1
-    - ID=GdPO4; Corrected_PB=1624.47; Use_for_mean_calc=True
-    - Mean Corrected_PB=1624.47
+    - ID=GdPO4; Corrected_PB=1624.5; Use_for_mean_calc=True
+    - Mean Corrected_PB=1624.5
   Peak Gd_Ma1
-    - ID=GdPO4; Corrected_PB=645.226; Use_for_mean_calc=True
-    - Mean Corrected_PB=645.226
+    - ID=GdPO4; Corrected_PB=645.2; Use_for_mean_calc=True
+    - Mean Corrected_PB=645.2
   Peak Gd_Mz1
     - ID=GdPO4; Corrected_PB=226.2; Use_for_mean_calc=True
     - Mean Corrected_PB=226.2
   Peak Dy_La1
-    - ID=DyPO4; Corrected_PB=1412.92; Use_for_mean_calc=True
-    - Mean Corrected_PB=1412.92
+    - ID=DyPO4; Corrected_PB=1412.9; Use_for_mean_calc=True
+    - Mean Corrected_PB=1412.9
   Peak Dy_Ma1
-    - ID=DyPO4; Corrected_PB=899.31; Use_for_mean_calc=True
-    - Mean Corrected_PB=899.31
+    - ID=DyPO4; Corrected_PB=899.3; Use_for_mean_calc=True
+    - Mean Corrected_PB=899.3
   Peak Dy_Mz1
-    - ID=DyPO4; Corrected_PB=258.849; Use_for_mean_calc=True
-    - Mean Corrected_PB=258.849
+    - ID=DyPO4; Corrected_PB=258.8; Use_for_mean_calc=True
+    - Mean Corrected_PB=258.8
+  Peak Er_La1
+    - ID=ErPO4; Corrected_PB=1366.4; Use_for_mean_calc=True
+    - Mean Corrected_PB=1366.4
+  Peak Er_Ma1
+    - ID=ErPO4; Corrected_PB=421.9; Use_for_mean_calc=True
+    - Mean Corrected_PB=421.9
+  Peak Er_Mz1
+    - ID=ErPO4; Corrected_PB=216.7; Use_for_mean_calc=True
+    - Mean Corrected_PB=216.7
   Peak Lu_La1
-    - ID=LuPO4; Corrected_PB=1456.42; Use_for_mean_calc=True
-    - Mean Corrected_PB=1456.42
+    - ID=LuPO4; Corrected_PB=1456.4; Use_for_mean_calc=True
+    - Mean Corrected_PB=1456.4
   Peak Lu_Ma1
-    - ID=LuPO4; Corrected_PB=1323.69; Use_for_mean_calc=True
-    - Mean Corrected_PB=1323.69
+    - ID=LuPO4; Corrected_PB=1323.7; Use_for_mean_calc=True
+    - Mean Corrected_PB=1323.7
   Peak Lu_Mz1
-    - ID=LuPO4; Corrected_PB=152.585; Use_for_mean_calc=True
-    - Mean Corrected_PB=152.585
+    - ID=LuPO4; Corrected_PB=152.6; Use_for_mean_calc=True
+    - Mean Corrected_PB=152.6
   Peak Hf_La1
     - ID=Hf; Corrected_PB=1268.9; Use_for_mean_calc=True
     - Mean Corrected_PB=1268.9
   Peak Hf_Ma1
-    - ID=Hf; Corrected_PB=1158.56; Use_for_mean_calc=True
-    - Mean Corrected_PB=1158.56
+    - ID=Hf; Corrected_PB=1158.6; Use_for_mean_calc=True
+    - Mean Corrected_PB=1158.6
   Peak Hf_Mz1
-    - ID=Hf; Corrected_PB=142.274; Use_for_mean_calc=True
-    - Mean Corrected_PB=142.274
+    - ID=Hf; Corrected_PB=142.3; Use_for_mean_calc=True
+    - Mean Corrected_PB=142.3
   Peak Ta_La1
-    - ID=Ta; Corrected_PB=1133.53; Use_for_mean_calc=True
-    - Mean Corrected_PB=1133.53
+    - ID=Ta; Corrected_PB=1133.5; Use_for_mean_calc=True
+    - Mean Corrected_PB=1133.5
   Peak Ta_Ma1
-    - ID=Ta; Corrected_PB=1164.41; Use_for_mean_calc=True
-    - Mean Corrected_PB=1164.41
+    - ID=Ta; Corrected_PB=1164.4; Use_for_mean_calc=True
+    - Mean Corrected_PB=1164.4
   Peak W_La1
     - ID=W; Corrected_PB=1085.3; Use_for_mean_calc=True
     - Mean Corrected_PB=1085.3
   Peak W_Ma1
-    - ID=W; Corrected_PB=1248.04; Use_for_mean_calc=True
-    - Mean Corrected_PB=1248.04
+    - ID=W; Corrected_PB=1248; Use_for_mean_calc=True
+    - Mean Corrected_PB=1248
   Peak W_Mz1
-    - ID=W; Corrected_PB=35.0349; Use_for_mean_calc=True
-    - Mean Corrected_PB=35.0349
+    - ID=W; Corrected_PB=35; Use_for_mean_calc=True
+    - Mean Corrected_PB=35
   Peak Re_La1
-    - ID=Re; Corrected_PB=686.557; Use_for_mean_calc=True
-    - Mean Corrected_PB=686.557
+    - ID=Re; Corrected_PB=686.6; Use_for_mean_calc=True
+    - Mean Corrected_PB=686.6
   Peak Re_Ma1
     - ID=Re; Corrected_PB=1216.6; Use_for_mean_calc=True
     - Mean Corrected_PB=1216.6
   Peak Re_Mz1
-    - ID=Re; Corrected_PB=29.5239; Use_for_mean_calc=True
-    - Mean Corrected_PB=29.5239
+    - ID=Re; Corrected_PB=29.5; Use_for_mean_calc=True
+    - Mean Corrected_PB=29.5
   Peak Ir_La1
-    - ID=Ir; Corrected_PB=575.57; Use_for_mean_calc=True
-    - Mean Corrected_PB=575.57
+    - ID=Ir; Corrected_PB=575.6; Use_for_mean_calc=True
+    - Mean Corrected_PB=575.6
   Peak Ir_Ma1
-    - ID=Ir; Corrected_PB=2629.58; Use_for_mean_calc=True
-    - Mean Corrected_PB=2629.58
+    - ID=Ir; Corrected_PB=2629.6; Use_for_mean_calc=True
+    - Mean Corrected_PB=2629.6
   Peak Ir_Mz1
-    - ID=Ir; Corrected_PB=63.547; Use_for_mean_calc=True
-    - Mean Corrected_PB=63.547
+    - ID=Ir; Corrected_PB=63.5; Use_for_mean_calc=True
+    - Mean Corrected_PB=63.5
   Peak Pb_La1
-    - ID=Pb; Corrected_PB=262.242; Use_for_mean_calc=True
-    - ID=GdPO4; Corrected_PB=4570.94; Use_for_mean_calc=False
-    - Mean Corrected_PB=262.242
+    - ID=Pb; Corrected_PB=262.2; Use_for_mean_calc=True
+    - ID=GdPO4; Corrected_PB=4570.9; Use_for_mean_calc=False
+    - ID=PrPO4; Corrected_PB=1131; Use_for_mean_calc=False
+    - Mean Corrected_PB=262.2
   Peak Pb_Ma1
-    - ID=Pb; Corrected_PB=1103.08; Use_for_mean_calc=True
-    - ID=GdPO4; Corrected_PB=5724.65; Use_for_mean_calc=False
-    - Mean Corrected_PB=1103.08
+    - ID=Pb; Corrected_PB=1103.1; Use_for_mean_calc=True
+    - ID=GdPO4; Corrected_PB=5724.6; Use_for_mean_calc=False
+    - ID=PrPO4; Corrected_PB=1027.3; Use_for_mean_calc=False
+    - Mean Corrected_PB=1103.1
   Peak Pb_Mz1
-    - ID=GdPO4; Corrected_PB=142.446; Use_for_mean_calc=False
-    - Mean Corrected_PB=142.446
+    - ID=GdPO4; Corrected_PB=142.4; Use_for_mean_calc=False
+    - ID=PrPO4; Corrected_PB=31.3; Use_for_mean_calc=False
+    - Mean Corrected_PB=86.85
   Peak Bi_La1
-    - ID=Bi; Corrected_PB=200.085; Use_for_mean_calc=True
-    - Mean Corrected_PB=200.085
+    - ID=Bi; Corrected_PB=200.1; Use_for_mean_calc=True
+    - Mean Corrected_PB=200.1
   Peak Bi_Ma1
-    - ID=Bi; Corrected_PB=1147.69; Use_for_mean_calc=True
-    - Mean Corrected_PB=1147.69
+    - ID=Bi; Corrected_PB=1147.7; Use_for_mean_calc=True
+    - Mean Corrected_PB=1147.7
 
 Mode: map | current: 5.1
   (no peak data)
