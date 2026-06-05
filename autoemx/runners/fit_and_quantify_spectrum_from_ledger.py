@@ -29,7 +29,7 @@ import os
 import warnings
 import logging
 from pathlib import Path
-from typing import Optional, List  
+from typing import Any, Optional, List
 
 import numpy as np
 
@@ -82,6 +82,7 @@ def fit_and_quantify_spectrum_from_ledger(
     fitting_verbose: bool = True,
     free_area_el_lines: Optional[List[str]] = None,
     peaks_to_annotate: str = 'main',
+    ledger: Optional[Any] = None,
 ):  
     """
     Fit and (optionally) quantify a single spectrum.
@@ -154,7 +155,8 @@ def fit_and_quantify_spectrum_from_ledger(
     logging.info(f"Sample '{sample_ID}', spectrum {spectrum_ID}")
     
     try:
-        ledger = load_sample_ledger(ledger_path)
+        if ledger is None:
+            ledger = load_sample_ledger(ledger_path)
         configs = {
             cnst.MICROSCOPE_CFG_KEY: ledger.configs.microscope_cfg,
             cnst.SAMPLE_CFG_KEY: ledger.configs.sample_cfg,

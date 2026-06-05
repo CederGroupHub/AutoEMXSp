@@ -11,13 +11,15 @@ Created on Thu Jun 4 2026
 @author: Andrea
 
 Outputs (in the standard folder):
-- *_peak_weights_areas_table_*.csv: line-by-row table with Meas 1..N, Mean, Stdev, Er (%).
+- *_peak_weights_areas_table_*.csv: line-by-row table with Spectrum #<ID> columns, Mean, Stdev, Er (%).
 - *_peak_weights_ratios_table_*.csv: same layout normalized to an auto-selected reference peak.
+- *_peak_weights_correlated_adjustments_*.csv: sum-locked groups (near-neighbor), measured sum constancy and recomputed ratios.
 - *_peak_weights_summary_*.csv: correlations and sum-locked diagnostics.
 """
 
 from autoemx.runners.calibrate_peak_weights_experimental_standard import (
     calibrate_peak_weights_experimental_standard,
+    recompute_calibration,
 )
 
 
@@ -52,8 +54,6 @@ fit_tol = 1e-4
 # =============================================================================
 # Correlation signaling options
 # =============================================================================
-abs_corr_threshold = 0.90
-sum_locked_neg_corr_threshold = -0.90
 sum_cv_threshold = 0.12
 n_sig_figs = 4
 
@@ -71,8 +71,33 @@ calibrate_peak_weights_experimental_standard(
     is_particle=is_particle,
     use_instrument_background=use_instrument_background,
     fit_tol=fit_tol,
-    abs_corr_threshold=abs_corr_threshold,
-    sum_locked_neg_corr_threshold=sum_locked_neg_corr_threshold,
     sum_cv_threshold=sum_cv_threshold,
     n_sig_figs=n_sig_figs,
 )
+
+
+# Optional recompute helper (kept commented on purpose):
+# Use this when you want to regenerate all final CSV files while excluding
+# specific outlier/problematic spectra. It writes separate files with
+# `_recompute` suffix and leaves the original calibration CSV files untouched.
+#
+# `manual_groups` lets you force specific peaks to be treated as a Group.
+# Each group is a list of element-lines written like the entries of
+# `fitted_extra_peaks` (e.g. "Pr_Mz1"). Lines listed in a manual group are
+# excluded from the automated detection of sum-locked groups.
+#
+# spectrum_to_ignore = [3, 8]  # Example IDs to exclude
+# manual_groups = [
+#     ["Pr_Mz1", "Pr_Ma1"],   # Example: force these two peaks into one group
+#     # ["La_Lb1", "La_Lb2"], # Add more groups as needed
+# ]
+# recompute_calibration(
+#     std_ID=std_ID,
+#     free_area_el_lines=fitted_extra_peaks,
+#     spectrum_to_ignore=spectrum_to_ignore,
+#     spectrum_IDs_to_fit=spectrum_IDs_to_fit,
+#     manual_groups=manual_groups,
+#     results_path=results_path,
+#     sum_cv_threshold=sum_cv_threshold,
+#     n_sig_figs=n_sig_figs,
+# )
