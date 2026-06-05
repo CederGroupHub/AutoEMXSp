@@ -23,7 +23,7 @@ from autoemx.config.schema_models import (
     StandardMeanZ,  # type: ignore
 )
 from autoemx.core.quantifier import Quant_Corrections, XSp_Quantifier
-from autoemx.utils import print_double_separator, print_single_separator, weight_to_atomic_fr
+from autoemx.utils.helper import print_double_separator, print_single_separator, weight_to_atomic_fr
 
 from autoemx._logging import get_logger  # type: ignore
 logger = get_logger(__name__)

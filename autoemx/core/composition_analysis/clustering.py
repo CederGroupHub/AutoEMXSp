@@ -14,7 +14,7 @@ from sklearn.metrics import silhouette_samples, silhouette_score
 from yellowbrick.cluster import KElbowVisualizer
 
 import autoemx.utils.constants as cnst
-from autoemx.utils import print_single_separator
+from autoemx.utils.helper import print_single_separator
 
 from autoemx._logging import get_logger
 logger = get_logger(__name__)

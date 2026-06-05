@@ -41,7 +41,7 @@ from typing import Any, List, Optional, Tuple, Union
 
 # Local project imports
 import autoemx.utils.constants as cnst
-from autoemx.utils import EMError, print_single_separator, draw_scalebar
+from autoemx.utils.helper import EMError, print_single_separator, draw_scalebar
 from autoemx.config import (
     MicroscopeConfig,
     SampleConfig,

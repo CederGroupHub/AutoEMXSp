@@ -42,7 +42,7 @@ import autoemx.config.defaults as dflt
 from autoemx.config import config_classes_dict
 from autoemx.config.ledger_schemas import ClusteringConfig
 from .fit_and_quantify_spectrum import fit_and_quantify_spectrum
-from autoemx.config import load_sample_ledger
+from autoemx.config.ledger_io import load_sample_ledger
 
 # Configure logging
 logging.basicConfig(
@@ -79,7 +79,9 @@ def fit_and_quantify_spectrum_from_ledger(
     standards_dict: Optional[dict] = None,
     print_results: bool = True,
     quant_verbose: bool = True,
-    fitting_verbose: bool = True
+    fitting_verbose: bool = True,
+    free_area_el_lines: Optional[List[str]] = None,
+    peaks_to_annotate: str = 'main',
 ):  
     """
     Fit and (optionally) quantify a single spectrum.
@@ -111,6 +113,8 @@ def fit_and_quantify_spectrum_from_ledger(
         Whether to zoom on a specific line.
     line_to_plot : str, optional
         Line to zoom on.
+    peaks_to_annotate : str, optional
+        Which peaks to annotate in `plot_quantified_spectrum` ('all', 'main', 'most).
     fit_tol : float, optional
         scipy fit tolerance. Defines conditions of fit convergence
     is_particle : bool, optional
@@ -319,12 +323,13 @@ def fit_and_quantify_spectrum_from_ledger(
             )
             if exp_stds_cfg_from_ledger is None:
                 logging.warning(
-                    f"No ExpStandardsConfig found in ledger for '{std_id}'. "
+                    f"No ExpStandardsConfig found in ledger for '{sample_ID}'. "
                     f"Skipping — cannot fit a standard without a reference formula."
                 )
+                return
             if exp_stds_cfg_from_ledger.w_frs is None:
                 raise ValueError(
-                    f"No 'w_frs' (element weight fractions) found for standard '{std_id}'. "
+                    f"No 'w_frs' (element weight fractions) found for standard '{sample_ID}'. "
                     f"Checked sample_cfg, exp_stds_cfg, and ledger's exp_stds_cfg. "
                     f"You must pass 'els_w_frs' directly, or modify the ledger to include 'w_frs'."
                 )
@@ -360,7 +365,9 @@ def fit_and_quantify_spectrum_from_ledger(
         line_to_plot = line_to_plot,
         print_results = print_results,
         quant_verbose = quant_verbose,
-        fitting_verbose = fitting_verbose
+        fitting_verbose = fitting_verbose,
+        free_area_el_lines=free_area_el_lines,
+        peaks_to_annotate=peaks_to_annotate,
     )
 
     return quantifier

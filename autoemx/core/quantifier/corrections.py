@@ -10,7 +10,7 @@ from pymatgen.core import Element
 
 import autoemx.calibrations as calibs
 import autoemx.utils.constants as cnst
-from autoemx.utils import (
+from autoemx.utils.helper import (
     EDSError,
     atomic_to_weight_fr,
     print_double_separator,

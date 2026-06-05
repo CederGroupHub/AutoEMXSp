@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import autoemx.utils.constants as cnst
-from autoemx.utils import to_latex_formula
+from autoemx.utils.helper import to_latex_formula
 
 custom_dir = ''
 

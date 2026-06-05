@@ -17,7 +17,7 @@ Created on 2026
 import time
 import warnings
 
-from autoemx.utils import EMError, print_single_separator
+from autoemx.utils.helper import EMError, print_single_separator
 from autoemx import microscope_drivers as EM_driver
 
 from autoemx._logging import get_logger

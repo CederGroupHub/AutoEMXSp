@@ -84,7 +84,7 @@ from pymatgen.core import Element
 # =============================================================================
 import autoemx.calibrations as calibs 
 import autoemx.utils.constants as cnst
-from autoemx.utils import (
+from autoemx.utils.helper import (
     print_nice_1d_row,
     print_single_separator,
     print_double_separator,
@@ -198,7 +198,8 @@ class XSp_Quantifier:
         fit_tol=1e-4,
         standards_dict = None,
         verbose=False,
-        fitting_verbose=False
+        fitting_verbose=False,
+        free_area_el_lines=None,
     ):
         """
         Initialize an XSp_Quantifier for quantitative EDS spectrum analysis.
@@ -329,6 +330,7 @@ class XSp_Quantifier:
 
         self.verbose = verbose
         self.fitting_verbose = fitting_verbose
+        self.free_area_el_lines = free_area_el_lines
         
     #%% Fit spectrum
     # =============================================================================
@@ -372,6 +374,7 @@ class XSp_Quantifier:
             xray_quant_ref_lines=self.xray_quant_ref_lines,
             print_evolving_params=False,
             verbose=self.fitting_verbose,
+            free_area_el_lines=self.free_area_el_lines,
         )
     
     

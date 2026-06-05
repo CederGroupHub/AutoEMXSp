@@ -24,7 +24,7 @@ from datetime import datetime
 
 import autoemx.utils.constants as cnst
 from autoemx.config.schema_models import EDSStandardsFile
-from autoemx.utils import print_single_separator
+from autoemx.utils.helper import print_single_separator
 from autoemx.utils.legacy import is_legacy_standards_payload, standards_payload_to_model
 
 from autoemx._logging import get_logger

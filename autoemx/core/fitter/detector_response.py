@@ -22,7 +22,7 @@ from scipy.integrate import quad, trapezoid
 from scipy.optimize import root_scalar
 from pydantic import BaseModel
 
-from autoemx.utils import print_single_separator, load_msa
+from autoemx.utils.helper import print_single_separator, load_msa
 import autoemx.utils.constants as cnst
 import autoemx.calibrations as calibs
 from autoemx.data.Xray_absorption_coeffs import xray_mass_absorption_coeff

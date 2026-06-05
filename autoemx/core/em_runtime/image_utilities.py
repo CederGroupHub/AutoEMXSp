@@ -27,7 +27,7 @@ import numpy as np
 import cv2
 from PIL import Image
 
-from autoemx.utils import draw_scalebar
+from autoemx.utils.helper import draw_scalebar
 import autoemx.utils.constants as cnst
 
 

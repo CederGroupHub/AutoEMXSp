@@ -155,7 +155,7 @@ from lmfit.models import GaussianModel
 # =============================================================================
 # Package imports
 # =============================================================================
-from autoemx.utils import (
+from autoemx.utils.helper import (
     RefLineError, print_single_separator, print_double_separator,
     weight_to_atomic_fr, load_msa
 )
@@ -248,7 +248,8 @@ class XSp_Fitter:
         sp_collection_time=None,
         xray_quant_ref_lines=None,
         print_evolving_params=False,
-        verbose=False
+        verbose=False,
+        free_area_el_lines=None,
     ):
         """Initialize the EDS spectrum fitter."""
         # Handle mutable default arguments
@@ -258,6 +259,7 @@ class XSp_Fitter:
             els_substrate = ['C', 'O', 'Al']
         if els_w_fr is None:
             els_w_fr = {}
+        self.free_area_el_lines = free_area_el_lines
         if xray_quant_ref_lines is None:
             xray_quant_ref_lines = ('Ka1', 'La1', 'Ma1')
 
@@ -474,6 +476,7 @@ class XSp_Fitter:
             fitting_pars = params,
             xray_weight_refs_dict=self.el_lines_weight_refs_dict,
             is_particle=self.is_particle,
+            free_area_el_lines=self.free_area_el_lines,
         )
         
         fitted_peaks = []

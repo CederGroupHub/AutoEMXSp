@@ -59,7 +59,9 @@ def fit_and_quantify_spectrum(
     line_to_plot: str = '',
     print_results: bool = True,
     quant_verbose: bool = True,
-    fitting_verbose: bool = True
+    fitting_verbose: bool = True,
+    free_area_el_lines=None,
+    peaks_to_annotate: str = 'main',
 ):
     """
     Fit and (optionally) quantify a single spectrum.
@@ -117,6 +119,8 @@ def fit_and_quantify_spectrum(
         Whether to zoom on a specific line.
     line_to_plot : str, optional
         Line to zoom on.
+    peaks_to_annotate : str, optional
+        Which peaks to annotate in `plot_quantified_spectrum` ('all', 'main', 'most).
     print_results : bool, optional
         If True, prints all fitted parameters and their values (default: True).
     quant_verbose : bool, optional
@@ -152,7 +156,8 @@ def fit_and_quantify_spectrum(
         fit_tol=fit_tol,
         verbose=quant_verbose,
         fitting_verbose=fitting_verbose,
-        standards_dict = standards_dict
+        standards_dict = standards_dict,
+        free_area_el_lines=free_area_el_lines,
     )
     
     try:
@@ -221,7 +226,7 @@ def fit_and_quantify_spectrum(
         quantifier.plot_quantified_spectrum(
             plot_title=plot_title,
             peaks_to_zoom=line_to_zoom,
-            annotate_peaks='main'
+            annotate_peaks=peaks_to_annotate,
         )
 
     total_process_time = (time.time() - sample_processing_time_start)

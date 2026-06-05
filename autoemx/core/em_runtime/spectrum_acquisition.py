@@ -16,7 +16,7 @@ Created on 2026
 """
 from typing import Optional, List, Tuple
 
-from autoemx.utils import EMError, Prompt_User
+from autoemx.utils.helper import EMError, Prompt_User
 
 from autoemx._logging import get_logger
 logger = get_logger(__name__)

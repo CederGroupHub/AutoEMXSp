@@ -23,7 +23,7 @@ from autoemx.data import (
     xray_mass_absorption_coeff,
     J_df,
 )
-from autoemx.utils import weight_to_atomic_fr
+from autoemx.utils.helper import weight_to_atomic_fr
 from .detector_response import DetectorResponseFunction
 
 

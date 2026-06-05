@@ -20,7 +20,7 @@ from typing import Optional, Union, Tuple
 import numpy as np
 import cv2
 
-from autoemx.utils import EMError, print_single_separator
+from autoemx.utils.helper import EMError, print_single_separator
 from autoemx.core.em_runtime.image_utilities import normalise_img
 import autoemx.utils.constants as cnst
 from autoemx import microscope_drivers as EM_driver

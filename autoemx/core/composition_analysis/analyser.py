@@ -83,7 +83,7 @@ from autoemx.core.em_runtime.sample_finder import EM_Sample_Finder
 import autoemx.calibrations as calibs
 import autoemx.utils.constants as cnst
 import autoemx.config.defaults as dflt
-from autoemx.utils import (
+from autoemx.utils.helper import (
     print_single_separator,
     print_double_separator,
     make_unique_path,

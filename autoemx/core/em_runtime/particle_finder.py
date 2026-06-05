@@ -73,7 +73,7 @@ import pandas as pd
 from typing import List, Optional
 
 # Local project imports
-from autoemx.utils import (
+from autoemx.utils.helper import (
     Prompt_User,
     draw_scalebar,
     print_double_separator,

@@ -18,7 +18,7 @@ import time
 import numpy as np
 
 import autoemx.utils.constants as cnst
-from autoemx.utils import AlphabetMapper, Prompt_User, print_single_separator
+from autoemx.utils.helper import AlphabetMapper, Prompt_User, print_single_separator
 from autoemx.core.em_runtime.particle_finder import EM_Particle_Finder
 
 from autoemx._logging import get_logger

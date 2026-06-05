@@ -19,7 +19,7 @@ from sklearn.cluster import KMeans
 import autoemx.calibrations as calibs
 from autoemx.core.composition_analysis import custom_plotting_builtin as builtin_custom_plotting
 import autoemx.utils.constants as cnst
-from autoemx.utils import print_single_separator, to_latex_formula
+from autoemx.utils.helper import print_single_separator, to_latex_formula
 
 from autoemx._logging import get_logger
 logger = get_logger(__name__)
