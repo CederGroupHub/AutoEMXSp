@@ -100,13 +100,14 @@ def _collect_fit_row(
 
     return row
 
-
 def _build_summary_table(
     std_id: str,
     areas_df: pd.DataFrame,
     free_lines: Sequence[str],
     line_energies: Dict[str, float],
     sum_cv_threshold: float,
+    anti_corr_threshold: float = -0.7,
+    split_cv_ratio: float = 0.5,
 ) -> pd.DataFrame:
     summary_rows: List[Dict[str, Any]] = []
 
@@ -128,11 +129,14 @@ def _build_summary_table(
                 "std_area": std_v,
                 "cv_area": cv_v,
                 "pearson_r": np.nan,
+                "cv_A": np.nan,
+                "cv_B": np.nan,
                 "sum_mean": np.nan,
                 "sum_std": np.nan,
                 "sum_cv": np.nan,
-                "is_high_corr": False,
+                "is_anti_corr": False,
                 "is_sum_locked_pair": False,
+                "is_split_pair": False,
                 "signal": "",
             }
         )
@@ -146,26 +150,44 @@ def _build_summary_table(
         n = int(pair_df.shape[0])
 
         if n < 3:
-            corr_v = np.nan
-            sum_mean = np.nan
-            sum_std = np.nan
-            sum_cv = np.nan
-            is_high_corr = False
-            is_sum_locked = False
+            corr_v = sum_mean = sum_std = sum_cv = np.nan
+            cv_a = cv_b = np.nan
+            is_anti_corr = is_sum_locked = is_split_pair = False
         else:
-            corr_v = float(pair_df[line_a].corr(pair_df[line_b]))
-            pair_sum = pair_df[line_a] + pair_df[line_b]
-            sum_mean = float(pair_sum.mean())
-            sum_std = float(pair_sum.std(ddof=1)) if n > 1 else np.nan
-            sum_cv = float(sum_std / sum_mean) if np.isfinite(sum_mean) and sum_mean != 0 else np.nan
+            a = pair_df[line_a]
+            b = pair_df[line_b]
+            corr_v = float(a.corr(b))
 
-            # Sum-lock criterion: low variation of the summed area.
-            is_high_corr = False
+            pair_sum = a + b
+            sum_mean = float(pair_sum.mean())
+            sum_std = float(pair_sum.std(ddof=1))
+            sum_cv = float(sum_std / sum_mean) if sum_mean != 0 else np.nan
+
+            # Per-peak CVs: the splitting signature is that each peak varies
+            # much more than their sum.
+            cv_a = float(a.std(ddof=1) / a.mean()) if a.mean() != 0 else np.nan
+            cv_b = float(b.std(ddof=1) / b.mean()) if b.mean() != 0 else np.nan
+            max_peak_cv = np.nanmax([cv_a, cv_b])
+
+            is_anti_corr = bool(np.isfinite(corr_v) and corr_v <= anti_corr_threshold)
             is_sum_locked = bool(np.isfinite(sum_cv) and sum_cv <= sum_cv_threshold)
+            # The sum must be substantially more stable than the noisier peak.
+            is_variance_in_split = bool(
+                np.isfinite(sum_cv)
+                and np.isfinite(max_peak_cv)
+                and max_peak_cv > 0
+                and (sum_cv / max_peak_cv) <= split_cv_ratio
+            )
+            # A pair is a true "split" only if all three hold.
+            is_split_pair = is_anti_corr and is_sum_locked and is_variance_in_split
 
         signal_tokens = []
-        if is_sum_locked:
-            signal_tokens.append("SUM_LOCKED_PAIR")
+        if is_split_pair:
+            signal_tokens.append("SPLIT_PAIR")
+        elif is_anti_corr:
+            signal_tokens.append("ANTI_CORR_ONLY")
+        elif is_sum_locked:
+            signal_tokens.append("SUM_LOCKED_ONLY")
 
         summary_rows.append(
             {
@@ -178,11 +200,14 @@ def _build_summary_table(
                 "std_area": np.nan,
                 "cv_area": np.nan,
                 "pearson_r": corr_v,
+                "cv_A": cv_a,
+                "cv_B": cv_b,
                 "sum_mean": sum_mean,
                 "sum_std": sum_std,
                 "sum_cv": sum_cv,
-                "is_high_corr": is_high_corr,
+                "is_anti_corr": is_anti_corr,
                 "is_sum_locked_pair": is_sum_locked,
+                "is_split_pair": is_split_pair,
                 "signal": "|".join(signal_tokens),
             }
         )
@@ -251,9 +276,111 @@ def _build_output_paths(output_dir: Path, std_id: str, output_file_suffix: str) 
         "ratios_table": output_dir / f"{std_id}_peak_weights_ratios_table{output_file_suffix}.csv",
         "correlated_adjustments": output_dir
         / f"{std_id}_peak_weights_correlated_adjustments{output_file_suffix}.csv",
+        "correlated_diagnostics": output_dir
+        / f"{std_id}_peak_weights_correlated_diagnostics{output_file_suffix}.csv",
         "summary": output_dir / f"{std_id}_peak_weights_summary{output_file_suffix}.csv",
     }
 
+def _finalize_calibration_outputs(
+    std_id: str,
+    raw_df: pd.DataFrame,
+    free_area_el_lines: Sequence[str],
+    areas_by_line: pd.DataFrame,
+    spectrum_ids_used: Sequence[Any],
+    output_dir: Path,
+    output_file_suffix: str,
+    sum_cv_threshold: float,
+    n_sig_figs: int,
+    manual_groups: Optional[Sequence[Sequence[str]]] = None,
+    log_verb: str = "Saved",
+) -> Dict[str, Any]:
+    """
+    Shared post-fit pipeline: derive ratios, build tables, round, write CSVs, and
+    assemble the return dict. Used by both calibrate and recompute entry points.
+    """
+    ref_peak = _select_reference_peak(free_area_el_lines, areas_by_line)
+    ref_vals = pd.to_numeric(areas_by_line[ref_peak], errors="coerce")
+    ratios_by_line = areas_by_line.div(ref_vals.replace(0, np.nan), axis=0)
+
+    original_weights = _get_original_weights(free_area_el_lines)
+    line_energies = _get_line_energies(free_area_el_lines)
+
+    areas_table_df = _build_workbook_like_table(
+        values_by_line=areas_by_line,
+        line_order=free_area_el_lines,
+        spectrum_ids=spectrum_ids_used,
+        original_weights=original_weights,
+        line_energies=line_energies,
+    )
+    ratios_table_df = _build_workbook_like_table(
+        values_by_line=ratios_by_line,
+        line_order=free_area_el_lines,
+        spectrum_ids=spectrum_ids_used,
+        original_weights=original_weights,
+        line_energies=line_energies,
+    )
+    ratios_table_df.insert(0, "Reference peak", ref_peak)
+
+    summary_df = _build_summary_table(
+        std_id=std_id,
+        areas_df=raw_df,
+        free_lines=free_area_el_lines,
+        line_energies=line_energies,
+        sum_cv_threshold=sum_cv_threshold,
+    )
+
+    recommendations_df, diagnostics_df = _build_correlated_adjustments_table(
+        summary_df=summary_df,
+        ratios_by_line=ratios_by_line,
+        areas_by_line=areas_by_line,
+        line_energies=line_energies,
+        original_weights=original_weights,
+        ref_peak=ref_peak,
+        sum_cv_threshold=sum_cv_threshold,
+        spectrum_ids=spectrum_ids_used,
+        manual_groups=manual_groups,
+    )
+
+    # Reduce exported numeric precision for easier manual use in calibration workbooks.
+    raw_df_out = _round_dataframe_sig_figs(raw_df, n_sig_figs=n_sig_figs)
+    areas_table_df_out = _round_dataframe_sig_figs(areas_table_df, n_sig_figs=n_sig_figs)
+    ratios_table_df_out = _round_dataframe_sig_figs(ratios_table_df, n_sig_figs=n_sig_figs)
+    recommendations_df_out = _round_dataframe_sig_figs(recommendations_df, n_sig_figs=n_sig_figs)
+    diagnostics_df_out = _round_dataframe_sig_figs(diagnostics_df, n_sig_figs=n_sig_figs)
+    summary_df_out = _round_dataframe_sig_figs(summary_df, n_sig_figs=n_sig_figs)
+
+    output_paths = _build_output_paths(output_dir, std_id, output_file_suffix)
+
+    raw_df_out.to_csv(output_paths["raw"], index=False)
+    areas_table_df_out.to_csv(output_paths["areas_table"], index=False)
+    ratios_table_df_out.to_csv(output_paths["ratios_table"], index=False)
+    recommendations_df_out.to_csv(output_paths["correlated_adjustments"], index=False)
+    diagnostics_df_out.to_csv(output_paths["correlated_diagnostics"], index=False)
+    summary_df_out.to_csv(output_paths["summary"], index=False)
+
+    print_double_separator()
+    logging.info("%s raw peak areas to: %s", log_verb, output_paths["raw"])
+    logging.info("%s workbook-like areas table to: %s", log_verb, output_paths["areas_table"])
+    logging.info("%s workbook-like ratio table to: %s", log_verb, output_paths["ratios_table"])
+    logging.info("%s correlated-peak adjustments to: %s", log_verb, output_paths["correlated_adjustments"])
+    logging.info("%s correlated-peak diagnostics to: %s", log_verb, output_paths["correlated_diagnostics"])
+    logging.info("%s peak-weight summary to: %s", log_verb, output_paths["summary"])
+
+    return {
+        "raw_path": str(output_paths["raw"]),
+        "areas_table_path": str(output_paths["areas_table"]),
+        "ratios_table_path": str(output_paths["ratios_table"]),
+        "correlated_adjustments_path": str(output_paths["correlated_adjustments"]),
+        "correlated_diagnostics_path": str(output_paths["correlated_diagnostics"]),
+        "summary_path": str(output_paths["summary"]),
+        "reference_peak": ref_peak,
+        "raw_df": raw_df_out,
+        "areas_table_df": areas_table_df_out,
+        "ratios_table_df": ratios_table_df_out,
+        "correlated_adjustments_df": recommendations_df_out,
+        "correlated_diagnostics_df": diagnostics_df_out,
+        "summary_df": summary_df_out,
+    }
 
 def _build_workbook_like_table(
     values_by_line: pd.DataFrame,
@@ -364,7 +491,6 @@ def _are_adjacent_by_energy(line_a: str, line_b: str, line_energies: Dict[str, f
     idx_b = same_el_lines.index(line_b)
     return abs(idx_a - idx_b) == 1
 
-
 def _build_correlated_adjustments_table(
     summary_df: pd.DataFrame,
     ratios_by_line: pd.DataFrame,
@@ -375,34 +501,37 @@ def _build_correlated_adjustments_table(
     sum_cv_threshold: float,
     spectrum_ids: Sequence[Any],
     manual_groups: Optional[Sequence[Sequence[str]]] = None,
-) -> pd.DataFrame:
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    For sum-locked correlated pairs, compute total measured ratio and recommended
-    per-peak ratios preserving original relative proportions.
+    Build correlated-peak adjustment tables for sum-locked groups.
 
-    Parameters
-    ----------
-    manual_groups
-        Optional user-defined groups of element-lines (e.g. [["Pr_Mz1", "Pr_Ma1"]]).
-        Each provided group is taken verbatim as a Group. Any line that appears in a
-        manual group is excluded from the automated (sum-locked) group detection so it
-        cannot be reassigned to a different, automatically-found group.
+    Returns
+    -------
+    (recommendations_df, group_diagnostics_df)
+        recommendations_df : one row per peak, the actionable redistribution.
+        group_diagnostics_df : one row per group, the supporting statistics.
     """
     manual_groups = [list(g) for g in (manual_groups or []) if len(g) >= 2]
-
-    # Lines locked into a user-defined group are excluded from automated detection.
     manually_locked_lines = {line for g in manual_groups for line in g}
 
-    # Use low sum_cv as primary criterion for "sum-locked" behavior.
-    # Keep pairwise negative-correlation logic in summary_df for diagnostics,
-    # but do not require it here to avoid missing valid overlapping pairs.
-    pair_rows = summary_df[
-        (summary_df["record_type"] == "pair_correlation")
-        & (pd.to_numeric(summary_df["sum_cv"], errors="coerce") <= sum_cv_threshold)
+    rec_columns = [
+        "Group", "Lines in group", "Reference peak",
+        "Line", "Energy (keV)",
+        "Original w", "Original frac in group",
+        "Recommended ratio", "n",
+    ]
+    diag_columns = [
+        "Group", "Lines in group", "n_lines", "n",
+        "Area sum mean", "Area sum stdev", "Area sum er (%)",
+        "Meas total ratio mean", "Meas total ratio stdev", "Meas total ratio er (%)",
+        "Source",
     ]
 
-    # Drop any pair that involves a manually-locked line so the automated grouping
-    # does not re-derive or merge those peaks.
+    pair_rows = summary_df[
+        (summary_df["record_type"] == "pair_correlation")
+        & (summary_df["is_split_pair"] == True)  # noqa: E712
+    ]
+
     if not pair_rows.empty and manually_locked_lines:
         keep_mask = pair_rows.apply(
             lambda r: (str(r["line_A"]) not in manually_locked_lines)
@@ -411,41 +540,22 @@ def _build_correlated_adjustments_table(
         )
         pair_rows = pair_rows[keep_mask]
 
-    # Keep only physically plausible pairs: adjacent peaks by energy.
     if not pair_rows.empty:
         adjacency_mask = pair_rows.apply(
-            lambda r: _are_adjacent_by_energy(str(r["line_A"]), str(r["line_B"]), line_energies),
+            lambda r: _are_adjacent_by_energy(
+                str(r["line_A"]), str(r["line_B"]), line_energies
+            ),
             axis=1,
         )
         pair_rows = pair_rows[adjacency_mask]
 
-    # If there are neither manual groups nor automated pairs, return empty table.
     if pair_rows.empty and not manual_groups:
-        return pd.DataFrame(
-            columns=[
-                "Group",
-                "Reference peak",
-                "Lines in group",
-                "Line",
-                "Energy (keV)",
-                "Original w",
-                "Original frac in group",
-                "Area sum mean",
-                "Area sum stdev",
-                "Area sum er (%)",
-                "Meas total ratio mean",
-                "Meas total ratio stdev",
-                "Meas total ratio er (%)",
-                "Recommended ratio",
-                "n",
-            ]
-        )
+        return pd.DataFrame(columns=rec_columns), pd.DataFrame(columns=diag_columns)
 
-    # Build connected groups from pairwise sum-locked relations.
+    # --- build connected groups (unchanged logic) ---
     adjacency: Dict[str, set] = {}
     for _, row in pair_rows.iterrows():
-        a = str(row["line_A"])
-        b = str(row["line_B"])
+        a, b = str(row["line_A"]), str(row["line_B"])
         adjacency.setdefault(a, set()).add(b)
         adjacency.setdefault(b, set()).add(a)
 
@@ -454,66 +564,61 @@ def _build_correlated_adjustments_table(
     for node in adjacency:
         if node in visited:
             continue
-        stack = [node]
-        comp: List[str] = []
+        stack, comp = [node], []
         while stack:
             cur = stack.pop()
             if cur in visited:
                 continue
             visited.add(cur)
             comp.append(cur)
-            stack.extend([n for n in adjacency.get(cur, set()) if n not in visited])
+            stack.extend(n for n in adjacency.get(cur, set()) if n not in visited)
         if len(comp) >= 2:
             connected_groups.append(sorted(comp))
 
-    # Validate each connected group as a whole: if whole-group sum is not stable,
-    # fall back to individual low-sum_cv pairs to avoid over-grouping.
+    # Track provenance so the diagnostics table can show it.
+    group_source: Dict[frozenset, str] = {}
+
     groups: List[List[str]] = []
     for comp in connected_groups:
         if len(comp) == 2:
             groups.append(comp)
+            group_source[frozenset(comp)] = "auto-pair"
             continue
-
-        # Hard cap: do not allow groups larger than 3 peaks.
-        # For larger connected components, keep only pair-level groups.
         if len(comp) > 3:
             sub_pairs = pair_rows[
-                (pair_rows["line_A"].isin(comp))
-                & (pair_rows["line_B"].isin(comp))
+                pair_rows["line_A"].isin(comp) & pair_rows["line_B"].isin(comp)
             ][["line_A", "line_B"]].drop_duplicates()
             for _, p in sub_pairs.iterrows():
-                groups.append(sorted([str(p["line_A"]), str(p["line_B"])]))
+                g = sorted([str(p["line_A"]), str(p["line_B"])])
+                groups.append(g)
+                group_source[frozenset(g)] = "auto-pair (split from >3)"
             continue
 
-        comp_area_total = areas_by_line[comp].apply(pd.to_numeric, errors="coerce").sum(axis=1)
+        comp_total = areas_by_line[comp].apply(pd.to_numeric, errors="coerce").sum(axis=1)
         comp_sum_cv = np.nan
-        if comp_area_total.notna().sum() > 1:
-            comp_mean = float(comp_area_total.mean())
-            comp_std = float(comp_area_total.std(ddof=1))
-            if np.isfinite(comp_mean) and comp_mean != 0:
-                comp_sum_cv = comp_std / comp_mean
+        if comp_total.notna().sum() > 1:
+            cmean = float(comp_total.mean())
+            if np.isfinite(cmean) and cmean != 0:
+                comp_sum_cv = float(comp_total.std(ddof=1)) / cmean
 
         if np.isfinite(comp_sum_cv) and comp_sum_cv <= sum_cv_threshold:
             groups.append(comp)
+            group_source[frozenset(comp)] = "auto-triple"
         else:
-            # Keep the pair-level groups that generated this component.
             sub_pairs = pair_rows[
-                (pair_rows["line_A"].isin(comp))
-                & (pair_rows["line_B"].isin(comp))
+                pair_rows["line_A"].isin(comp) & pair_rows["line_B"].isin(comp)
             ][["line_A", "line_B"]].drop_duplicates()
             for _, p in sub_pairs.iterrows():
-                groups.append(sorted([str(p["line_A"]), str(p["line_B"])]))
+                g = sorted([str(p["line_A"]), str(p["line_B"])])
+                groups.append(g)
+                group_source[frozenset(g)] = "auto-pair (triple rejected)"
 
-    # Prepend user-defined manual groups (taken verbatim, order preserved).
-    # They are placed first so they get the lowest Group indices.
+    for g in manual_groups:
+        group_source[frozenset(g)] = "manual"
     groups = [list(g) for g in manual_groups] + groups
 
-    # Deduplicate groups while preserving order.
-    unique_groups: List[List[str]] = []
-    seen = set()
+    unique_groups, seen = [], set()
     for g in groups:
-        # Use a frozenset key so the same set of lines in any order is deduplicated,
-        # but keep the first-seen ordering (manual groups win because they are first).
         key = frozenset(g)
         if key in seen:
             continue
@@ -521,99 +626,83 @@ def _build_correlated_adjustments_table(
         unique_groups.append(g)
     groups = unique_groups
 
-    out_rows: List[Dict[str, Any]] = []
-
-    spectrum_cols = _build_spectrum_column_labels(spectrum_ids)
+    rec_rows: List[Dict[str, Any]] = []
+    diag_rows: List[Dict[str, Any]] = []
 
     for g_idx, group_lines in enumerate(groups, start=1):
-        missing_cols = [line for line in group_lines if line not in ratios_by_line.columns or line not in areas_by_line.columns]
-        if missing_cols:
-            logging.warning(
-                "Skipping group %s: lines not present in fitted data: %s",
-                group_lines,
-                missing_cols,
-            )
+        missing = [
+            line for line in group_lines
+            if line not in ratios_by_line.columns or line not in areas_by_line.columns
+        ]
+        if missing:
+            logging.warning("Skipping group %s: lines not in fitted data: %s",
+                            group_lines, missing)
             continue
 
         area_total = areas_by_line[group_lines].apply(pd.to_numeric, errors="coerce").sum(axis=1)
         ratio_total = ratios_by_line[group_lines].apply(pd.to_numeric, errors="coerce").sum(axis=1)
-
         n = int(ratio_total.notna().sum())
 
         area_mean = float(area_total.mean()) if area_total.notna().any() else np.nan
         area_std = float(area_total.std(ddof=1)) if area_total.notna().sum() > 1 else np.nan
-        area_er = (
-            float(area_std / area_mean * 100)
-            if np.isfinite(area_mean) and area_mean != 0 and np.isfinite(area_std)
-            else np.nan
-        )
+        area_er = (float(area_std / area_mean * 100)
+                   if np.isfinite(area_mean) and area_mean != 0 and np.isfinite(area_std)
+                   else np.nan)
 
         mean_total = float(ratio_total.mean()) if ratio_total.notna().any() else np.nan
         std_total = float(ratio_total.std(ddof=1)) if ratio_total.notna().sum() > 1 else np.nan
-        er_total = (
-            float(std_total / mean_total * 100)
-            if np.isfinite(mean_total) and mean_total != 0 and np.isfinite(std_total)
-            else np.nan
-        )
+        er_total = (float(std_total / mean_total * 100)
+                    if np.isfinite(mean_total) and mean_total != 0 and np.isfinite(std_total)
+                    else np.nan)
 
-        # Fractions from original weights when available, fallback to measured mean ratios.
         group_weights = {line: original_weights.get(line, np.nan) for line in group_lines}
         valid_w = {line: w for line, w in group_weights.items() if np.isfinite(w)}
-
-        if len(valid_w) == len(group_lines):
+        if len(valid_w) == len(group_lines) and sum(valid_w.values()) > 0:
             w_sum = float(sum(valid_w.values()))
-            if w_sum > 0:
-                fracs = {line: float(valid_w[line] / w_sum) for line in group_lines}
-            else:
-                fracs = {line: np.nan for line in group_lines}
+            fracs = {line: float(valid_w[line] / w_sum) for line in group_lines}
         else:
             means = pd.to_numeric(ratios_by_line[group_lines].mean(axis=0), errors="coerce")
             mean_sum = float(means.sum()) if means.notna().any() else np.nan
-            if np.isfinite(mean_sum) and mean_sum > 0:
-                fracs = {line: float(means[line] / mean_sum) for line in group_lines}
-            else:
-                fracs = {line: np.nan for line in group_lines}
+            fracs = ({line: float(means[line] / mean_sum) for line in group_lines}
+                     if np.isfinite(mean_sum) and mean_sum > 0
+                     else {line: np.nan for line in group_lines})
 
         group_label = f"Group {g_idx}"
         group_lines_str = " + ".join(_line_key(line) for line in group_lines)
 
+        diag_rows.append({
+            "Group": group_label,
+            "Lines in group": group_lines_str,
+            "n_lines": len(group_lines),
+            "n": n,
+            "Area sum mean": area_mean,
+            "Area sum stdev": area_std,
+            "Area sum er (%)": area_er,
+            "Meas total ratio mean": mean_total,
+            "Meas total ratio stdev": std_total,
+            "Meas total ratio er (%)": er_total,
+            "Source": group_source.get(frozenset(group_lines), "auto"),
+        })
+
         for line in group_lines:
             frac = fracs.get(line, np.nan)
-            rec = float(mean_total * frac) if np.isfinite(mean_total) and np.isfinite(frac) else np.nan
-
-            out_row: Dict[str, Any] = {
+            rec = (float(mean_total * frac)
+                   if np.isfinite(mean_total) and np.isfinite(frac) else np.nan)
+            rec_rows.append({
                 "Group": group_label,
-                "Reference peak": ref_peak,
                 "Lines in group": group_lines_str,
+                "Reference peak": ref_peak,
                 "Line": _line_key(line),
                 "Energy (keV)": line_energies.get(line, np.nan),
                 "Original w": group_weights.get(line, np.nan),
                 "Original frac in group": frac,
-                "Area sum mean": area_mean,
-                "Area sum stdev": area_std,
-                "Area sum er (%)": area_er,
-                "Meas total ratio mean": mean_total,
-                "Meas total ratio stdev": std_total,
-                "Meas total ratio er (%)": er_total,
                 "Recommended ratio": rec,
                 "n": n,
-            }
+            })
 
-            for idx, col_name in enumerate(spectrum_cols):
-                out_row[f"Area sum {col_name}"] = (
-                    float(area_total.iloc[idx])
-                    if idx < len(area_total) and pd.notna(area_total.iloc[idx])
-                    else np.nan
-                )
-                out_row[f"Ratio sum {col_name}"] = (
-                    float(ratio_total.iloc[idx])
-                    if idx < len(ratio_total) and pd.notna(ratio_total.iloc[idx])
-                    else np.nan
-                )
-
-            out_rows.append(out_row)
-
-    return pd.DataFrame(out_rows)
+    rec_df = pd.DataFrame(rec_rows, columns=rec_columns)
+    diag_df = pd.DataFrame(diag_rows, columns=diag_columns)
+    return rec_df, diag_df
 
 def _round_to_sig_figs(val: Any, n_sig_figs: int) -> Any:
     """Round numeric scalars to a fixed number of significant figures."""
@@ -662,6 +751,9 @@ def calibrate_peak_weights_experimental_standard(
         raise ValueError(
             "free_area_el_lines is empty. Provide at least one line to calibrate peak weights."
         )
+    
+    #Remove potential duplicate lines
+    free_area_el_lines = list(dict.fromkeys(free_area_el_lines))
 
     results_root = _resolve_results_root(results_path)
     sample_dir = Path(get_sample_dir(str(results_root), std_ID))
@@ -713,93 +805,21 @@ def calibrate_peak_weights_experimental_standard(
     spectrum_ids_used = raw_df["spectrum_ID"].tolist()
     areas_by_line = raw_df[list(free_area_el_lines)].copy()
 
-    ref_peak = _select_reference_peak(free_area_el_lines, areas_by_line)
-    ref_vals = pd.to_numeric(areas_by_line[ref_peak], errors="coerce")
-    ratios_by_line = areas_by_line.div(ref_vals.replace(0, np.nan), axis=0)
-
-    original_weights = _get_original_weights(free_area_el_lines)
-    line_energies = _get_line_energies(free_area_el_lines)
-
-    areas_table_df = _build_workbook_like_table(
-        values_by_line=areas_by_line,
-        line_order=free_area_el_lines,
-        spectrum_ids=spectrum_ids_used,
-        original_weights=original_weights,
-        line_energies=line_energies,
-    )
-    ratios_table_df = _build_workbook_like_table(
-        values_by_line=ratios_by_line,
-        line_order=free_area_el_lines,
-        spectrum_ids=spectrum_ids_used,
-        original_weights=original_weights,
-        line_energies=line_energies,
-    )
-
-    ratios_table_df.insert(0, "Reference peak", ref_peak)
-
-    summary_df = _build_summary_table(
-        std_id=std_ID,
-        areas_df=raw_df,
-        free_lines=free_area_el_lines,
-        line_energies=line_energies,
-        sum_cv_threshold=sum_cv_threshold,
-    )
-
-    correlated_adjustments_df = _build_correlated_adjustments_table(
-        summary_df=summary_df,
-        ratios_by_line=ratios_by_line,
-        areas_by_line=areas_by_line,
-        line_energies=line_energies,
-        original_weights=original_weights,
-        ref_peak=ref_peak,
-        sum_cv_threshold=sum_cv_threshold,
-        spectrum_ids=spectrum_ids_used,
-    )
-
-    # Reduce exported numeric precision for easier manual use in calibration workbooks.
-    raw_df_out = _round_dataframe_sig_figs(raw_df, n_sig_figs=n_sig_figs)
-    areas_table_df_out = _round_dataframe_sig_figs(areas_table_df, n_sig_figs=n_sig_figs)
-    ratios_table_df_out = _round_dataframe_sig_figs(ratios_table_df, n_sig_figs=n_sig_figs)
-    correlated_adjustments_df_out = _round_dataframe_sig_figs(
-        correlated_adjustments_df, n_sig_figs=n_sig_figs
-    )
-    summary_df_out = _round_dataframe_sig_figs(summary_df, n_sig_figs=n_sig_figs)
-
     output_dir = _resolve_output_dir(sample_dir, std_ID, free_area_el_lines)
-    output_paths = _build_output_paths(output_dir, std_ID, output_file_suffix)
 
-    output_raw_path = output_paths["raw"]
-    output_areas_table_path = output_paths["areas_table"]
-    output_ratios_table_path = output_paths["ratios_table"]
-    output_corr_adjust_path = output_paths["correlated_adjustments"]
-    output_summary_path = output_paths["summary"]
-
-    raw_df_out.to_csv(output_raw_path, index=False)
-    areas_table_df_out.to_csv(output_areas_table_path, index=False)
-    ratios_table_df_out.to_csv(output_ratios_table_path, index=False)
-    correlated_adjustments_df_out.to_csv(output_corr_adjust_path, index=False)
-    summary_df_out.to_csv(output_summary_path, index=False)
-
-    print_double_separator()
-    logging.info("Saved raw peak areas to: %s", output_raw_path)
-    logging.info("Saved workbook-like areas table to: %s", output_areas_table_path)
-    logging.info("Saved workbook-like ratio table to: %s", output_ratios_table_path)
-    logging.info("Saved correlated-peak adjustments to: %s", output_corr_adjust_path)
-    logging.info("Saved peak-weight summary to: %s", output_summary_path)
-
-    return {
-        "raw_path": str(output_raw_path),
-        "areas_table_path": str(output_areas_table_path),
-        "ratios_table_path": str(output_ratios_table_path),
-        "correlated_adjustments_path": str(output_corr_adjust_path),
-        "summary_path": str(output_summary_path),
-        "reference_peak": ref_peak,
-        "raw_df": raw_df_out,
-        "areas_table_df": areas_table_df_out,
-        "ratios_table_df": ratios_table_df_out,
-        "correlated_adjustments_df": correlated_adjustments_df_out,
-        "summary_df": summary_df_out,
-    }
+    return _finalize_calibration_outputs(
+        std_id=std_ID,
+        raw_df=raw_df,
+        free_area_el_lines=free_area_el_lines,
+        areas_by_line=areas_by_line,
+        spectrum_ids_used=spectrum_ids_used,
+        output_dir=output_dir,
+        output_file_suffix=output_file_suffix,
+        sum_cv_threshold=sum_cv_threshold,
+        n_sig_figs=n_sig_figs,
+        manual_groups=None,
+        log_verb="Saved",
+    )
 
 
 def recompute_calibration(
@@ -832,6 +852,8 @@ def recompute_calibration(
         raise ValueError(
             "free_area_el_lines is empty. Provide at least one line to recalibrate peak weights."
         )
+    #Remove potential duplicate lines
+    free_area_el_lines = list(dict.fromkeys(free_area_el_lines))
 
     # Normalize and validate manual groups against the available free lines.
     free_lines_set = set(free_area_el_lines)
@@ -940,87 +962,16 @@ def recompute_calibration(
         raw_data[el_line] = areas_by_line[el_line].tolist()
     raw_df = pd.DataFrame(raw_data)
 
-    ref_peak = _select_reference_peak(free_area_el_lines, areas_by_line)
-    ref_vals = pd.to_numeric(areas_by_line[ref_peak], errors="coerce")
-    ratios_by_line = areas_by_line.div(ref_vals.replace(0, np.nan), axis=0)
-
-    original_weights = _get_original_weights(free_area_el_lines)
-    line_energies = _get_line_energies(free_area_el_lines)
-
-    areas_table_df = _build_workbook_like_table(
-        values_by_line=areas_by_line,
-        line_order=free_area_el_lines,
-        spectrum_ids=spectrum_ids_used,
-        original_weights=original_weights,
-        line_energies=line_energies,
-    )
-    ratios_table_df = _build_workbook_like_table(
-        values_by_line=ratios_by_line,
-        line_order=free_area_el_lines,
-        spectrum_ids=spectrum_ids_used,
-        original_weights=original_weights,
-        line_energies=line_energies,
-    )
-    ratios_table_df.insert(0, "Reference peak", ref_peak)
-
-    summary_df = _build_summary_table(
+    return _finalize_calibration_outputs(
         std_id=std_ID,
-        areas_df=raw_df,
-        free_lines=free_area_el_lines,
-        line_energies=line_energies,
-        sum_cv_threshold=sum_cv_threshold,
-    )
-
-    correlated_adjustments_df = _build_correlated_adjustments_table(
-        summary_df=summary_df,
-        ratios_by_line=ratios_by_line,
+        raw_df=raw_df,
+        free_area_el_lines=free_area_el_lines,
         areas_by_line=areas_by_line,
-        line_energies=line_energies,
-        original_weights=original_weights,
-        ref_peak=ref_peak,
+        spectrum_ids_used=spectrum_ids_used,
+        output_dir=output_dir,
+        output_file_suffix="_recompute",
         sum_cv_threshold=sum_cv_threshold,
-        spectrum_ids=spectrum_ids_used,
+        n_sig_figs=n_sig_figs,
         manual_groups=normalized_manual_groups,
+        log_verb="Recomputed",
     )
-
-    raw_df_out = _round_dataframe_sig_figs(raw_df, n_sig_figs=n_sig_figs)
-    areas_table_df_out = _round_dataframe_sig_figs(areas_table_df, n_sig_figs=n_sig_figs)
-    ratios_table_df_out = _round_dataframe_sig_figs(ratios_table_df, n_sig_figs=n_sig_figs)
-    correlated_adjustments_df_out = _round_dataframe_sig_figs(
-        correlated_adjustments_df, n_sig_figs=n_sig_figs
-    )
-    summary_df_out = _round_dataframe_sig_figs(summary_df, n_sig_figs=n_sig_figs)
-
-    output_paths = _build_output_paths(output_dir, std_ID, output_file_suffix="_recompute")
-    output_raw_path = output_paths["raw"]
-    output_areas_table_path = output_paths["areas_table"]
-    output_ratios_table_path = output_paths["ratios_table"]
-    output_corr_adjust_path = output_paths["correlated_adjustments"]
-    output_summary_path = output_paths["summary"]
-
-    raw_df_out.to_csv(output_raw_path, index=False)
-    areas_table_df_out.to_csv(output_areas_table_path, index=False)
-    ratios_table_df_out.to_csv(output_ratios_table_path, index=False)
-    correlated_adjustments_df_out.to_csv(output_corr_adjust_path, index=False)
-    summary_df_out.to_csv(output_summary_path, index=False)
-
-    print_double_separator()
-    logging.info("Recomputed raw peak areas to: %s", output_raw_path)
-    logging.info("Recomputed workbook-like areas table to: %s", output_areas_table_path)
-    logging.info("Recomputed workbook-like ratio table to: %s", output_ratios_table_path)
-    logging.info("Recomputed correlated-peak adjustments to: %s", output_corr_adjust_path)
-    logging.info("Recomputed peak-weight summary to: %s", output_summary_path)
-
-    return {
-        "raw_path": str(output_raw_path),
-        "areas_table_path": str(output_areas_table_path),
-        "ratios_table_path": str(output_ratios_table_path),
-        "correlated_adjustments_path": str(output_corr_adjust_path),
-        "summary_path": str(output_summary_path),
-        "reference_peak": ref_peak,
-        "raw_df": raw_df_out,
-        "areas_table_df": areas_table_df_out,
-        "ratios_table_df": ratios_table_df_out,
-        "correlated_adjustments_df": correlated_adjustments_df_out,
-        "summary_df": summary_df_out,
-    }
