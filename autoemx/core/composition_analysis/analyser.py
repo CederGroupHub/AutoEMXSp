@@ -112,6 +112,7 @@ from autoemx.config.ledger_schemas import (
     SpotCoordinates,
     SpectrumEntry,
 )
+from autoemx.config.ledger_io import ingest_spectra
 from autoemx.config.schema_models.clustering import ClusteringAnalysis, ClusteringResult
 from autoemx.config.schema_models.standards import EDSStandardsFile
 from .clustering import ClusteringModule
@@ -1924,7 +1925,6 @@ class EMXSp_Composition_Analyzer:
 
             spectra_dir = self._get_spectra_dir()
             os.makedirs(spectra_dir, exist_ok=True)
-            pointer_files = self._list_pointer_files_in_spectra_dir()
 
             ledger = self._load_existing_ledger()
             ledger_changed = False
@@ -1940,26 +1940,9 @@ class EMXSp_Composition_Analyzer:
                 self._last_acq_ledger_created = True
                 ledger_changed = True
 
-            existing_spectrum_ids = {
-                str(spectrum.spectrum_id)
-                for spectrum in ledger.spectra
-                if spectrum.spectrum_id is not None
-            }
-            for pointer_file in pointer_files:
-                stem = pointer_file.stem
-                spectrum_id = (
-                    stem[len(cnst.SPECTRUM_FILENAME_PREFIX):]
-                    if stem.startswith(cnst.SPECTRUM_FILENAME_PREFIX)
-                    else stem
-                )
-                if spectrum_id in existing_spectrum_ids:
-                    continue
-
-                ledger.spectra.append(
-                    self._build_spectrum_entry_from_pointer_file(pointer_file)
-                )
-                existing_spectrum_ids.add(spectrum_id)
-                self._last_acq_ledger_ingested_spectra_count += 1
+            n_ingested, n_removed = ingest_spectra(ledger)
+            self._last_acq_ledger_ingested_spectra_count = n_ingested
+            if n_ingested > 0 or n_removed > 0:
                 ledger_changed = True
 
             if ledger.sample_path != os.path.abspath(self.sample_result_dir):
