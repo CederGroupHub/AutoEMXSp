@@ -2847,14 +2847,14 @@ class EMXSp_Composition_Analyzer:
         n_spectra_to_collect : int
             Number of new spectra to collect.
         n_tot_sp_collected : int, optional
-            The running total of spectra already collected (default: 0).
+            Next spectrum ID to use. If None, it is inferred as max(existing_id) + 1.
         quantify : bool, optional
             If True, perform spectra quantification (default: True).
     
         Returns
         -------
         n_tot_sp_collected : int
-            The updated total number of spectra collected after this session.
+            Updated next spectrum ID to use.
         success : bool
             False if collection was interrupted by user, or if no more particles could be found. True otherwise.
     
@@ -2877,11 +2877,11 @@ class EMXSp_Composition_Analyzer:
                         max_id = max(max_id, int(spectrum_id))
             n_tot_sp_collected = max_id + 1
 
+        next_spectrum_id = n_tot_sp_collected
         n_spectra_collected = 0
-        n_spectra_init = n_tot_sp_collected
 
         while n_spectra_collected < n_spectra_to_collect:
-            success, spots_xy_list, particle_cntr = self.EM_controller.get_XSp_coords(n_tot_sp_collected)
+            success, spots_xy_list, particle_cntr = self.EM_controller.get_XSp_coords(next_spectrum_id)
             
             if not success:
                 break
@@ -2896,21 +2896,21 @@ class EMXSp_Composition_Analyzer:
             for i, (x, y) in enumerate(spots_xy_list):
                 latest_spot_id = i
                 xy_center = (int(x), int(y))
-                current_spectrum_id = str(n_tot_sp_collected)
+                current_spectrum_id = str(next_spectrum_id)
 
                 if current_spectrum_id in ingested_spectrum_ids:
-                    n_tot_sp_collected += 1
+                    next_spectrum_id += 1
                     continue
 
                 if self.verbose:
                     print_single_separator()
-                    logger.info(f'🔬 Acquiring spectrum #{n_tot_sp_collected}...')
+                    logger.info(f'🔬 Acquiring spectrum #{next_spectrum_id}...')
 
                 spectrum_relpath = self._build_spectrum_relpath(current_spectrum_id)
                 manufacturer_msa_path = os.path.join(self.sample_result_dir, spectrum_relpath)
                 os.makedirs(os.path.dirname(manufacturer_msa_path), exist_ok=True)
 
-                n_tot_sp_collected += 1
+                next_spectrum_id += 1
                 total_counts = self._acquire_spectrum(
                     x,
                     y,
@@ -2954,6 +2954,7 @@ class EMXSp_Composition_Analyzer:
                 ledger.spectra.append(spectrum_entry)
                 ledger.to_json_file(ledger_path)
                 ingested_spectrum_ids.add(str(spectrum_entry.spectrum_id))
+                n_spectra_collected += 1
 
                 # Contamination check: skip quantification if counts are too low (only at first measurement spot)
                 if i==0 and self.sample_cfg.is_particle_acquisition:
@@ -2983,7 +2984,7 @@ class EMXSp_Composition_Analyzer:
                     
                     im_annotations.append({
                         cnst.ANNOTATION_TEXT_KEY: (
-                            str(n_tot_sp_collected - 1 - latest_spot_id + i),
+                            str(next_spectrum_id - 1 - latest_spot_id + i),
                             (xy_center[0] - 30, xy_center[1] - 15)
                         ),
                         cnst.ANNOTATION_CIRCLE_KEY: (10, xy_center, -1)
@@ -2993,10 +2994,8 @@ class EMXSp_Composition_Analyzer:
                 
             if quantify:
                 self._fit_and_quantify_spectra(interrupt_fits_bad_spectra = interrupt_fits_bad_spectra)
-
-            n_spectra_collected = n_tot_sp_collected - n_spectra_init
     
-        return n_tot_sp_collected, success
+        return next_spectrum_id, success
     
     
     def _fit_and_quantify_spectra(
