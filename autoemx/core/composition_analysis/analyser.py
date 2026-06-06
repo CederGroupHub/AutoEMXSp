@@ -2868,7 +2868,14 @@ class EMXSp_Composition_Analyzer:
         # Auto-detect next available spectrum ID if not provided
         if n_tot_sp_collected is None:
             pointer_files = self._list_pointer_files_in_spectra_dir()
-            n_tot_sp_collected = len(pointer_files)
+            max_id = -1
+            for pf in pointer_files:
+                stem = pf.stem
+                if stem.startswith(cnst.SPECTRUM_FILENAME_PREFIX):
+                    spectrum_id = stem[len(cnst.SPECTRUM_FILENAME_PREFIX):]
+                    if spectrum_id.isdigit():
+                        max_id = max(max_id, int(spectrum_id))
+            n_tot_sp_collected = max_id + 1
 
         n_spectra_collected = 0
         n_spectra_init = n_tot_sp_collected
@@ -3561,6 +3568,12 @@ class EMXSp_Composition_Analyzer:
         _existing_ledger = self._load_or_create_ledger()
         if _existing_ledger is not None and _existing_ledger.spectra:
             tot_n_spectra = len(_existing_ledger.spectra)
+            _numeric_ids = [
+                int(e.spectrum_id)
+                for e in _existing_ledger.spectra
+                if e.spectrum_id is not None and str(e.spectrum_id).isdigit()
+            ]
+            next_spectrum_id = (max(_numeric_ids) + 1) if _numeric_ids else 0
             _particle_ids = [
                 e.acquisition_details.particle_id
                 for e in _existing_ledger.spectra
@@ -3603,19 +3616,21 @@ class EMXSp_Composition_Analyzer:
                 "New spectra will be appended starting from index %d. "
                 "Delete the sample folder before starting if a fresh acquisition is desired: %s",
                 tot_n_spectra,
-                tot_n_spectra,
+                next_spectrum_id,
                 self.sample_result_dir,
             )
         else:
             tot_n_spectra = 0
+            next_spectrum_id = 0
             _particle_id_offset = 0
 
         next_particle_id = _particle_id_offset + 1 if self.sample_cfg.is_particle_acquisition else "n/a"
-        logger.info(
-            "ℹ️ Resume point resolved: next spectrum ID=%d, next particle ID=%s.",
-            tot_n_spectra,
-            next_particle_id,
-        )
+        if next_spectrum_id > 0 and self.verbose:
+            logger.info(
+                "ℹ️ Resume point resolved: next spectrum ID=%d, next particle ID=%s.",
+                next_spectrum_id,
+                next_particle_id,
+            )
 
         max_n_sp_per_iter = 10  # Max spectra to collect per iteration (for saving in between)
         n_spectra_collected_this_session = 0  # Track new spectra collected in this session
@@ -3650,13 +3665,15 @@ class EMXSp_Composition_Analyzer:
     
             # Collect the next batch of spectra (and quantify if requested)
             n_spectra_before = tot_n_spectra
-            tot_n_spectra, is_acquisition_successful = self._collect_spectra(
+            next_spectrum_id, is_acquisition_successful = self._collect_spectra(
                 n_spectra_to_collect,
-                n_tot_sp_collected=tot_n_spectra,
+                n_tot_sp_collected=next_spectrum_id,
                 quantify=is_spectral_quant,
                 particle_id_offset=_particle_id_offset,
                 interrupt_fits_bad_spectra=interrupt_fits_bad_spectra
             )
+            refreshed_ledger = self._load_or_create_ledger()
+            tot_n_spectra = len(refreshed_ledger.spectra) if refreshed_ledger is not None else 0
             n_spectra_collected_this_session += (tot_n_spectra - n_spectra_before)
     
             if self.verbose:
