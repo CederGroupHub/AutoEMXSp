@@ -103,19 +103,30 @@ def _build_spectrum_entry(sample_root: Path, pointer_file: Path) -> SpectrumEntr
     )
 
 
-def ingest_spectra(ledger: SampleLedger) -> int:
-    """Ingest newly copied spectra files into an existing ledger.
+def ingest_spectra(ledger: SampleLedger) -> tuple[int, int]:
+    """Synchronize ledger spectra entries with files in ``<ledger.sample_path>/spectra``.
 
-    Scans ``<ledger.sample_path>/spectra`` and appends any pointer file whose
-    spectrum id is not already present in ``ledger.spectra``.
+    Appends pointer files whose spectrum id is not already present in
+    ``ledger.spectra`` and removes ledger entries whose spectrum id no longer
+    exists on disk.
 
     Returns
     -------
-    int
-        Number of newly ingested spectra.
+    tuple[int, int]
+        Number of newly ingested spectra and number of removed spectra.
     """
     sample_root = Path(ledger.sample_path)
     spectra_dir = sample_root / cnst.SPECTRA_DIR
+    pointer_files = _list_spectrum_pointer_files(spectra_dir)
+    available_ids = {_extract_spectrum_id(pointer_file) for pointer_file in pointer_files}
+
+    original_count = len(ledger.spectra)
+    ledger.spectra[:] = [
+        entry
+        for entry in ledger.spectra
+        if entry.spectrum_id in (None, "") or str(entry.spectrum_id) in available_ids
+    ]
+    n_removed = original_count - len(ledger.spectra)
 
     existing_ids = {
         str(entry.spectrum_id)
@@ -124,7 +135,7 @@ def ingest_spectra(ledger: SampleLedger) -> int:
     }
 
     n_ingested = 0
-    for pointer_file in _list_spectrum_pointer_files(spectra_dir):
+    for pointer_file in pointer_files:
         spectrum_id = _extract_spectrum_id(pointer_file)
         if spectrum_id in existing_ids:
             continue
@@ -132,7 +143,7 @@ def ingest_spectra(ledger: SampleLedger) -> int:
         existing_ids.add(spectrum_id)
         n_ingested += 1
 
-    return n_ingested
+    return n_ingested, n_removed
 
 
 def load_sample_ledger(file_path: str | Path) -> SampleLedger:
@@ -150,14 +161,19 @@ def load_sample_ledger(file_path: str | Path) -> SampleLedger:
         if sample_path_changed:
             ledger.sample_path = sample_root
 
-        n_ingested = ingest_spectra(ledger)
-        if sample_path_changed or n_ingested > 0:
+        n_ingested, n_removed = ingest_spectra(ledger)
+        if sample_path_changed or n_ingested > 0 or n_removed > 0:
             ledger.to_json_file(ledger_path)
 
-        if n_ingested > 0:
+        if n_ingested > 0 or n_removed > 0:
+            change_parts = []
+            if n_ingested > 0:
+                change_parts.append(f"ingested {n_ingested} new spectrum file{'s' if n_ingested != 1 else ''}")
+            if n_removed > 0:
+                change_parts.append(f"removed {n_removed} missing spectrum entr{'ies' if n_removed != 1 else 'y'}")
             print(
                 f"Loaded sample ledger for sample '{ledger.sample_id}' from {ledger_path} "
-                f"and ingested {n_ingested} new spectrum file{'s' if n_ingested != 1 else ''}."
+                f"and {'; '.join(change_parts)}."
             )
         else:
             print(f"Loaded sample ledger for sample '{ledger.sample_id}' from {ledger_path}")

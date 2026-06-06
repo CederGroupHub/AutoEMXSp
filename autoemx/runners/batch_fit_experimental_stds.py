@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple, cast
 
 from autoemx.core.composition_analysis import EMXSp_Composition_Analyzer
-from autoemx.utils import print_double_separator, get_sample_dir
+from autoemx.utils.helper import print_double_separator, get_sample_dir
 from autoemx.config.ledger_io import load_sample_ledger
 from autoemx.config.ledger_schemas import ClusteringConfig  # type: ignore
 import autoemx.utils.constants as cnst
