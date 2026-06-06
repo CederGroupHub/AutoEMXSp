@@ -119,12 +119,23 @@ def ingest_spectra(ledger: SampleLedger) -> tuple[int, int]:
     spectra_dir = sample_root / cnst.SPECTRA_DIR
     pointer_files = _list_spectrum_pointer_files(spectra_dir)
     available_ids = {_extract_spectrum_id(pointer_file) for pointer_file in pointer_files}
+    available_relpaths = {
+        pointer_file.resolve().relative_to(sample_root.resolve()).as_posix()
+        for pointer_file in pointer_files
+    }
 
     original_count = len(ledger.spectra)
     ledger.spectra[:] = [
         entry
         for entry in ledger.spectra
-        if entry.spectrum_id in (None, "") or str(entry.spectrum_id) in available_ids
+        if (
+            entry.spectrum_relpath in available_relpaths
+            or (
+                entry.spectrum_relpath in (None, "")
+                and entry.spectrum_id not in (None, "")
+                and str(entry.spectrum_id) in available_ids
+            )
+        )
     ]
     n_removed = original_count - len(ledger.spectra)
 

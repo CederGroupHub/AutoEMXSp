@@ -2885,14 +2885,7 @@ class EMXSp_Composition_Analyzer:
         # Auto-detect next available spectrum ID if not provided
         if n_tot_sp_collected is None:
             pointer_files = self._list_pointer_files_in_spectra_dir()
-            max_id = -1
-            for pf in pointer_files:
-                stem = pf.stem
-                if stem.startswith(cnst.SPECTRUM_FILENAME_PREFIX):
-                    spectrum_id = stem[len(cnst.SPECTRUM_FILENAME_PREFIX):]
-                    if spectrum_id.isdigit():
-                        max_id = max(max_id, int(spectrum_id))
-            n_tot_sp_collected = max_id + 1
+            n_tot_sp_collected = len(pointer_files)
 
         n_spectra_collected = 0
         n_spectra_init = n_tot_sp_collected
@@ -3584,12 +3577,7 @@ class EMXSp_Composition_Analyzer:
         _had_ledger_before = self._load_existing_ledger() is not None
         _existing_ledger = self._load_or_create_ledger()
         if _existing_ledger is not None and _existing_ledger.spectra:
-            _numeric_ids = [
-                int(e.spectrum_id)
-                for e in _existing_ledger.spectra
-                if e.spectrum_id is not None and str(e.spectrum_id).isdigit()
-            ]
-            tot_n_spectra = (max(_numeric_ids) + 1) if _numeric_ids else 0
+            tot_n_spectra = len(_existing_ledger.spectra)
             _particle_ids = [
                 e.acquisition_details.particle_id
                 for e in _existing_ledger.spectra
