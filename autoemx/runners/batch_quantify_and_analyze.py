@@ -50,7 +50,7 @@ import logging
 import traceback
 from typing import Any, Dict, List, Optional, cast
 
-from autoemx.utils import (
+from autoemx.utils.helper import (
     print_double_separator,
     get_sample_dir,
 )
@@ -244,8 +244,13 @@ def batch_quantify_and_analyze(
             quant_cfg.use_instrument_background = use_instrument_background
 
         # Change is_known_precursor_mixture if provided
-        if is_known_precursor_mixture is not None and powder_meas_cfg is not None:
-            powder_meas_cfg.is_known_powder_mixture_meas = is_known_precursor_mixture
+        if is_known_precursor_mixture is not None:
+            if powder_meas_cfg is not None:
+                powder_meas_cfg.is_known_powder_mixture_meas = is_known_precursor_mixture
+            else:
+                from autoemx.config.runtime_configs import PowderMeasurementConfig
+                powder_meas_cfg = PowderMeasurementConfig()
+                powder_meas_cfg.is_known_powder_mixture_meas = is_known_precursor_mixture
 
         # --- Run Composition Analysis or Spectral Acquisition
         comp_analyzer = EMXSp_Composition_Analyzer(
