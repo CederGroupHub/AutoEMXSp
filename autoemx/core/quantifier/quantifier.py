@@ -1530,7 +1530,7 @@ class XSp_Quantifier:
             new_weight_fractions = k_ratios * ZAF_pb_factors
             if self.verbose:
                 print_nice_1d_row('New W_fr', new_weight_fractions)
-                logger.debug('  ℹ️ Analytical error: %.2f w%%', sum(new_weight_fractions) * 100 - 100)
+                logger.debug('  ℹ️ Analytical error: %.2f w%', sum(new_weight_fractions) * 100 - 100)
     
             max_diff = max(abs(new_weight_fractions - weight_fractions))
             weight_fractions = new_weight_fractions.copy()
