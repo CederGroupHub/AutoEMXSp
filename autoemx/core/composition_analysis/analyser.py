@@ -3151,7 +3151,7 @@ class EMXSp_Composition_Analyzer:
             if self.verbose and n_spectra_to_quant > 0:
                 print_single_separator()
                 quant_str = "quantification" if quantify else "fitting"
-                logger.info(f"▶️ Starting {quant_str} of {n_spectra_to_quant} spectra on up to {_n_cores} cores")
+                logger.info(f"▶️ Starting {quant_str} of {n_spectra_to_quant} spectra on up to {_n_cores} cores.\nThis may take a while...")
         
             if quantify:
                 indices_to_process_set = set(indices_to_process)
