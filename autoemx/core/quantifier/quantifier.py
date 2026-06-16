@@ -1515,7 +1515,7 @@ class XSp_Quantifier:
             print_single_separator()
             print_nice_1d_row('', self.fitted_els_quant)
             print_nice_1d_row('Initial W_fr', k_ratios)
-            logger.info(f"ℹ️ Initial analytical error: {(1 - sum(k_ratios)) * 100:.2f}%%")
+            logger.info(f"ℹ️ Initial analytical error: {(1 - sum(k_ratios)) * 100:.2f}%")
     
         while max_diff > converge_tol and ZAF_cntr < max_iter:
             ZAF_cntr += 1
@@ -1791,7 +1791,7 @@ class XSp_Quantifier:
     
         # Print analytical error as a percentage (w%)
         an_err_percent = quant_result[cnst.AN_ER_KEY] * 100
-        logger.info(f"  ℹ️ Analytical error: {an_err_percent:.2f} w%%")
+        logger.info(f"  ℹ️ Analytical error: {an_err_percent:.2f} w%")
         
         if quant_flag is not None:
             logger.info(f"  ℹ️ Quantification flag: {quant_flag}")
