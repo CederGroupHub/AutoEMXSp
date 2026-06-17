@@ -462,6 +462,136 @@ class XSp_Fitter:
     
         return background_mod, background_pars
     
+    def _abs_attenuation_for_line(self, el_line, mass_fractions):
+        base_line = el_line
+        for suffix in (self.escape_peaks_str, self.pileup_peaks_str):
+            if base_line.endswith(suffix):
+                base_line = base_line[: -len(suffix)]
+
+        el, line = base_line.split("_", 1)
+        en = np.array([get_el_xray_lines(el)[line]["energy (keV)"]])
+
+        kwargs = {"det_angle": self.emergence_angle, "adr_abs": 0}
+        for el_i, w_i in mass_fractions.items():
+            kwargs[f"f_{el_i}"] = float(w_i)
+
+        return float(Background_Model._abs_attenuation_phirho(en, **kwargs)[0])
+
+
+    def _weight_absorption_correction_factors(self, fitted_lines):
+        """
+        Per-line multiplicative correction for cross-line weights, accounting
+        for the difference in relative self-absorption between the (known)
+        sample composition and the pure-element calibration.
+
+        The fitted weight of a non-reference line is calibrated on pure
+        elements:  area(line) = weight_pure * area(ref). In a sample with a
+        different composition, line and reference are absorbed differently than
+        in the pure case, so the effective weight should be:
+
+            weight_sample = weight_pure * corr(line)
+
+            corr(line) = [A_sample(line) / A_pure(line)]
+                         / [A_sample(ref)  / A_pure(ref)]
+
+        The reference line maps to itself, giving corr == 1.0 exactly.
+
+        Parameters
+        ----------
+        fitted_lines : list of str
+            Lines actually present in the model (from _add_peak_model_and_pars).
+
+        Returns
+        -------
+        dict
+            {el_line: correction_factor} for every line in `fitted_lines`.
+            Lines whose factor cannot be computed default to 1.0.
+        """
+        sample_fr = self._normalized_known_mass_fractions()
+
+        # Set cls_beam_e (and clear caches) ONCE with the real beam energy,
+        # before any attenuation probe.
+        Background_Model(
+            self.is_particle,
+            beam_energy=self.beam_energy,
+            emergence_angle=self.emergence_angle,
+        )
+
+        # Cache per (el_line) so reference lines shared across many peaks are
+        # only evaluated once. Keyed by the suffix-stripped base line + scope.
+        sample_cache = {}
+        pure_cache = {}
+
+        def a_sample(el_line):
+            if el_line not in sample_cache:
+                sample_cache[el_line] = self._abs_attenuation_for_line(el_line, sample_fr)
+            return sample_cache[el_line]
+
+        def a_pure(el_line):
+            # Pure-element attenuation: composition is the line's own element only.
+            if el_line not in pure_cache:
+                base_line = el_line
+                for suffix in (self.escape_peaks_str, self.pileup_peaks_str):
+                    if base_line.endswith(suffix):
+                        base_line = base_line[: -len(suffix)]
+                el = base_line.split("_", 1)[0]
+                pure_cache[el_line] = self._abs_attenuation_for_line(el_line, {el: 1.0})
+            return pure_cache[el_line]
+
+        factors = {}
+        deferred = []  # escape/pileup lines, resolved after parents are known
+
+        for el_line in fitted_lines:
+            # Escape/pileup peaks inherit their PARENT characteristic line's correction
+            # (the parent X-ray is what's self-absorbed in the sample; the escape/sum
+            # happens in the detector, post-sample). Defer until parents are computed.
+            if el_line.endswith(self.escape_peaks_str) or el_line.endswith(self.pileup_peaks_str):
+                deferred.append(el_line)
+                continue
+
+            ref_line = self.el_lines_weight_refs_dict.get(el_line)
+            if ref_line is None or ref_line == el_line:
+                factors[el_line] = 1.0
+                continue
+
+            try:
+                line_ratio = a_sample(el_line) / a_pure(el_line)
+                ref_ratio = a_sample(ref_line) / a_pure(ref_line)
+                if ref_ratio == 0 or not np.isfinite(line_ratio) or not np.isfinite(ref_ratio):
+                    factors[el_line] = 1.0
+                else:
+                    factors[el_line] = line_ratio / ref_ratio
+            except (KeyError, ZeroDivisionError, ValueError):
+                factors[el_line] = 1.0
+
+        # Second pass: copy parent factor onto escape/pileup peaks.
+        for el_line in deferred:
+            parent_line = el_line
+            for suffix in (self.escape_peaks_str, self.pileup_peaks_str):
+                if parent_line.endswith(suffix):
+                    parent_line = parent_line[: -len(suffix)]
+                    break
+            # Parent should be in factors; default to 1.0 if it wasn't fitted/computed.
+            if parent_line not in factors and self.verbose:
+                logger.warning(
+                    f"⚠️ Parent line '{parent_line}' for '{el_line}' has no computed "
+                    f"correction; defaulting to 1.0."
+                )
+            factors[el_line] = factors.get(parent_line, 1.0)
+
+        return factors
+
+    def _normalized_known_mass_fractions(self):
+        """
+        Normalize self.els_w_fr to sum to 1, for use as the sample composition
+        in absorption calculations. Assumes all els_to_quantify are present in
+        els_w_fr (the caller guarantees this before invoking).
+        """
+        total = sum(self.els_w_fr.values())
+        if total <= 0:
+            raise ValueError("els_w_fr sum to <= 0; cannot normalize for absorption correction.")
+        return {el: w / total for el, w in self.els_w_fr.items()}
+    
     
     def _make_spectrum_mod_pars(self, print_initial_pars=False):
         """Generate the peaks lmfit models and parameters."""
@@ -486,7 +616,20 @@ class XSp_Fitter:
                 fitted_peaks.append(el_line)
     
         peaks_mod_pars._fix_overlapping_ref_peaks()
-    
+
+        # Bake absorption-corrected weights when composition is known ---
+        all_quant_fixed = (
+            len(self.els_to_quantify) > 0
+            and all(el in self.els_w_fr for el in self.els_to_quantify)
+        )
+        if all_quant_fixed:
+            try:
+                weight_corr = self._weight_absorption_correction_factors(fitted_peaks)
+                peaks_mod_pars._apply_weight_absorption_correction(weight_corr)
+                logger.info("Applied absorption correction to peak weights based on known composition.")
+            finally:
+                Background_Model._clear_cached_abs_att_variables()
+
         fitted_elements = [el for el in self.els_to_fit_list if any(el + '_' in peak for peak in fitted_peaks)]
         fitted_els_to_quantify = [el for el in fitted_elements if el in self.els_to_quantify]
         

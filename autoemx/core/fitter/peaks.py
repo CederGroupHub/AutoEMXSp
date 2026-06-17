@@ -383,6 +383,58 @@ class Peaks_Model:
             max=sigma_init * 1.1
         )
 
+    def _is_escape_line(self, line):
+        """Determine if a given line corresponds to an escape peak."""
+        return self.escape_peaks_str in line
+
+    def _is_pileup_line(self, line):
+        """Determine if a given line corresponds to a pileup peak."""
+        return self.pileup_peaks_str in line
+
+    def _get_el_line_terms(self, el_line):
+        """Extract the element and line components from an el_line string."""
+        return el_line.split('_', 1)
+
+    def _apply_weight_absorption_correction(self, weight_corr):
+            """
+            Apply weight/absorption correction factors to characteristic line areas.
+
+            Only characteristic (non-escape, non-pileup) lines that act as cross-line
+            weight *dependents* are corrected here. Reference lines are skipped: they
+            define the weight ratios and map to themselves. Escape and pileup areas
+            are NOT touched directly -- they're defined via expr chains tied to their
+            characteristic parents, so they inherit the correction automatically once
+            the parent area is corrected.
+            """
+            for el_line, corr in weight_corr.items():
+                el, line = self._get_el_line_terms(el_line)
+                # Reference lines define the ratios (corr == 1.0 by construction);
+                # skip them explicitly rather than relying on the float comparison.
+                if el_line in self.xray_weight_refs_lines:
+                    continue
+
+                # Escape / pileup lines inherit through their expr-bound parents;
+                # correcting them here would double-apply the factor.
+                if self._is_escape_line(line) or self._is_pileup_line(line):
+                    continue
+
+                # Guard against degenerate / no-op factors.
+                if corr is None or not np.isfinite(corr) or corr <= 0 or corr == 1.0:
+                    continue
+
+                area_name = f"{el_line}_{self.area_key}"
+                if area_name not in self.fitting_params:
+                    continue
+
+                par = self.fitting_params[area_name]
+
+                # Only scale a free, value-backed parameter. If the area is itself
+                # defined by an expr (i.e. it's a dependent of another characteristic
+                # line), fold the factor into that expr so the chain stays intact.
+                if par.expr:
+                    par.set(expr=f"({par.expr}) * {corr}")
+                else:
+                    par.set(value=par.value * corr)
 
     def _add_peak_model_and_pars(self, el_line):
         """Add a peak model and its parameters for a specific X-ray line to the composite model."""
@@ -390,12 +442,12 @@ class Peaks_Model:
         model = self.fitting_model
         params = self.fitting_params
         
-        el, line = el_line.split('_', 1)
+        el, line = self._get_el_line_terms(el_line)
         line_prefix = el_line + '_'
         
-        is_escape_peak = self.escape_peaks_str in line
-        is_pileup_peak = self.pileup_peaks_str in line
-    
+        is_escape_peak = self._is_escape_line(line)
+        is_pileup_peak = self._is_pileup_line(line)
+
         escape_ref_line = None
         is_escape_ref_peak = False
         if is_escape_peak:

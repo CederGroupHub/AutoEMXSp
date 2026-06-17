@@ -1614,7 +1614,11 @@ class XSp_Quantifier:
                     # Get or cache the weight in pure material
                     if iter_cntr == 3:
                         el_fr_param = {f'f_{el}': 1}
-                        Background_Model(True)  # Re-initialize absorption attenuation globals
+                        Background_Model(
+                            self.fitter.is_particle,
+                            beam_energy=self.beam_energy,
+                            emergence_angle=self.emergence_angle,
+                        )  # Re-initialize absorption attenuation globals
                         line_abs_val_pure = Background_Model._abs_attenuation_phirho(
                             line_en, det_angle=self.emergence_angle, adr_abs=0, **el_fr_param
                         )

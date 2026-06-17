@@ -303,7 +303,7 @@ def _quantify_spectrum_worker(worker_payload: Dict[str, Any]) -> tuple[int, Opti
         background_vals=background,
         els_sample=worker_payload['all_els_sample'],
         els_substrate=worker_payload['detectable_els_substrate'],
-        els_w_fr=worker_payload.get('sample_w_frs'),  # None for fitting-only
+        els_w_fr=worker_payload.get('sample_w_frs'),
         is_particle=bool(worker_payload['apply_geom_factors']),
         sp_collection_time=float(worker_payload['sp_collection_time']),
         max_undetectable_w_fr=float(worker_payload['max_undetectable_w_fr']),
@@ -3137,7 +3137,13 @@ class EMXSp_Composition_Analyzer:
                         'emergence_angle': float(self.measurement_cfg.emergence_angle),
                         'all_els_sample': list(self.all_els_sample),
                         'detectable_els_substrate': list(self.detectable_els_substrate),
-                        'sample_w_frs': None,  # Not used for fitting-only
+                        'sample_w_frs': (
+                            dict(self.exp_stds_cfg.w_frs)
+                            if self.exp_stds_cfg.w_frs is not None
+                            else dict(self.sample_cfg.w_frs)
+                            if self.sample_cfg.w_frs is not None
+                            else None
+                        ),
                         'apply_geom_factors': bool(self._apply_geom_factors),
                         'max_undetectable_w_fr': float(self.undetectable_an_er),
                         'fit_tolerance': float(self.quant_cfg.fit_tolerance),

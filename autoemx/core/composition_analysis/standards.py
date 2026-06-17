@@ -15,7 +15,7 @@ import autoemx.calibrations as calibs
 import autoemx.utils.constants as cnst
 from autoemx.config.schema_models import (
     EDSStandardsFile,  # type: ignore
-        ReferenceMean,  # type: ignore
+    ReferenceMean,  # type: ignore
     StandardEntry,  # type: ignore
     StandardFitLineResult,  # type: ignore
     StandardsFitResults,  # type: ignore
