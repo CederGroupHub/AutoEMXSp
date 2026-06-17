@@ -71,3 +71,7 @@ saved_images_extension: str = 'png'
 
 save_raw_images: bool = False
 
+# These values are used as a general estimate but they should be properly defined in the microscope calibration module XS_calibrations.py
+escape_peak_probability = 0.03
+pileup_peak_probability = 0.003
+weight_Ll_ref_Ka1 = 0.05

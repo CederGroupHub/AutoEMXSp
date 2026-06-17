@@ -18,6 +18,7 @@ from scipy.signal import find_peaks, peak_prominences
 from lmfit import Model, Parameters, Parameter
 from pymatgen.core import Element
 
+import autoemx.config.defaults as dflt
 import autoemx.calibrations as calibs
 from autoemx.data.Xray_lines import get_el_xray_lines
 from .detector_response import DetectorResponseFunction
@@ -411,16 +412,26 @@ class Peaks_Model:
             
         lines = get_el_xray_lines(el)
         if is_escape_peak:
-            line_energy = lines[escape_ref_line]['energy (keV)'] - 1.740
+            if escape_ref_line not in lines:
+                raise ValueError(
+                    f"escape_ref_line '{escape_ref_line}' not found in X-ray lines for element '{el}'"
+                )
+            else:
+                line_energy = lines[escape_ref_line]['energy (keV)'] - 1.740
         elif is_pileup_peak:
-            line_energy = lines[pileup_ref_line]['energy (keV)'] * 2
+            if pileup_ref_line not in lines:
+                raise ValueError(
+                    f"pileup_ref_line '{pileup_ref_line}' not found in X-ray lines for element '{el}'"
+                )
+            else:
+                line_energy = lines[pileup_ref_line]['energy (keV)'] * 2
         else:
             line_energy = lines[line]['energy (keV)']
         
         center_par = self._get_gaussian_center_param(line_prefix, line_energy)
         sigma_init = DetectorResponseFunction._det_sigma(line_energy)
         sigma_par = self._get_gaussian_sigma_param(line_prefix, sigma_init)
-        
+
         initial_area, is_small_peak, is_peak_overlapping = self._estimate_peak_area(line_energy, sigma_init, el_line)
         
         if el_line not in self.xray_weight_refs_lines:
@@ -433,8 +444,12 @@ class Peaks_Model:
             else:
                 if is_escape_peak:
                     peak_m = Model(Peaks_Model._gaussian, prefix=line_prefix)
+                    try:
+                        escape_peak_probability = calibs.escape_peak_probability[self.meas_mode] # type: ignore
+                    except Exception:
+                        escape_peak_probability = dflt.escape_peak_probability
                     if is_escape_ref_peak:
-                        max_area_escape = calibs.escape_peak_probability[self.meas_mode] * ref_peak_area_param.value
+                        max_area_escape = escape_peak_probability * ref_peak_area_param.value
                         params.add(line_prefix + self.area_key, value=initial_area, min=0, max=max_area_escape)
                     else:
                         weight = lines[escape_ref_line]['weight']
@@ -442,12 +457,16 @@ class Peaks_Model:
                         if params.get(escape_ref_line_prefix + self.area_key) is not None:
                             params.add(line_prefix + self.area_key, expr=escape_ref_line_prefix + self.area_key + f'*{weight}')
                         else:
-                            max_area_escape = weight * calibs.escape_peak_probability[self.meas_mode] * ref_peak_area_param.value
+                            max_area_escape = weight * escape_peak_probability * ref_peak_area_param.value
                             params.add(line_prefix + self.area_key, value=initial_area, min=0, max=max_area_escape)
                 elif is_pileup_peak:
                     peak_m = Model(Peaks_Model._gaussian, prefix=line_prefix)
+                    try:
+                        pileup_peak_probability = calibs.pileup_peak_probability[self.meas_mode] # type: ignore
+                    except Exception:
+                        pileup_peak_probability = dflt.pileup_peak_probability
                     if is_pileup_ref_peak:
-                        max_area_pileup = calibs.pileup_peak_probability[self.meas_mode] * ref_peak_area_param.value
+                        max_area_pileup = pileup_peak_probability * ref_peak_area_param.value
                         vary_area = max_area_pileup > 0.1
                         params.add(line_prefix + self.area_key, value=initial_area, vary=vary_area, min=0, max=max_area_pileup)
                     else:
@@ -483,15 +502,19 @@ class Peaks_Model:
                 if line == 'Ll':
                     ref_line_prefix = el + '_Ka1_'
                     ref_peak_area_param = params.get(ref_line_prefix + self.area_key)
+                    try:
+                        weight_Ll_ref_Ka1 = calibs.weight_Ll_ref_Ka1[self.meas_mode] # type: ignore
+                    except Exception:
+                        weight_Ll_ref_Ka1 = dflt.weight_Ll_ref_Ka1
                     if ref_peak_area_param is None or ref_peak_area_param.value == 0:
                         initial_area = 0
                         max_area = 1
                         vary_area = False
                     elif not self.is_particle:
-                        max_area = calibs.weight_Ll_ref_Ka1[self.meas_mode] * ref_peak_area_param.value
+                        max_area = weight_Ll_ref_Ka1 * ref_peak_area_param.value
                         is_small_peak = True
                     else:
-                        max_area = 5 * calibs.weight_Ll_ref_Ka1[self.meas_mode] * ref_peak_area_param.value
+                        max_area = 5 * weight_Ll_ref_Ka1 * ref_peak_area_param.value
                 else:
                     max_area = np.inf
             

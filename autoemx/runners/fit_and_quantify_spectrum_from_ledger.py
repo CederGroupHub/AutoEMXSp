@@ -33,10 +33,7 @@ from typing import Any, Optional, List
 
 import numpy as np
 
-from autoemx.utils import (
-    print_double_separator,
-    get_sample_dir,
-)
+import autoemx.utils.helper as utils
 import autoemx.utils.constants as cnst
 import autoemx.config.defaults as dflt
 from autoemx.config import config_classes_dict
@@ -143,7 +140,7 @@ def fit_and_quantify_spectrum_from_ledger(
         results_path = os.path.join(os.getcwd(), cnst.RESULTS_DIR)
         
     try:
-        sample_dir = get_sample_dir(results_path, sample_ID)
+        sample_dir = utils.get_sample_dir(results_path, sample_ID)
     except Exception as e:
         logging.warning("Failed to get sample directory for %s: %s", sample_ID, e)
         return
@@ -151,7 +148,7 @@ def fit_and_quantify_spectrum_from_ledger(
     ledger_path = os.path.join(sample_dir, f"{cnst.LEDGER_FILENAME}{cnst.LEDGER_FILEEXT}")
     spectral_info_f_path = ledger_path
     
-    print_double_separator()
+    utils.print_double_separator()
     logging.info(f"Sample '{sample_ID}', spectrum {spectrum_ID}")
     
     try:
