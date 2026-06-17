@@ -24,6 +24,9 @@ from autoemx.data.Xray_lines import get_el_xray_lines
 from autoemx.runners.fit_and_quantify_spectrum_from_ledger import (
     fit_and_quantify_spectrum_from_ledger,
 )
+from autoemx.core.fitter import (
+    Background_Model
+)
 from autoemx.utils.helper import get_sample_dir, print_double_separator
 import autoemx.utils.constants as cnst
 
@@ -76,6 +79,98 @@ def _normalize_spectrum_id(value: Any) -> Any:
         return int(as_num)
     return as_num
 
+def _extract_standard_absorption_inputs(
+    ledger,
+) -> Tuple[Dict[str, float], float]:
+    """
+    Pull the standard's mass fractions and emergence angle from the ledger,
+    mirroring the resolution order used in fit_and_quantify_spectrum_from_ledger.
+
+    Returns (std_mass_fractions, emergence_angle), where mass fractions are
+    a dict {element: weight_fraction} normalized to sum to 1.
+    """
+    measurement_cfg = ledger.configs.measurement_cfg
+    sample_cfg = ledger.configs.sample_cfg
+
+    emergence_angle = float(measurement_cfg.emergence_angle)
+
+    # Same fallback chain as the fitting module.
+    w_frs = getattr(sample_cfg, "w_frs", None)
+    if w_frs is None:
+        exp_stds_cfg = getattr(measurement_cfg, "exp_stds_cfg", None)
+        if exp_stds_cfg is not None:
+            w_frs = getattr(exp_stds_cfg, "w_frs", None)
+
+    if w_frs is None:
+        raise ValueError(
+            "Could not resolve standard mass fractions (w_frs) from the ledger. "
+            "Checked sample_cfg.w_frs and measurement_cfg.exp_stds_cfg.w_frs."
+        )
+
+    w_frs = {el: float(w) for el, w in w_frs.items()}
+
+    total = sum(w_frs.values())
+    if total <= 0:
+        raise ValueError("Standard weight fractions sum to <= 0; cannot normalize.")
+
+    std_mass_fractions = {el: w / total for el, w in w_frs.items()}
+    return std_mass_fractions, emergence_angle
+
+def _absorption_factor_per_line(
+    free_area_el_lines: Sequence[str],
+    std_mass_fractions: Dict[str, float],
+    emergence_angle: float,
+    direction: str = "to_pure",
+) -> Dict[str, float]:
+    """
+    Compute a constant per-line absorption-correction factor for the standard.
+
+    The standard's absorption profile is fully determined by its known mass
+    fractions and geometry, so each line's factor is identical across spectra.
+
+    direction="to_pure":  A_corr = A_meas * (A_pure / A_sample)
+    direction="strip":    A_corr = A_meas / A_sample
+    """
+    sample_kwargs: Dict[str, Any] = {"det_angle": emergence_angle, "adr_abs": 0}
+    for el, w in std_mass_fractions.items():
+        sample_kwargs[f"f_{el}"] = float(w)
+
+    factors: Dict[str, float] = {}
+    for el_line in free_area_el_lines:
+        if "_" not in el_line:
+            factors[el_line] = 1.0
+            continue
+        el, line = el_line.split("_", 1)
+
+        en = np.array([get_el_xray_lines(el)[line]["energy (keV)"]])
+
+        Background_Model(True)
+        a_sample = float(Background_Model._abs_attenuation_phirho(en, **sample_kwargs)[0])
+
+        if direction == "strip":
+            factors[el_line] = 1.0 / a_sample
+            continue
+
+        Background_Model(True)
+        pure_kwargs = {"det_angle": emergence_angle, "adr_abs": 0, f"f_{el}": 1.0}
+        a_pure = float(Background_Model._abs_attenuation_phirho(en, **pure_kwargs)[0])
+
+        factors[el_line] = a_pure / a_sample
+
+    return factors
+
+
+def _apply_absorption_factors(
+    raw_df: pd.DataFrame,
+    free_area_el_lines: Sequence[str],
+    factors: Dict[str, float],
+) -> pd.DataFrame:
+    """Multiply each fitted area column by its constant absorption factor."""
+    out = raw_df.copy()
+    for el_line in free_area_el_lines:
+        if el_line in out.columns:
+            out[el_line] = pd.to_numeric(out[el_line], errors="coerce") * factors.get(el_line, 1.0)
+    return out
 
 def _collect_fit_row(
     std_id: str,
@@ -291,6 +386,7 @@ def _finalize_calibration_outputs(
     output_file_suffix: str,
     sum_cv_threshold: float,
     n_sig_figs: int,
+    abs_factors: Optional[Dict[str, float]] = None,
     manual_groups: Optional[Sequence[Sequence[str]]] = None,
     log_verb: str = "Saved",
 ) -> Dict[str, Any]:
@@ -301,6 +397,12 @@ def _finalize_calibration_outputs(
     ref_peak = _select_reference_peak(free_area_el_lines, areas_by_line)
     ref_vals = pd.to_numeric(areas_by_line[ref_peak], errors="coerce")
     ratios_by_line = areas_by_line.div(ref_vals.replace(0, np.nan), axis=0)
+
+    # Absorption-correct the ratios for the standard's self-absorption.
+    if abs_factors:
+        ratios_by_line = _apply_absorption_factors(
+            ratios_by_line, free_area_el_lines, abs_factors
+        )
 
     original_weights = _get_original_weights(free_area_el_lines)
     line_energies = _get_line_energies(free_area_el_lines)
@@ -723,6 +825,16 @@ def _round_dataframe_sig_figs(df: pd.DataFrame, n_sig_figs: int) -> pd.DataFrame
             out[col] = out[col].map(lambda x: _round_to_sig_figs(x, n_sig_figs))
     return out
 
+def _load_ledger_for_standard(
+    std_ID: str,
+    results_path: Optional[str],
+) -> Tuple[Path, Path, Path, Any]:
+    """Resolve results root, sample dir, ledger path, and load the ledger."""
+    results_root = _resolve_results_root(results_path)
+    sample_dir = Path(get_sample_dir(str(results_root), std_ID))
+    ledger_path = sample_dir / f"{cnst.LEDGER_FILENAME}{cnst.LEDGER_FILEEXT}"
+    ledger = load_sample_ledger(str(ledger_path))
+    return results_root, sample_dir, ledger_path, ledger
 
 def calibrate_peak_weights_experimental_standard(
     std_ID: str,
@@ -755,11 +867,7 @@ def calibrate_peak_weights_experimental_standard(
     #Remove potential duplicate lines
     free_area_el_lines = list(dict.fromkeys(free_area_el_lines))
 
-    results_root = _resolve_results_root(results_path)
-    sample_dir = Path(get_sample_dir(str(results_root), std_ID))
-    ledger_path = sample_dir / f"{cnst.LEDGER_FILENAME}{cnst.LEDGER_FILEEXT}"
-
-    ledger = load_sample_ledger(str(ledger_path))
+    results_root, sample_dir, _, ledger = _load_ledger_for_standard(std_ID, results_path)
     spectrum_ids = _resolve_spectrum_ids(ledger, spectrum_IDs_to_fit)
 
     print_double_separator(
@@ -807,6 +915,14 @@ def calibrate_peak_weights_experimental_standard(
 
     output_dir = _resolve_output_dir(sample_dir, std_ID, free_area_el_lines)
 
+    std_mass_fractions, emergence_angle = _extract_standard_absorption_inputs(ledger)
+    abs_factors = _absorption_factor_per_line(
+        free_area_el_lines=free_area_el_lines,
+        std_mass_fractions=std_mass_fractions,
+        emergence_angle=emergence_angle,
+        direction="to_pure",
+    )
+
     return _finalize_calibration_outputs(
         std_id=std_ID,
         raw_df=raw_df,
@@ -817,6 +933,7 @@ def calibrate_peak_weights_experimental_standard(
         output_file_suffix=output_file_suffix,
         sum_cv_threshold=sum_cv_threshold,
         n_sig_figs=n_sig_figs,
+        abs_factors=abs_factors,
         manual_groups=None,
         log_verb="Saved",
     )
@@ -848,6 +965,17 @@ def recompute_calibration(
         line appearing in a manual group is excluded from the automated detection of
         sum-locked groups, so those peaks cannot be reassigned automatically.
     """
+    _, sample_dir, _, ledger = _load_ledger_for_standard(std_ID, results_path)
+    output_dir = _resolve_output_dir(sample_dir, std_ID, free_area_el_lines)
+
+    std_mass_fractions, emergence_angle = _extract_standard_absorption_inputs(ledger)
+    abs_factors = _absorption_factor_per_line(
+        free_area_el_lines=free_area_el_lines,
+        std_mass_fractions=std_mass_fractions,
+        emergence_angle=emergence_angle,
+        direction="to_pure",
+    )
+
     if len(free_area_el_lines) == 0:
         raise ValueError(
             "free_area_el_lines is empty. Provide at least one line to recalibrate peak weights."
@@ -871,10 +999,6 @@ def recompute_calibration(
                 f"{unknown}. Available lines: {sorted(free_lines_set)}"
             )
         normalized_manual_groups.append(group_lines)
-
-    results_root = _resolve_results_root(results_path)
-    sample_dir = Path(get_sample_dir(str(results_root), std_ID))
-    output_dir = _resolve_output_dir(sample_dir, std_ID, free_area_el_lines)
 
     source_paths = _build_output_paths(output_dir, std_ID, output_file_suffix="")
     source_raw_path = source_paths["raw"]
@@ -972,6 +1096,7 @@ def recompute_calibration(
         output_file_suffix="_recompute",
         sum_cv_threshold=sum_cv_threshold,
         n_sig_figs=n_sig_figs,
+        abs_factors=abs_factors,
         manual_groups=normalized_manual_groups,
         log_verb="Recomputed",
     )
