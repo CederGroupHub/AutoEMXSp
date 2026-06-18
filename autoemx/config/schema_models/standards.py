@@ -73,7 +73,7 @@ class StandardEntry(StandardPbSummary):
     datetime: str = Field(alias=cnst.DATETIME_KEY)
     formula: Optional[str] = Field(default=None, alias=cnst.STD_FORMULA_KEY)
     std_type: Optional[str] = Field(default=None, alias=cnst.STD_TYPE_KEY)
-    use_for_mean_calc: Optional[bool] = Field(default=None, alias=cnst.STD_USE_FOR_MEAN_KEY)
+    use_for_mean_calc: Optional[bool] = Field(default=False, alias=cnst.STD_USE_FOR_MEAN_KEY)
     mean_z: Optional[StandardMeanZ] = Field(default=None, alias=cnst.STD_Z_KEY)
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
@@ -129,7 +129,7 @@ class StandardFitLineResult(StandardPbSummary):
         datetime: str,
         formula: Optional[str] = None,
         std_type: Optional[str] = None,
-        use_for_mean_calc: Optional[bool] = None,
+        use_for_mean_calc: Optional[bool] = False,
         mean_z: Optional[StandardMeanZ] = None,
     ) -> StandardEntry:
         return StandardEntry.model_validate({

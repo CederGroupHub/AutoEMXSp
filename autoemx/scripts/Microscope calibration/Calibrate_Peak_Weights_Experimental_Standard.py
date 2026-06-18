@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Calibrate relative X-ray line weights for one experimental standard.
+IMPORTANT: RUN ONLY ONE LINE GROUP (K or L, etc.) FOR ONE ELEMENT AT A TIME.
 
 This script is a thin configuration wrapper around:
 `autoemx.runners.calibrate_peak_weights_experimental_standard`.
@@ -75,17 +76,19 @@ calibrate_peak_weights_experimental_standard(
     n_sig_figs=n_sig_figs,
 )
 
+# # =============================================================================
+# # Recompute calibration with outlier exclusion and manual grouping (optional)
+# # =============================================================================
+# # Optional recompute helper (kept commented on purpose):
+# # Use this when you want to regenerate all final CSV files while excluding
+# # specific outlier/problematic spectra. It writes separate files with
+# # `_recompute` suffix and leaves the original calibration CSV files untouched.
 
-# Optional recompute helper (kept commented on purpose):
-# Use this when you want to regenerate all final CSV files while excluding
-# specific outlier/problematic spectra. It writes separate files with
-# `_recompute` suffix and leaves the original calibration CSV files untouched.
-#
-# `manual_groups` lets you force specific peaks to be treated as a Group.
-# Each group is a list of element-lines written like the entries of
-# `fitted_extra_peaks` (e.g. "Pr_Mz1"). Lines listed in a manual group are
-# excluded from the automated detection of sum-locked groups.
-#
+# # `manual_groups` lets you force specific peaks to be treated as a Group.
+# # Each group is a list of element-lines written like the entries of
+# # `fitted_extra_peaks` (e.g. "Pr_Mz1"). Lines listed in a manual group are
+# # excluded from the automated detection of sum-locked groups.
+
 # spectrum_to_ignore = [3, 8]  # Example IDs to exclude
 # manual_groups = [
 #     ["Pr_Mz1", "Pr_Ma1"],   # Example: force these two peaks into one group

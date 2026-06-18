@@ -24,9 +24,7 @@ from autoemx.data.Xray_lines import get_el_xray_lines
 from autoemx.runners.fit_and_quantify_spectrum_from_ledger import (
     fit_and_quantify_spectrum_from_ledger,
 )
-from autoemx.core.fitter import (
-    Background_Model
-)
+from autoemx.core.fitter import Background_Model
 from autoemx.utils.helper import get_sample_dir, print_double_separator
 import autoemx.utils.constants as cnst
 
@@ -79,61 +77,111 @@ def _normalize_spectrum_id(value: Any) -> Any:
         return int(as_num)
     return as_num
 
-def _extract_standard_absorption_inputs(
-    ledger,
-) -> Tuple[Dict[str, float], float]:
+def _load_abs_factors_from_table(
+    ratios_abs_corrected_path: Path,
+    free_area_el_lines: Sequence[str],
+) -> Dict[str, float]:
     """
-    Pull the standard's mass fractions and emergence angle from the ledger,
-    mirroring the resolution order used in fit_and_quantify_spectrum_from_ledger.
+    Load per-line absorption-correction factors from a previously written
+    'ratios_abs_corrected' table.
 
-    Returns (std_mass_fractions, emergence_angle), where mass fractions are
-    a dict {element: weight_fraction} normalized to sum to 1.
+    The table has one row per line (keyed by the 'Line' column, e.g. 'Ma1') and a
+    'Correction factor' column. We map each requested element-line back to its row by
+    matching the line key, consuming rows positionally to disambiguate repeated keys.
     """
-    measurement_cfg = ledger.configs.measurement_cfg
-    sample_cfg = ledger.configs.sample_cfg
-
-    emergence_angle = float(measurement_cfg.emergence_angle)
-
-    # Same fallback chain as the fitting module.
-    w_frs = getattr(sample_cfg, "w_frs", None)
-    if w_frs is None:
-        exp_stds_cfg = getattr(measurement_cfg, "exp_stds_cfg", None)
-        if exp_stds_cfg is not None:
-            w_frs = getattr(exp_stds_cfg, "w_frs", None)
-
-    if w_frs is None:
-        raise ValueError(
-            "Could not resolve standard mass fractions (w_frs) from the ledger. "
-            "Checked sample_cfg.w_frs and measurement_cfg.exp_stds_cfg.w_frs."
+    if not ratios_abs_corrected_path.exists():
+        raise FileNotFoundError(
+            "Absorption-corrected ratios table not found for recompute. Run a normal "
+            f"calibration first: {ratios_abs_corrected_path}"
         )
 
-    w_frs = {el: float(w) for el, w in w_frs.items()}
+    table = pd.read_csv(ratios_abs_corrected_path)
+    if "Line" not in table.columns or "Correction factor" not in table.columns:
+        raise ValueError(
+            "Absorption-corrected ratios table is missing required 'Line' and/or "
+            f"'Correction factor' columns. File: {ratios_abs_corrected_path}"
+        )
 
-    total = sum(w_frs.values())
-    if total <= 0:
-        raise ValueError("Standard weight fractions sum to <= 0; cannot normalize.")
+    line_key_series = table["Line"].astype(str)
+    used_row_idx: set = set()
+    factors: Dict[str, float] = {}
+    for el_line in free_area_el_lines:
+        line_key = _line_key(el_line)
+        candidate_idx = [
+            idx for idx in line_key_series[line_key_series == line_key].index
+            if idx not in used_row_idx
+        ]
+        if len(candidate_idx) == 0:
+            logging.warning(
+                "Line '%s' (from '%s') not found in absorption-corrected ratios table; "
+                "defaulting correction factor to 1.0. File: %s",
+                line_key, el_line, ratios_abs_corrected_path,
+            )
+            factors[el_line] = 1.0
+            continue
+        row_idx = candidate_idx[0]
+        used_row_idx.add(row_idx)
 
-    std_mass_fractions = {el: w / total for el, w in w_frs.items()}
-    return std_mass_fractions, emergence_angle
+        factor_val = pd.to_numeric(table.loc[row_idx, "Correction factor"], errors="coerce")
+        factors[el_line] = float(factor_val) if pd.notna(factor_val) else 1.0
+
+    return factors
 
 def _absorption_factor_per_line(
     free_area_el_lines: Sequence[str],
-    std_mass_fractions: Dict[str, float],
-    emergence_angle: float,
+    quantifier,
+    ref_peak: str,
     direction: str = "to_pure",
 ) -> Dict[str, float]:
     """
-    Compute a constant per-line absorption-correction factor for the standard.
+    Compute per-line absorption-correction factors for the standard, expressed as a
+    *double ratio against ref_peak*, to match the convention used by
+    _update_peak_weights in the quantifier.
 
-    The standard's absorption profile is fully determined by its known mass
-    fractions and geometry, so each line's factor is identical across spectra.
+    The quantifier expresses each dependent line's area as
+        A(L) = A(R) * weight_NIST(L) * (a_pure(R)/a_pure(L)) * (a_sample(L)/a_sample(R))
+    so the absorption-corrected ratio A(L)/A(R) -> pure-element ratio requires
+        factor(L) = (a_pure(L)/a_sample(L)) / (a_pure(R)/a_sample(R))
 
-    direction="to_pure":  A_corr = A_meas * (A_pure / A_sample)
-    direction="strip":    A_corr = A_meas / A_sample
+    With this definition, factor(ref_peak) == 1 by construction, and the corrected
+    ratio  (A_meas(L)/A_meas(R)) * factor(L)  equals the pure-element area ratio,
+    identical to what the quantifier's dependent-line expression encodes.
+
+    direction="to_pure":  ratio_corr = ratio_meas * factor(L)   [double ratio above]
+    direction="strip":    factor(L) = a_sample(R) / a_sample(L)  [remove only self-abs]
     """
-    sample_kwargs: Dict[str, Any] = {"det_angle": emergence_angle, "adr_abs": 0}
-    for el, w in std_mass_fractions.items():
-        sample_kwargs[f"f_{el}"] = float(w)
+    fitted_params_for_calcs = quantifier.fit_result.params.copy()
+    fitted_params_for_calcs['apply_det_response'].value = 0
+    Background_Model(quantifier.is_particle,
+                    beam_energy=quantifier.beam_energy,
+                    emergence_angle=quantifier.emergence_angle)
+
+    def _a_sample(el: str, line: str) -> float:
+        en = np.array([get_el_xray_lines(el)[line]["energy (keV)"]])
+        Background_Model._clear_cached_abs_att_variables()
+        return float(Background_Model._abs_attenuation_phirho(en, **fitted_params_for_calcs)[0])
+
+    def _a_pure(el: str, line: str) -> float:
+        en = np.array([get_el_xray_lines(el)[line]["energy (keV)"]])
+        Background_Model._clear_cached_abs_att_variables()
+        pure_kwargs = {"det_angle": quantifier.emergence_angle, "adr_abs": 0, f"f_{el}": 1.0}
+        return float(Background_Model._abs_attenuation_phirho(en, **pure_kwargs)[0])
+
+    # Reference-peak absorption terms (denominator of the double ratio).
+    if "_" not in ref_peak:
+        raise ValueError(
+            f"Reference peak '{ref_peak}' is not an element-line label; cannot build "
+            "absorption double ratio against it."
+        )
+    ref_el, ref_line = ref_peak.split("_", 1)
+    a_sample_ref = _a_sample(ref_el, ref_line)
+    a_pure_ref = _a_pure(ref_el, ref_line)
+
+    if a_sample_ref == 0 or a_pure_ref == 0:
+        raise ValueError(
+            f"Reference peak '{ref_peak}' has a zero absorption term "
+            f"(a_pure={a_pure_ref}, a_sample={a_sample_ref}); cannot normalize."
+        )
 
     factors: Dict[str, float] = {}
     for el_line in free_area_el_lines:
@@ -142,20 +190,18 @@ def _absorption_factor_per_line(
             continue
         el, line = el_line.split("_", 1)
 
-        en = np.array([get_el_xray_lines(el)[line]["energy (keV)"]])
-
-        Background_Model(True)
-        a_sample = float(Background_Model._abs_attenuation_phirho(en, **sample_kwargs)[0])
+        a_sample = _a_sample(el, line)
 
         if direction == "strip":
-            factors[el_line] = 1.0 / a_sample
+            # Remove self-absorption relative to the reference peak's self-absorption,
+            # so the reference peak itself is left unchanged (factor == 1).
+            factors[el_line] = a_sample_ref / a_sample if a_sample != 0 else 1.0
             continue
 
-        Background_Model(True)
-        pure_kwargs = {"det_angle": emergence_angle, "adr_abs": 0, f"f_{el}": 1.0}
-        a_pure = float(Background_Model._abs_attenuation_phirho(en, **pure_kwargs)[0])
+        a_pure = _a_pure(el, line)
 
-        factors[el_line] = a_pure / a_sample
+        # Double ratio: (a_pure(L)/a_sample(L)) / (a_pure(R)/a_sample(R))
+        factors[el_line] = (a_pure / a_sample) / (a_pure_ref / a_sample_ref)
 
     return factors
 
@@ -310,22 +356,48 @@ def _build_summary_table(
     return pd.DataFrame(summary_rows)
 
 
-def _select_reference_peak(free_lines: Sequence[str], areas_df: pd.DataFrame) -> str:
+def _select_reference_peak(free_lines: Sequence[str]) -> str:
     """Choose a reference peak to compute relative ratios (e.g., La1, Ka1, Ma1)."""
-    if len(free_lines) == 1:
-        return free_lines[0]
+    reference_suffixes = ("Ka1", "La1", "Ma1", "Mz1", "Ll")
 
-    preferred_suffixes = ("Ka1", "La1", "Ma1", "Mz1", "Ll")
-    for suffix in preferred_suffixes:
-        candidates = [line for line in free_lines if line.endswith(f"_{suffix}")]
-        if len(candidates) == 1:
-            return candidates[0]
-        if len(candidates) > 1:
-            means = pd.to_numeric(areas_df[candidates].mean(axis=0), errors="coerce")
-            return str(means.idxmax())
+    def suffix_of(line: str) -> str:
+        return line.rsplit("_", 1)[-1]
 
-    means = pd.to_numeric(areas_df[list(free_lines)].mean(axis=0), errors="coerce")
-    return str(means.idxmax())
+    def element_of(line: str) -> str:
+        return line.rsplit("_", 1)[0]
+
+    # Filter down to actual reference candidates.
+    candidates = [line for line in free_lines if suffix_of(line) in reference_suffixes]
+
+    if len(candidates) == 0:
+        raise ValueError(f"No reference line found among: {list(free_lines)}")
+
+    if len(candidates) == 1:
+        return candidates[0]
+
+    # Beyond this point we have multiple candidates; only same-element pairs
+    # are resolvable.
+    elements = {element_of(line) for line in candidates}
+    if len(elements) > 1:
+        raise ValueError(
+            f"Multiple elements present among reference lines: {list(candidates)}"
+        )
+
+    suffixes = {suffix_of(line): line for line in candidates}
+
+    resolvable_pairs = {
+        frozenset(("Mz1", "Ma1")): "Ma1",
+        frozenset(("La1", "Ll")): "La1",
+    }
+
+    if len(candidates) == 2 and len(suffixes) == 2:
+        key = frozenset(suffixes)
+        if key in resolvable_pairs:
+            return suffixes[resolvable_pairs[key]]
+
+    raise ValueError(
+        f"Multiple reference lines present and not a resolvable pair: {list(candidates)}"
+    )
 
 
 def _line_key(el_line: str) -> str:
@@ -345,35 +417,48 @@ def _parse_spectrum_id_from_column(col_name: str) -> Any:
     raw = str(col_name)[len(prefix):]
     return _normalize_spectrum_id(raw)
 
-
-def _resolve_output_dir(sample_dir: Path, std_id: str, free_area_el_lines: Sequence[str]) -> Path:
-    """Resolve and create per-element calibration output directory."""
-    line_elements = sorted(
-        {el_line.split("_", 1)[0] for el_line in free_area_el_lines if "_" in el_line}
-    )
-    if len(line_elements) == 1:
-        el_tag = line_elements[0]
-    elif len(line_elements) > 1:
-        el_tag = "-".join(line_elements)
+def _append_correction_factor_column(
+    table_df: pd.DataFrame,
+    line_order: Sequence[str],
+    abs_factors: Dict[str, float],
+) -> pd.DataFrame:
+    """Insert a 'Correction factor' column matching each line row in the table."""
+    out = table_df.copy()
+    factor_col = [float(abs_factors.get(el_line, 1.0)) for el_line in line_order]
+    # Place it just after the 'Original w' column when present, else at the end.
+    if "Original w" in out.columns:
+        loc = out.columns.get_loc("Original w")
+        if not isinstance(loc, int):
+            # Non-unique/duplicated column label; fall back to appending at the end.
+            insert_at = len(out.columns)
+        else:
+            insert_at = loc + 1
     else:
-        el_tag = std_id
+        insert_at = len(out.columns)
+    out.insert(insert_at, "Correction factor", factor_col)
+    return out
 
-    output_dir = sample_dir / f"{el_tag}_peaks_area_calib"
+def _resolve_output_dir(sample_dir: Path, std_id: str, ref_peak: str, free_area_el_lines: Sequence[str]) -> Path:
+    """Resolve and create per-element calibration output directory."""
+
+    output_dir = sample_dir / f"{ref_peak}_group_area_calib"
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 
 
-def _build_output_paths(output_dir: Path, std_id: str, output_file_suffix: str) -> Dict[str, Path]:
+def _build_output_paths(output_dir: Path, std_id: str, ref_peak: str, output_file_suffix: str) -> Dict[str, Path]:
     """Build deterministic output paths for all calibration CSV files."""
     return {
-        "raw": output_dir / f"{std_id}_peak_weights_raw{output_file_suffix}.csv",
-        "areas_table": output_dir / f"{std_id}_peak_weights_areas_table{output_file_suffix}.csv",
-        "ratios_table": output_dir / f"{std_id}_peak_weights_ratios_table{output_file_suffix}.csv",
+        "raw": output_dir / f"{std_id}_{ref_peak}_group_weights_raw{output_file_suffix}.csv",
+        "areas_table": output_dir / f"{std_id}_{ref_peak}_group_weights_areas{output_file_suffix}.csv",
+        "ratios_table": output_dir / f"{std_id}_{ref_peak}_group_weights_ratios{output_file_suffix}.csv",
+        "ratios_abs_corrected": output_dir
+        / f"{std_id}_{ref_peak}_group_weights_ratios_abs_corrected{output_file_suffix}.csv",
         "correlated_adjustments": output_dir
-        / f"{std_id}_peak_weights_correlated_adjustments{output_file_suffix}.csv",
+        / f"{std_id}_{ref_peak}_group_weights_correlated_adjustments{output_file_suffix}.csv",
         "correlated_diagnostics": output_dir
-        / f"{std_id}_peak_weights_correlated_diagnostics{output_file_suffix}.csv",
-        "summary": output_dir / f"{std_id}_peak_weights_summary{output_file_suffix}.csv",
+        / f"{std_id}_{ref_peak}_group_weights_correlated_diagnostics{output_file_suffix}.csv",
+        "summary": output_dir / f"{std_id}_{ref_peak}_group_weights_summary{output_file_suffix}.csv",
     }
 
 def _finalize_calibration_outputs(
@@ -386,6 +471,7 @@ def _finalize_calibration_outputs(
     output_file_suffix: str,
     sum_cv_threshold: float,
     n_sig_figs: int,
+    ref_peak: str,
     abs_factors: Optional[Dict[str, float]] = None,
     manual_groups: Optional[Sequence[Sequence[str]]] = None,
     log_verb: str = "Saved",
@@ -394,15 +480,18 @@ def _finalize_calibration_outputs(
     Shared post-fit pipeline: derive ratios, build tables, round, write CSVs, and
     assemble the return dict. Used by both calibrate and recompute entry points.
     """
-    ref_peak = _select_reference_peak(free_area_el_lines, areas_by_line)
     ref_vals = pd.to_numeric(areas_by_line[ref_peak], errors="coerce")
+
+    # Raw (uncorrected) ratios.
     ratios_by_line = areas_by_line.div(ref_vals.replace(0, np.nan), axis=0)
 
-    # Absorption-correct the ratios for the standard's self-absorption.
+    # Absorption-corrected ratios (separate frame; do not mutate the raw one).
     if abs_factors:
-        ratios_by_line = _apply_absorption_factors(
+        ratios_corrected_by_line = _apply_absorption_factors(
             ratios_by_line, free_area_el_lines, abs_factors
         )
+    else:
+        ratios_corrected_by_line = ratios_by_line.copy()
 
     original_weights = _get_original_weights(free_area_el_lines)
     line_energies = _get_line_energies(free_area_el_lines)
@@ -423,6 +512,18 @@ def _finalize_calibration_outputs(
     )
     ratios_table_df.insert(0, "Reference peak", ref_peak)
 
+    ratios_corrected_table_df = _build_workbook_like_table(
+        values_by_line=ratios_corrected_by_line,
+        line_order=free_area_el_lines,
+        spectrum_ids=spectrum_ids_used,
+        original_weights=original_weights,
+        line_energies=line_energies,
+    )
+    ratios_corrected_table_df = _append_correction_factor_column(
+        ratios_corrected_table_df, free_area_el_lines, abs_factors or {}
+    )
+    ratios_corrected_table_df.insert(0, "Reference peak", ref_peak)
+
     summary_df = _build_summary_table(
         std_id=std_id,
         areas_df=raw_df,
@@ -433,7 +534,7 @@ def _finalize_calibration_outputs(
 
     recommendations_df, diagnostics_df = _build_correlated_adjustments_table(
         summary_df=summary_df,
-        ratios_by_line=ratios_by_line,
+        ratios_by_line=ratios_corrected_by_line,
         areas_by_line=areas_by_line,
         line_energies=line_energies,
         original_weights=original_weights,
@@ -447,15 +548,19 @@ def _finalize_calibration_outputs(
     raw_df_out = _round_dataframe_sig_figs(raw_df, n_sig_figs=n_sig_figs)
     areas_table_df_out = _round_dataframe_sig_figs(areas_table_df, n_sig_figs=n_sig_figs)
     ratios_table_df_out = _round_dataframe_sig_figs(ratios_table_df, n_sig_figs=n_sig_figs)
+    ratios_corrected_table_df_out = _round_dataframe_sig_figs(
+        ratios_corrected_table_df, n_sig_figs=n_sig_figs
+    )
     recommendations_df_out = _round_dataframe_sig_figs(recommendations_df, n_sig_figs=n_sig_figs)
     diagnostics_df_out = _round_dataframe_sig_figs(diagnostics_df, n_sig_figs=n_sig_figs)
     summary_df_out = _round_dataframe_sig_figs(summary_df, n_sig_figs=n_sig_figs)
 
-    output_paths = _build_output_paths(output_dir, std_id, output_file_suffix)
+    output_paths = _build_output_paths(output_dir, std_id, ref_peak, output_file_suffix)
 
     raw_df_out.to_csv(output_paths["raw"], index=False)
     areas_table_df_out.to_csv(output_paths["areas_table"], index=False)
     ratios_table_df_out.to_csv(output_paths["ratios_table"], index=False)
+    ratios_corrected_table_df_out.to_csv(output_paths["ratios_abs_corrected"], index=False)
     recommendations_df_out.to_csv(output_paths["correlated_adjustments"], index=False)
     diagnostics_df_out.to_csv(output_paths["correlated_diagnostics"], index=False)
     summary_df_out.to_csv(output_paths["summary"], index=False)
@@ -464,24 +569,32 @@ def _finalize_calibration_outputs(
     logging.info("%s raw peak areas to: %s", log_verb, output_paths["raw"])
     logging.info("%s workbook-like areas table to: %s", log_verb, output_paths["areas_table"])
     logging.info("%s workbook-like ratio table to: %s", log_verb, output_paths["ratios_table"])
-    logging.info("%s correlated-peak adjustments to: %s", log_verb, output_paths["correlated_adjustments"])
-    logging.info("%s correlated-peak diagnostics to: %s", log_verb, output_paths["correlated_diagnostics"])
-    logging.info("%s peak-weight summary to: %s", log_verb, output_paths["summary"])
+    logging.info(
+        "%s absorption-corrected ratio table to: %s",
+        log_verb,
+        output_paths["ratios_abs_corrected"],
+    )
+    logging.info(
+        "%s correlated adjustments to: %s",
+        log_verb,
+        output_paths["correlated_adjustments"],
+    )
+    logging.info(
+        "%s correlated diagnostics to: %s",
+        log_verb,
+        output_paths["correlated_diagnostics"],
+    )
+    logging.info("%s calibration summary to: %s", log_verb, output_paths["summary"])
+    print_double_separator()
 
     return {
-        "raw_path": str(output_paths["raw"]),
-        "areas_table_path": str(output_paths["areas_table"]),
-        "ratios_table_path": str(output_paths["ratios_table"]),
-        "correlated_adjustments_path": str(output_paths["correlated_adjustments"]),
-        "correlated_diagnostics_path": str(output_paths["correlated_diagnostics"]),
-        "summary_path": str(output_paths["summary"]),
-        "reference_peak": ref_peak,
-        "raw_df": raw_df_out,
-        "areas_table_df": areas_table_df_out,
-        "ratios_table_df": ratios_table_df_out,
-        "correlated_adjustments_df": recommendations_df_out,
-        "correlated_diagnostics_df": diagnostics_df_out,
-        "summary_df": summary_df_out,
+        "raw": raw_df_out,
+        "areas_table": areas_table_df_out,
+        "ratios_table": ratios_table_df_out,
+        "ratios_abs_corrected": ratios_corrected_table_df_out,
+        "correlated_adjustments": recommendations_df_out,
+        "correlated_diagnostics": diagnostics_df_out,
+        "summary": summary_df_out,
     }
 
 def _build_workbook_like_table(
@@ -875,6 +988,7 @@ def calibrate_peak_weights_experimental_standard(
     )
 
     raw_rows: List[Dict[str, Any]] = []
+    latest_valid_quantifier = None
     for spectrum_id in spectrum_ids:
         quantifier = fit_and_quantify_spectrum_from_ledger(
             sample_ID=std_ID,
@@ -903,7 +1017,8 @@ def calibrate_peak_weights_experimental_standard(
         if quantifier is None:
             logging.warning("Spectrum %s could not be fitted and will be skipped.", spectrum_id)
             continue
-
+        
+        latest_valid_quantifier = quantifier
         raw_rows.append(_collect_fit_row(std_ID, spectrum_id, quantifier, free_area_el_lines))
 
     if len(raw_rows) == 0:
@@ -913,13 +1028,14 @@ def calibrate_peak_weights_experimental_standard(
     spectrum_ids_used = raw_df["spectrum_ID"].tolist()
     areas_by_line = raw_df[list(free_area_el_lines)].copy()
 
-    output_dir = _resolve_output_dir(sample_dir, std_ID, free_area_el_lines)
+    ref_peak = _select_reference_peak(free_area_el_lines)
 
-    std_mass_fractions, emergence_angle = _extract_standard_absorption_inputs(ledger)
+    output_dir = _resolve_output_dir(sample_dir, std_ID, ref_peak, free_area_el_lines)
+
     abs_factors = _absorption_factor_per_line(
         free_area_el_lines=free_area_el_lines,
-        std_mass_fractions=std_mass_fractions,
-        emergence_angle=emergence_angle,
+        quantifier=latest_valid_quantifier,
+        ref_peak = ref_peak,
         direction="to_pure",
     )
 
@@ -927,6 +1043,7 @@ def calibrate_peak_weights_experimental_standard(
         std_id=std_ID,
         raw_df=raw_df,
         free_area_el_lines=free_area_el_lines,
+        ref_peak=ref_peak,
         areas_by_line=areas_by_line,
         spectrum_ids_used=spectrum_ids_used,
         output_dir=output_dir,
@@ -952,6 +1069,9 @@ def recompute_calibration(
     """
     Recompute calibration outputs excluding specific spectra, without refitting.
 
+    Absorption-correction factors are not recomputed (no refit occurs); they are
+    loaded from the 'ratios_abs_corrected' table produced by the original calibration.
+
     Parameters
     ----------
     spectrum_to_ignore
@@ -965,15 +1085,48 @@ def recompute_calibration(
         line appearing in a manual group is excluded from the automated detection of
         sum-locked groups, so those peaks cannot be reassigned automatically.
     """
-    _, sample_dir, _, ledger = _load_ledger_for_standard(std_ID, results_path)
-    output_dir = _resolve_output_dir(sample_dir, std_ID, free_area_el_lines)
+    if len(free_area_el_lines) == 0:
+        raise ValueError(
+            "free_area_el_lines is empty. Provide at least one line to recalibrate peak weights."
+        )
+    # Remove potential duplicate lines.
+    free_area_el_lines = list(dict.fromkeys(free_area_el_lines))
+    ref_peak = _select_reference_peak(free_area_el_lines)
 
-    std_mass_fractions, emergence_angle = _extract_standard_absorption_inputs(ledger)
-    abs_factors = _absorption_factor_per_line(
+    _, sample_dir, _, ledger = _load_ledger_for_standard(std_ID, results_path)
+    output_dir = _resolve_output_dir(sample_dir, std_ID, ref_peak, free_area_el_lines)
+
+    # Normalize and validate manual groups against the available free lines.
+    free_lines_set = set(free_area_el_lines)
+    normalized_manual_groups: List[List[str]] = []
+    for group in (manual_groups or []):
+        group_lines = list(group)
+        if len(group_lines) < 2:
+            raise ValueError(
+                f"Each manual group must contain at least two lines. Got: {group_lines}"
+            )
+        unknown = [line for line in group_lines if line not in free_lines_set]
+        if unknown:
+            raise ValueError(
+                "Manual group references lines not present in free_area_el_lines: "
+                f"{unknown}. Available lines: {sorted(free_lines_set)}"
+            )
+        normalized_manual_groups.append(group_lines)
+
+    source_paths = _build_output_paths(output_dir, std_ID, ref_peak, output_file_suffix="")
+    source_raw_path = source_paths["raw"]
+    source_areas_table_path = source_paths["areas_table"]
+    if not source_areas_table_path.exists():
+        raise FileNotFoundError(
+            "Areas table not found for recompute. Run a normal calibration first: "
+            f"{source_areas_table_path}"
+        )
+
+    # Load absorption-correction factors from the original calibration's corrected
+    # ratios table (recompute does not refit, so factors cannot be regenerated here).
+    abs_factors = _load_abs_factors_from_table(
+        ratios_abs_corrected_path=source_paths["ratios_abs_corrected"],
         free_area_el_lines=free_area_el_lines,
-        std_mass_fractions=std_mass_fractions,
-        emergence_angle=emergence_angle,
-        direction="to_pure",
     )
 
     if len(free_area_el_lines) == 0:
@@ -1000,7 +1153,7 @@ def recompute_calibration(
             )
         normalized_manual_groups.append(group_lines)
 
-    source_paths = _build_output_paths(output_dir, std_ID, output_file_suffix="")
+    source_paths = _build_output_paths(output_dir, std_ID, ref_peak, output_file_suffix="")
     source_raw_path = source_paths["raw"]
     source_areas_table_path = source_paths["areas_table"]
     if not source_areas_table_path.exists():
@@ -1090,6 +1243,7 @@ def recompute_calibration(
         std_id=std_ID,
         raw_df=raw_df,
         free_area_el_lines=free_area_el_lines,
+        ref_peak=ref_peak,
         areas_by_line=areas_by_line,
         spectrum_ids_used=spectrum_ids_used,
         output_dir=output_dir,

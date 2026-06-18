@@ -74,6 +74,7 @@ __all__ = ["batch_quantify_and_analyze"]
 
 def batch_quantify_and_analyze(
     sample_IDs: List[str],
+    els_sample: Optional[List[str]] = None,
     quantification_method: Optional[str] = None,
     results_path: Optional[str] = None,
     min_bckgrnd_cnts: Optional[float] = None,
@@ -95,6 +96,9 @@ def batch_quantify_and_analyze(
     ----------
     sample_IDs : List[str]
         List of sample identifiers.
+    els_sample : list(str), optional
+        List of elements in the sample. If the first entry is "" or None, the rest of the list is appended to the 
+        list loaded from the ledger; otherwise, the provided list replaces it.
     quantification_method : str, optional
         Method to use for quantification. Uses quant_cfg.method if unspecified. Currently only supports 'PB'.
     results_path : str, optional
@@ -153,7 +157,12 @@ def batch_quantify_and_analyze(
     """
     if results_path is None:
         results_path = os.path.join(os.getcwd(), cnst.RESULTS_DIR)
-        
+
+    non_empty_sample_IDs = [s for s in sample_IDs if s]  # filters out None, empty strings, etc.
+
+    if els_sample is not None and len(els_sample) > 0 and len(non_empty_sample_IDs) > 0:
+        logging.info(f"⚠️ Warning: More than one sample ID provided. Using the same provided sample elements list for all samples: {els_sample}.\nEnsure this behaviour is intended, or provide sample-specific element lists by leaving els_sample as None and specifying them in the ledgers.")
+    
     quant_results = []
     for sample_ID in sample_IDs:
         try:
@@ -228,6 +237,12 @@ def batch_quantify_and_analyze(
         except KeyError as e:
             logging.warning(f"Missing configuration '{e.args[0]}' in {spectral_info_f_path}. Skipping sample '{sample_ID}'.")
             continue
+        
+        # Sample elements
+        if els_sample is not None and (els_sample[0] == "" or els_sample[0] is None):
+            sample_cfg.elements = sample_cfg.elements + els_sample[1:]
+        elif els_sample is not None and len(els_sample) > 0:
+            sample_cfg.elements = els_sample
 
         if clustering_cfg is None:
             clustering_cfg = ClusteringConfig()

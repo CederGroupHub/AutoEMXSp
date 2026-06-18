@@ -407,7 +407,7 @@ class Peaks_Model:
             the parent area is corrected.
             """
             for el_line, corr in weight_corr.items():
-                el, line = self._get_el_line_terms(el_line)
+                _, line = self._get_el_line_terms(el_line)
                 # Reference lines define the ratios (corr == 1.0 by construction);
                 # skip them explicitly rather than relying on the float comparison.
                 if el_line in self.xray_weight_refs_lines:
@@ -428,13 +428,10 @@ class Peaks_Model:
 
                 par = self.fitting_params[area_name]
 
-                # Only scale a free, value-backed parameter. If the area is itself
-                # defined by an expr (i.e. it's a dependent of another characteristic
-                # line), fold the factor into that expr so the chain stays intact.
-                if par.expr:
+                # Only scale dependent parameters, folding the factor into
+                # that expr so the chain stays intact.
+                if par.expr and not par.vary:
                     par.set(expr=f"({par.expr}) * {corr}")
-                else:
-                    par.set(value=par.value * corr)
 
     def _add_peak_model_and_pars(self, el_line):
         """Add a peak model and its parameters for a specific X-ray line to the composite model."""

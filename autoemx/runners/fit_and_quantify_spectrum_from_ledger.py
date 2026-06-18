@@ -93,10 +93,10 @@ def fit_and_quantify_spectrum_from_ledger(
         with the historical 'Spectrum #' identifier from Data.csv).
     els_sample : list(str), optional
         List of elements in the sample. If the first entry is "" or None, the rest of the list is appended to the 
-        list loaded from Comp_analysis_configs.json; otherwise, the provided list replaces it.
+        list loaded from the ledger; otherwise, the provided list replaces it.
     els_substrate : list(str), optional
         List of substrate elements. If the first entry is "" or None, the rest of the list is appended to the 
-        list loaded from Comp_analysis_configs.json; otherwise, the provided list replaces it.
+        list loaded from the ledger; otherwise, the provided list replaces it.
     is_standard : bool
         Defines whether measurement is from an experimental standard (i.e., sample of known composition)
     results_path : str, optional

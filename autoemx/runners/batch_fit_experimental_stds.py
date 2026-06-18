@@ -49,6 +49,8 @@ def batch_fit_experimental_stds(
     min_bckgrnd_cnts: float = 5,
     update_std_library: bool = True,
     force_refitting: bool = False,
+    els_sample: Optional[List[str]] = None,
+    els_w_frs: Optional[Dict[str, float]] = None,
     els_substrate: Optional[List[str]] = None,
     output_filename_suffix: str = '',
     verbose: bool = True,
@@ -73,8 +75,14 @@ def batch_fit_experimental_stds(
     force_refitting : bool, optional
         If True, force refitting even if results with same fitting configurations already exist for a standard.
         Default is False.
+    els_sample : Optional[List[str]], optional
+        List of elements in the sample. If None, defaults to all elements in the sample.
+        If the first entry is "" or None, the rest of the list is appended to the list loaded from the ledger; otherwise, the provided list replaces it.
+    els_w_frs : Optional[Dict[str, float]], optional
+        Dictionary of weight fractions for the elements in the sample to provide if they differ from those in the ledger. Keys should be element symbols. Used to compute PB correction.
     els_substrate : Optional[List[str]], optional
         List of elements in the substrate. If None, defaults to all elements in the sample.
+        If the first entry is "" or None, the rest of the list is appended to the list loaded from the ledger; otherwise, the provided list replaces it.
     output_filename_suffix : str, optional
         Suffix for the output filename.
     verbose : bool, optional
@@ -104,10 +112,27 @@ def batch_fit_experimental_stds(
             raise ValueError(
                 f"Could not load standards dictionary from {standards_dict_path}: {e}"
             )
+        
+    def _has_entries(x):
+        return x is not None and len(x) > 0
 
-    if els_substrate is None:
-        els_substrate = dflts.substrate_els
+    # count only non-empty sample IDs
+    n_samples = sum(1 for s in std_ids if s)
 
+    _warnings = [
+        (els_sample,    "elements list",            "els_sample"),
+        (els_w_frs,     "element weight fractions",  "els_w_frs"),
+        (els_substrate, "substrate elements list",   "els_substrate"),
+    ]
+
+    for value, label, argname in _warnings:
+        if _has_entries(value) and n_samples > 0:
+            logging.info(
+                f"⚠️ Warning: More than one sample ID provided. Using the same provided sample "
+                f"{label} for all samples: {value}.\nEnsure this behaviour is intended, or provide "
+                f"sample-specific {label} by leaving {argname} as None and specifying them in the ledgers."
+            )
+            
     results: List[Optional[EMXSp_Composition_Analyzer]] = []
     comp_analyzer: Optional[EMXSp_Composition_Analyzer] = None
 
@@ -208,6 +233,18 @@ def batch_fit_experimental_stds(
                 f"Skipping sample '{std_id}'."
             )
             continue
+        
+        # Sample elements
+        if els_sample is not None and (els_sample[0] == "" or els_sample[0] is None):
+            sample_cfg.elements = sample_cfg.elements + els_sample[1:]
+        elif els_sample is not None and len(els_sample) > 0:
+            sample_cfg.elements = els_sample
+
+        # Sample substrate elements
+        if els_substrate is not None and (els_substrate[0] == "" or els_substrate[0] is None):
+            sample_substrate_cfg.elements = sample_substrate_cfg.elements + els_substrate[1:]
+        elif els_substrate is not None and len(els_substrate) > 0:
+            sample_substrate_cfg.elements = els_substrate
 
         if clustering_cfg is None:
             clustering_cfg = ClusteringConfig()
@@ -222,6 +259,10 @@ def batch_fit_experimental_stds(
                 f"Skipping — cannot fit a standard without a reference formula."
             )
             continue
+
+        if els_w_frs is not None and len(els_w_frs) > 0:
+            exp_stds_cfg_from_ledger.w_frs = els_w_frs
+
         configs[cnst.EXP_STD_MEASUREMENT_CFG_KEY] = exp_stds_cfg_from_ledger
 
         if min_bckgrnd_cnts is not None:
@@ -290,8 +331,8 @@ def batch_fit_experimental_stds(
                 extract_experimental_standards_details,
             )
 
-            if stds_path is not None:
-                standards_dir = Path(stds_path).expanduser().resolve()
+            if standards_dict_path is not None:
+                standards_dir = Path(standards_dict_path).expanduser().resolve()
             else:
                 standards_dir = (
                     Path(__file__).resolve().parents[1]

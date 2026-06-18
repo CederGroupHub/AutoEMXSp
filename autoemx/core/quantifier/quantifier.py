@@ -1515,7 +1515,7 @@ class XSp_Quantifier:
             print_single_separator()
             print_nice_1d_row('', self.fitted_els_quant)
             print_nice_1d_row('Initial W_fr', k_ratios)
-            logger.info(f"ℹ️ Initial analytical error: {(1 - sum(k_ratios)) * 100:.2f}%")
+            logger.info(f"ℹ️  Initial analytical error: {(sum(k_ratios) - 1) * 100:.2f}%")
     
         while max_diff > converge_tol and ZAF_cntr < max_iter:
             ZAF_cntr += 1
@@ -1530,7 +1530,7 @@ class XSp_Quantifier:
             new_weight_fractions = k_ratios * ZAF_pb_factors
             if self.verbose:
                 print_nice_1d_row('New W_fr', new_weight_fractions)
-                logger.debug('  ℹ️ Analytical error: %.2f w%', sum(new_weight_fractions) * 100 - 100)
+                logger.info(f"ℹ️  New analytical error: {(sum(new_weight_fractions) - 1) * 100:.2f}%")
     
             max_diff = max(abs(new_weight_fractions - weight_fractions))
             weight_fractions = new_weight_fractions.copy()
@@ -1615,7 +1615,7 @@ class XSp_Quantifier:
                     if iter_cntr == 3:
                         el_fr_param = {f'f_{el}': 1}
                         Background_Model(
-                            self.fitter.is_particle,
+                            self.is_particle,
                             beam_energy=self.beam_energy,
                             emergence_angle=self.emergence_angle,
                         )  # Re-initialize absorption attenuation globals
@@ -1795,18 +1795,18 @@ class XSp_Quantifier:
     
         # Print analytical error as a percentage (w%)
         an_err_percent = quant_result[cnst.AN_ER_KEY] * 100
-        logger.info(f"  ℹ️ Analytical error: {an_err_percent:.2f} w%")
+        logger.info(f"  ℹ️  Analytical error: {an_err_percent:.2f} w%")
         
         if quant_flag is not None:
-            logger.info(f"  ℹ️ Quantification flag: {quant_flag}")
+            logger.info(f"  ℹ️  Quantification flag: {quant_flag}")
     
         # Print mean atomic numbers (Z̅) only if provided
         if Z_sample is not None:
             print('')
             if 'Statham2016' in Z_sample:
-                logger.info(f"  ℹ️ Z̅_Statham2016: {Z_sample['Statham2016']:.2f}")
+                logger.info(f"  ℹ️  Z̅_Statham2016: {Z_sample['Statham2016']:.2f}")
             if 'mass-averaged' in Z_sample:
-                logger.info(f"  ℹ️ Z̅_w (mass-averaged): {Z_sample['mass-averaged']:.2f}")
+                logger.info(f"  ℹ️  Z̅_w (mass-averaged): {Z_sample['mass-averaged']:.2f}")
             
     
     def plot_quantified_spectrum(

@@ -462,7 +462,7 @@ class XSp_Fitter:
     
         return background_mod, background_pars
     
-    def _abs_attenuation_for_line(self, el_line, mass_fractions):
+    def _abs_attenuation_for_line(self, el_line, mass_fractions, bckgrnd_model):
         base_line = el_line
         for suffix in (self.escape_peaks_str, self.pileup_peaks_str):
             if base_line.endswith(suffix):
@@ -475,7 +475,8 @@ class XSp_Fitter:
         for el_i, w_i in mass_fractions.items():
             kwargs[f"f_{el_i}"] = float(w_i)
 
-        return float(Background_Model._abs_attenuation_phirho(en, **kwargs)[0])
+        bckgrnd_model._clear_cached_abs_att_variables()
+        return float(bckgrnd_model._abs_attenuation_phirho(en, **kwargs)[0])
 
 
     def _weight_absorption_correction_factors(self, fitted_lines):
@@ -511,7 +512,7 @@ class XSp_Fitter:
 
         # Set cls_beam_e (and clear caches) ONCE with the real beam energy,
         # before any attenuation probe.
-        Background_Model(
+        bckgrnd_model = Background_Model(
             self.is_particle,
             beam_energy=self.beam_energy,
             emergence_angle=self.emergence_angle,
@@ -524,7 +525,7 @@ class XSp_Fitter:
 
         def a_sample(el_line):
             if el_line not in sample_cache:
-                sample_cache[el_line] = self._abs_attenuation_for_line(el_line, sample_fr)
+                sample_cache[el_line] = self._abs_attenuation_for_line(el_line, sample_fr, bckgrnd_model)
             return sample_cache[el_line]
 
         def a_pure(el_line):
@@ -535,7 +536,7 @@ class XSp_Fitter:
                     if base_line.endswith(suffix):
                         base_line = base_line[: -len(suffix)]
                 el = base_line.split("_", 1)[0]
-                pure_cache[el_line] = self._abs_attenuation_for_line(el_line, {el: 1.0})
+                pure_cache[el_line] = self._abs_attenuation_for_line(el_line, {el: 1.0}, bckgrnd_model)
             return pure_cache[el_line]
 
         factors = {}
