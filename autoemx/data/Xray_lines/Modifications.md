@@ -32,20 +32,23 @@ _Last updated: 2026-06-05_
 **Pr:** Modified the Mα1 line weight from 0.008 to 1 and the Mα2 weight vice versa, for compatibility with the code, which expects a Mα1 line to be the reference for M lines when present.
 
 ## 5. Recalibrated Weights
-
+Recalibration = Modified original NIST calibrations
 Recalibrated weights for Si, Bi, Pb, V, and In, along with the following:
 
-| #  | Line      | Note                                              |
-|----|-----------|---------------------------------------------------|
-| 21 | Sc Lα     | Calibrated by NIST, but not corresponding to signal |
-| 22 | Ti Lα     | Calibrated by NIST, but not corresponding to signal |
-| 25 | Mn Kβ     | Calibrated by NIST, but not corresponding to signal |
-| 26 | Fe Lα     | Calibrated by NIST, but not corresponding to signal |
+| #  | Group     | Note                                                 |
+|----|-----------|------------------------------------------------------|
+| 21 | Sc Lα     | Recalibration                                        |
+| 22 | Ti Lα     | Recalibration                                        |
+| 25 | Mn Kβ     | Recalibration                                        |
+| 26 | Fe Lα     | Recalibration                                        |
 | 28 | Ni Lα     | Calibrated by NIST, but slightly overestimated     |
 | 34 | Se Lα     | Calibrated by NIST, but slightly underestimated    |
 | 56 | Ba Mζ     | Previously calibrated, but at half the actual signal |
 | 57 | La Mζ     | Previously calibrated, but at 60% of the actual signal |
-| 59 | Pr Mα     | Calibrated by NIST, but not corresponding to signal |
+| 59 | Pr Lα     | Slight recalibration of Lb1 and Lb4 |
+| 59 | Pr Mα     | Recalibration                                        |
+| 69 | Er Lα     | Slight recalibration of Lb1, Lb4, Lb7, Lb10, Lb3, Lb6, Ll|
+| 69 | Er Mα     | Recalibration of Mb, Mg, M2N4, Mz1, Mz2              |
 | 72 | Hf Mα + N | Mostly uncalibrated from NIST                       |
 | 72 | Hf Lα     | Partially uncalibrated by NIST                      |
 | 73 | Ta Mα + N | Mostly uncalibrated from NIST                       |
