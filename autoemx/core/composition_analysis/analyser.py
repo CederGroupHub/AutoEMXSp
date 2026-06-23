@@ -890,13 +890,13 @@ class EMXSp_Composition_Analyzer:
                     logger.info(
                         "ℹ️ No ledger found; %d pre-existing spectrum file/s ingested into a new ledger "
                         "(assuming the same acquisition configurations). "
-                        "%d spectrum/spectra available; new spectra will append from index %d, particle ID %s. "
-                        "Delete the sample folder before starting if a fresh acquisition is desired: %s",
+                        "%d spectrum/spectra available; restarting from spectrum #%d, particle #%s. "
+                        "If a fresh acquisition is desired, delete the sample folder at: %s",
                         n_ingested,
                         tot_n_spectra,
                         next_spectrum_id,
                         next_particle_id,
-                        self.sample_result_dir,
+                        os.path.abspath(self.sample_result_dir),
                     )
                 else:
                     ledger_note = (
@@ -905,14 +905,13 @@ class EMXSp_Composition_Analyzer:
                         else "Prior spectra detected"
                     )
                     logger.info(
-                        "ℹ️ %s. %d spectrum/spectra available; new spectra will append from index %d, "
-                        "particle ID %s. Delete the sample folder before starting if a fresh acquisition is "
-                        "desired: %s",
+                        "ℹ️ %s. %d spectrum/spectra available; restarting from spectrum #%d, particle #%s. "
+                        "If a fresh acquisition is desired, delete the sample folder at: %s",
                         ledger_note,
                         tot_n_spectra,
                         next_spectrum_id,
                         next_particle_id,
-                        self.sample_result_dir,
+                        os.path.abspath(self.sample_result_dir),
                     )
         else:
             tot_n_spectra = 0
@@ -942,8 +941,8 @@ class EMXSp_Composition_Analyzer:
 
         if self.verbose and not self._spectrum_acquisition_needed:
             logger.info(
-                "ℹ️ %d spectrum/spectra already acquired (maximum %d). "
-                "Skipping microscope initialization.",
+                "ℹ️ %d spectrum/spectra already acquired (maximum %d). Skipping acquisition.",
+                "If more spectra are desired, increase max_n_spectra and restart acquisition.",
                 resume_state["tot_n_spectra"],
                 self.max_n_spectra,
             )
