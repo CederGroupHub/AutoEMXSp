@@ -1,0 +1,9 @@
+#!/bin/sh
+# Strip Cursor agent co-author trailers injected by the IDE/CLI.
+if [ -z "$1" ] || [ ! -f "$1" ]; then
+  exit 0
+fi
+
+tmp="${1}.cursor-strip"
+grep -v -E '^Co-authored-by: Cursor <cursoragent@cursor.com>$' "$1" > "$tmp" || true
+mv "$tmp" "$1"
