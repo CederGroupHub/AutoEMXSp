@@ -112,6 +112,8 @@ class SpectrumAcquisition:
             The particle counter/index, or None if not applicable.
         """
         
+        self.EM_controller.ref_image = None
+
         if self.measurement_cfg.is_manual_navigation:
             return self._get_manual_coords(n_tot_sp_collected, frame_navigator, microscope_ctrl)
         
@@ -187,6 +189,8 @@ class SpectrumAcquisition:
         except Exception as e:
             logger.error(f"❌ Error getting acquisition spot coordinates: {e}")
             return False, None, None
+
+        self.EM_controller.ref_image = frame_navigator.particle_finder.ref_image
         
         return True, spots_xy_list, particle_cntr
     

@@ -215,6 +215,8 @@ class EM_Controller:
         self.is_initialized = False
         self.pixel_size_um: Optional[float] = None
         self.grid_search_fw_mm = init_fw
+        self.ref_image: Optional[np.ndarray] = None
+        self.last_acquisition_pixel_coords: Optional[Tuple[float, float]] = None
 
         # --- Runtime state variables for EM adjustment
         
@@ -436,6 +438,7 @@ class EM_Controller:
         -------
         spectrum_data, background_data
         """
+        x, y = self._resolve_acquisition_pixel_coords(x, y)
         return self.spectrum_acq.acquire_XS_spot_spectrum(
             x,
             y,
@@ -503,6 +506,57 @@ class EM_Controller:
         """
         image = self.EM_driver.get_image_data(self.im_width, self.im_height, 1)
         return image
+
+
+    def get_image_drift_pixels(self) -> Optional[Tuple[float, float]]:
+        """
+        Estimate image drift in pixels relative to the reference image captured
+        when EDS spot positions were selected.
+
+        Returns
+        -------
+        tuple(float, float) or None
+            (dx, dy) drift of the current image relative to ``ref_image``.
+        """
+        from autoemx.core.em_runtime.drift_correction import estimate_drift_of
+
+        if self.ref_image is None:
+            return None
+
+        current_img = self.get_current_image()
+        return estimate_drift_of(self.ref_image, current_img)
+
+
+    def _resolve_acquisition_pixel_coords(self, x: float, y: float) -> Tuple[float, float]:
+        """
+        Return the pixel coordinates used for spectrum acquisition, applying
+        image-drift correction when enabled for particle measurements.
+        """
+        x_corr, y_corr = float(x), float(y)
+
+        if (
+            self.sample_cfg.is_particle_acquisition
+            and self.powder_meas_cfg.img_shift_tracking
+        ):
+            if self.verbose:
+                logger.info("Evaluating image drift...")
+            try:
+                drift_vector = self.get_image_drift_pixels()
+            except Exception as e:
+                drift_vector = None
+                logger.warning(f"Image drift detection generated an error: {e}")
+
+            if drift_vector:
+                if self.verbose:
+                    logger.info("Drift detected and applied.")
+                dx, dy = drift_vector
+                x_corr += dx
+                y_corr += dy
+            elif self.verbose:
+                logger.info("No drift applied.")
+
+        self.last_acquisition_pixel_coords = (x_corr, y_corr)
+        return x_corr, y_corr
     
     
     def move_to_pos(self, pos: tuple) -> None:
@@ -618,6 +672,9 @@ class EM_Controller:
         """
         if not save_dir:
             save_dir = self.results_dir
+
+        if frame_image is None and self.ref_image is not None:
+            frame_image = self.ref_image
         
         image_utilities.save_frame_image(
             frame_image=frame_image,
