@@ -736,14 +736,19 @@ class EMXSp_Composition_Analyzer:
         
         
         # --- Initialisations
-        # Initialise microscope and XSp analyser
+        # Reconcile ledger / existing spectra before touching the microscope so resume
+        # runs with sufficient data skip instrument initialization entirely.
         if is_acquisition:
-            if microscope_cfg.type == 'SEM':
+            spectrum_acquisition_needed = True
+            if is_XSp_measurement:
+                self._initialise_acquisition_ledger()
+                spectrum_acquisition_needed = self._spectrum_acquisition_needed
+
+            if microscope_cfg.type == 'SEM' and spectrum_acquisition_needed:
                 self._initialise_SEM()
             
-            if is_XSp_measurement:
+            if is_XSp_measurement and spectrum_acquisition_needed:
                 self._initialise_Xsp_analyzer()
-                self._initialise_acquisition_ledger()
         
 
     #%% Instrument initializations
@@ -830,25 +835,116 @@ class EMXSp_Composition_Analyzer:
                 f"X-ray spectroscopy analyzer initialization for measurement type '{self.measurement_cfg.type}' is not currently implemented."
             )
 
+    def _prepare_acquisition_resume_state(self, log_resume_info: bool = True) -> dict:
+        """Load the ledger, reconcile spectra pointers, and resolve acquisition resume counters.
+
+        Parameters
+        ----------
+        log_resume_info : bool, optional
+            If True, emit resume/progress messages when prior spectra are detected.
+
+        Returns
+        -------
+        dict
+            Keys: ``tot_n_spectra``, ``next_spectrum_id``, ``particle_id_offset``,
+            ``had_ledger_before``, and ``acquisition_needed``.
+        """
+        _had_ledger_before = self._load_existing_ledger() is not None
+        _existing_ledger = self._load_or_create_ledger()
+        if _existing_ledger is not None and _existing_ledger.spectra:
+            tot_n_spectra = len(_existing_ledger.spectra)
+            _numeric_ids = [
+                int(e.spectrum_id)
+                for e in _existing_ledger.spectra
+                if e.spectrum_id is not None and str(e.spectrum_id).isdigit()
+            ]
+            next_spectrum_id = (max(_numeric_ids) + 1) if _numeric_ids else 0
+            _particle_ids = [
+                e.acquisition_details.particle_id
+                for e in _existing_ledger.spectra
+                if e.acquisition_details is not None
+                and e.acquisition_details.particle_id is not None
+            ]
+            _particle_id_offset = 0
+            self.particle_cntr = -1
+            try:
+                if _particle_ids:
+                    _particle_id_offset = max(int(p) for p in _particle_ids)
+                    self.particle_cntr = _particle_id_offset
+                else:
+                    inferred_particle_id = self._infer_max_particle_id_from_saved_images()
+                    if inferred_particle_id is not None:
+                        _particle_id_offset = inferred_particle_id
+                        self.particle_cntr = inferred_particle_id
+            except (ValueError, TypeError):
+                _particle_id_offset = 0
+                self.particle_cntr = -1
+            next_particle_id = _particle_id_offset + 1 if self.sample_cfg.is_particle_acquisition else "n/a"
+            if log_resume_info and self.verbose:
+                n_ingested = getattr(self, "_last_acq_ledger_ingested_spectra_count", 0)
+                if (
+                    not _had_ledger_before
+                    and getattr(self, "_last_acq_ledger_created", False)
+                    and n_ingested > 0
+                ):
+                    logger.info(
+                        "ℹ️ No ledger found; %d pre-existing spectrum file/s ingested into a new ledger "
+                        "(assuming the same acquisition configurations). "
+                        "%d spectrum/spectra available; restarting from spectrum #%d, particle #%s. "
+                        "If a fresh acquisition is desired, delete the sample folder at: %s",
+                        n_ingested,
+                        tot_n_spectra,
+                        next_spectrum_id,
+                        next_particle_id,
+                        os.path.abspath(self.sample_result_dir),
+                    )
+                else:
+                    ledger_note = (
+                        "Existing ledger detected; acquisition will resume"
+                        if _had_ledger_before
+                        else "Prior spectra detected"
+                    )
+                    logger.info(
+                        "ℹ️ %s. %d spectrum/spectra available; restarting from spectrum #%d, particle #%s. "
+                        "If a fresh acquisition is desired, delete the sample folder at: %s",
+                        ledger_note,
+                        tot_n_spectra,
+                        next_spectrum_id,
+                        next_particle_id,
+                        os.path.abspath(self.sample_result_dir),
+                    )
+        else:
+            tot_n_spectra = 0
+            next_spectrum_id = 0
+            _particle_id_offset = 0
+
+        return {
+            "tot_n_spectra": tot_n_spectra,
+            "next_spectrum_id": next_spectrum_id,
+            "particle_id_offset": _particle_id_offset,
+            "had_ledger_before": _had_ledger_before,
+            "acquisition_needed": tot_n_spectra < self.max_n_spectra,
+        }
+
     def _initialise_acquisition_ledger(self) -> None:
         """Initialize acquisition ledger and reconcile any existing spectra pointers.
 
         This guarantees that if a ledger is missing but spectra files already exist
         under ``spectra/``, those spectra are ingested into the newly created ledger
-        before acquisition restarts.
+        before acquisition restarts. Also determines whether new spectra must be
+        acquired so microscope initialization can be skipped when unnecessary.
         """
-        ledger = self._load_or_create_ledger()
-        if (
-            self.verbose
-            and getattr(self, "_last_acq_ledger_created", False)
-            and getattr(self, "_last_acq_ledger_ingested_spectra_count", 0) > 0
-            and ledger is not None
-        ):
+        resume_state = self._prepare_acquisition_resume_state()
+        self._acquisition_resume_state = resume_state
+        self._spectrum_acquisition_needed = resume_state["acquisition_needed"]
+        self.EM_controller = None
+
+        if self.verbose and not self._spectrum_acquisition_needed:
             logger.info(
-                "ℹ️ No ledger was found, but %d pre-existing spectrum file/s were detected in spectra/. "
-                "These spectra were ingested into a newly created ledger, assuming they were acquired "
-                "with the same configurations as the current run.",
-                getattr(self, "_last_acq_ledger_ingested_spectra_count", 0),
+                "ℹ️ %d spectrum/spectra already acquired (maximum %d). Skipping acquisition.",
+                "If more spectra are desired, increase max_n_spectra and restart acquisition.",
+                resume_state["tot_n_spectra"],
+                self.max_n_spectra,
             )
 
     #%% Other initializations
@@ -3571,75 +3667,15 @@ class EMXSp_Composition_Analyzer:
         - Acquisition and quantification records are persisted incrementally to the ledger to prevent data loss.
         - Prints a summary and processing times at the end.
         """
-        # Resume from any previously acquired spectra so file names and particle IDs
-        # are always monotonically increasing across restarted acquisitions.
-        _had_ledger_before = self._load_existing_ledger() is not None
-        _existing_ledger = self._load_or_create_ledger()
-        if _existing_ledger is not None and _existing_ledger.spectra:
-            tot_n_spectra = len(_existing_ledger.spectra)
-            _numeric_ids = [
-                int(e.spectrum_id)
-                for e in _existing_ledger.spectra
-                if e.spectrum_id is not None and str(e.spectrum_id).isdigit()
-            ]
-            next_spectrum_id = (max(_numeric_ids) + 1) if _numeric_ids else 0
-            _particle_ids = [
-                e.acquisition_details.particle_id
-                for e in _existing_ledger.spectra
-                if e.acquisition_details is not None
-                and e.acquisition_details.particle_id is not None
-            ]
-            _particle_id_offset = 0
-            self.particle_cntr = -1
-            try:
-                if _particle_ids:
-                    # Controller particle counter restarts from 1 on each run.
-                    # Keep offset equal to the last persisted particle id so resume starts at last+1.
-                    _particle_id_offset = max(int(p) for p in _particle_ids)
-                    self.particle_cntr = _particle_id_offset
-                else:
-                    inferred_particle_id = self._infer_max_particle_id_from_saved_images()
-                    if inferred_particle_id is not None:
-                        _particle_id_offset = inferred_particle_id
-                        self.particle_cntr = inferred_particle_id
-            except (ValueError, TypeError):
-                _particle_id_offset = 0
-                self.particle_cntr = -1
-            if self.verbose:
-                if (
-                    not _had_ledger_before
-                    and getattr(self, "_last_acq_ledger_created", False)
-                    and getattr(self, "_last_acq_ledger_ingested_spectra_count", 0) > 0
-                ):
-                    logger.info(
-                        "ℹ️ Restart detected %d pre-existing spectrum file/s and ingested them into a new ledger "
-                        "(assuming the same acquisition configurations).",
-                        getattr(self, "_last_acq_ledger_ingested_spectra_count", 0),
-                    )
-                elif _had_ledger_before:
-                    logger.info(
-                        "ℹ️ Existing ledger detected; acquisition will resume from the next available spectrum and particle IDs."
-                    )
-            logger.info(
-                "ℹ️ %d previously acquired spectrum/spectra detected. "
-                "New spectra will be appended starting from index %d. "
-                "Delete the sample folder before starting if a fresh acquisition is desired: %s",
-                tot_n_spectra,
-                next_spectrum_id,
-                self.sample_result_dir,
-            )
+        resume_state = getattr(self, "_acquisition_resume_state", None)
+        if resume_state is None:
+            resume_state = self._prepare_acquisition_resume_state()
         else:
-            tot_n_spectra = 0
-            next_spectrum_id = 0
-            _particle_id_offset = 0
-
-        next_particle_id = _particle_id_offset + 1 if self.sample_cfg.is_particle_acquisition else "n/a"
-        if next_spectrum_id > 0 and self.verbose:
-            logger.info(
-                "ℹ️ Resume point resolved: next spectrum ID=%d, next particle ID=%s.",
-                next_spectrum_id,
-                next_particle_id,
-            )
+            resume_state = self._prepare_acquisition_resume_state(log_resume_info=False)
+            self._acquisition_resume_state = resume_state
+        tot_n_spectra = resume_state["tot_n_spectra"]
+        next_spectrum_id = resume_state["next_spectrum_id"]
+        _particle_id_offset = resume_state["particle_id_offset"]
 
         max_n_sp_per_iter = 10  # Max spectra to collect per iteration (for saving in between)
         n_spectra_collected_this_session = 0  # Track new spectra collected in this session
