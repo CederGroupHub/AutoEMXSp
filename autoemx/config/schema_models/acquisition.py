@@ -27,7 +27,12 @@ class Coordinate2D(BaseModel):
 
 
 class SpotCoordinates(BaseModel):
-    """Acquisition spot coordinates in both machine and image spaces."""
+    """Acquisition spot coordinates within a frame image.
+
+    ``machine_coordinates`` are normalized frame-relative coordinates (as used by
+    the EM API), not absolute stage positions in mm. They are derived from
+    ``pixel_coordinates`` via ``frame_pixel_to_rel_coords``.
+    """
 
     machine_coordinates: Optional[Coordinate2D] = None
     pixel_coordinates: Optional[Tuple[int, int]] = None

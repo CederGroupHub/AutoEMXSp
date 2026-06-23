@@ -1835,27 +1835,31 @@ class EMXSp_Composition_Analyzer:
         machine_coords = None
         pixel_coords = None
 
-        x_machine = self._parse_optional_float(machine_x)
-        y_machine = self._parse_optional_float(machine_y)
-        if x_machine is not None and y_machine is not None:
-            machine_coords = Coordinate2D(x=x_machine, y=y_machine)
-
         x_pixel = self._parse_optional_float(pixel_x)
         y_pixel = self._parse_optional_float(pixel_y)
         if x_pixel is not None and y_pixel is not None:
             pixel_coords = (int(round(x_pixel)), int(round(y_pixel)))
 
-        # If machine coordinates are missing, derive them from pixel coordinates
-        # using the active frame context from EM_Controller.
-        if machine_coords is None and pixel_coords is not None and hasattr(self, "EM_controller"):
+        if pixel_coords is not None and hasattr(self, "EM_controller"):
             try:
-                pos_abs_mm = self.EM_controller.convert_pixel_pos_to_mm(np.array(pixel_coords, dtype=float))
+                em_driver = self.EM_controller.EM_driver
+                rel_coords = em_driver.frame_pixel_to_rel_coords(
+                    np.asarray([pixel_coords], dtype=float),
+                    int(self.EM_controller.im_width),
+                    int(self.EM_controller.im_height),
+                )
                 machine_coords = Coordinate2D(
-                    x=float(pos_abs_mm[0]),
-                    y=float(pos_abs_mm[1]),
+                    x=float(rel_coords[0][0]),
+                    y=float(rel_coords[0][1]),
                 )
             except Exception:
                 machine_coords = None
+
+        if machine_coords is None:
+            x_machine = self._parse_optional_float(machine_x)
+            y_machine = self._parse_optional_float(machine_y)
+            if x_machine is not None and y_machine is not None:
+                machine_coords = Coordinate2D(x=x_machine, y=y_machine)
 
         if machine_coords is None and pixel_coords is None:
             return None

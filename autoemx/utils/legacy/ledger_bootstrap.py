@@ -383,9 +383,16 @@ def load_legacy_acquisition_details_by_spectrum_id(
 
         machine_x = row.get(cnst.SP_X_COORD_DF_KEY)
         machine_y = row.get(cnst.SP_Y_COORD_DF_KEY)
+
+        machine_coordinates = None
+        x_machine = _parse_optional_float(machine_x)
+        y_machine = _parse_optional_float(machine_y)
+        if x_machine is not None and y_machine is not None:
+            machine_coordinates = Coordinate2D(x=x_machine, y=y_machine)
+
         pixel_x = _coerce_pixel_coordinate(row.get(cnst.SP_X_PIXEL_COORD_DF_KEY))
         pixel_y = _coerce_pixel_coordinate(row.get(cnst.SP_Y_PIXEL_COORD_DF_KEY))
-        if pixel_x is None or pixel_y is None:
+        if (pixel_x is None or pixel_y is None) and machine_coordinates is not None:
             conv_x, conv_y = convert_machine_to_pixel_coordinates(
                 machine_x,
                 machine_y,
@@ -398,12 +405,6 @@ def load_legacy_acquisition_details_by_spectrum_id(
                 pixel_x = _coerce_pixel_coordinate(conv_x)
             if pixel_y is None:
                 pixel_y = _coerce_pixel_coordinate(conv_y)
-
-        machine_coordinates = None
-        x_machine = _parse_optional_float(machine_x)
-        y_machine = _parse_optional_float(machine_y)
-        if x_machine is not None and y_machine is not None:
-            machine_coordinates = Coordinate2D(x=x_machine, y=y_machine)
 
         pixel_coordinates = None
         if pixel_x is not None and pixel_y is not None:
