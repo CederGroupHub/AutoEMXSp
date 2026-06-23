@@ -89,3 +89,4 @@ tests/outputs/
 examples/Results/**/ledger.json
 examples/Results/**/spectra/
 examples/Results/**/Analysis*/
+examples/Results/**/analysis*/
