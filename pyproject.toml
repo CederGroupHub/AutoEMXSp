@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autoemx"
-version = "0.1.7"
+version = "1.0.0"
 description = "AutoEMX - Automated Electron Microscopy X-Ray Spectroscopy for Compositional Characterization of Materials"
 readme = "README.md"
 license = "LicenseRef-AcademicNonCommercial"

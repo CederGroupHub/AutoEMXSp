@@ -2,8 +2,8 @@
 
 # AutoEMX 
 
-[![PyPI version](https://badge.fury.io/py/autoemxsp.svg)](https://pypi.org/project/autoemxsp/)
-[![Python Version](https://img.shields.io/pypi/pyversions/autoemxsp.svg)](https://pypi.org/project/autoemxsp/)
+[![PyPI version](https://badge.fury.io/py/autoemx.svg)](https://pypi.org/project/autoemx/)
+[![Python Version](https://img.shields.io/pypi/pyversions/autoemx.svg)](https://pypi.org/project/autoemx/)
 [![CI](https://github.com/CederGroupHub/AutoEMX/actions/workflows/ci.yml/badge.svg)](https://github.com/CederGroupHub/AutoEMX/actions/workflows/ci.yml)
 [![License: Custom Non-Commercial](https://img.shields.io/badge/license-Custom%20Non--Commercial-blue.svg)](https://github.com/CederGroupHub/AutoEMX/blob/main/LICENSE.txt)
 [![Research Square Preprint](https://img.shields.io/badge/Research%20Square-preprint-orange)](https://doi.org/10.21203/rs.3.rs-7837297/v2)  
