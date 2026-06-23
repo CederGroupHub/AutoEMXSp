@@ -229,6 +229,7 @@ class EM_Particle_Finder:
 
         # --- Variable initializations
         self.tot_par_cntr = 0  # Keeps track of total number of particles analysed
+        self.ref_image = None
         self._fr_par_cntr = 0
         self._num_par_in_frame = 0
         self.analyzed_pars: List[tuple(float, str)] = []
@@ -978,6 +979,7 @@ class EM_Particle_Finder:
     
         # Check if a particle was detected. If not, return empty list
         if par_mask_return is None:
+            self.ref_image = None
             return []
         else:
             par_mask, par_image = par_mask_return
@@ -995,6 +997,7 @@ class EM_Particle_Finder:
         )
     
         if len(all_points) == 0:
+            self.ref_image = None
             return []
     
         # --- 5. Select points with minimum distance and maximum count ---
@@ -1020,7 +1023,8 @@ class EM_Particle_Finder:
             color_image = draw_scalebar(color_image, self.EM.pixel_size_um)
             # cv2.imshow('Selected XS spots', color_image)
             cv2.imwrite(os.path.join(self.results_dir, self._sample_id + f'_par{self.tot_par_cntr}_fr{self.EM.current_frame_label}_xyspots.png'), color_image)
-    
+
+        self.ref_image = par_image
         return [tuple(map(int, pt)) for pt in selected_points]
 
         
