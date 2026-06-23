@@ -85,4 +85,7 @@ detector_response_convolution_matrices.json
 detector_response_convolution_matrices.json.lock
 paper_data/*/
 tests/outputs/
+# Generated outputs under bundled example samples (legacy fixtures stay tracked)
+examples/Results/**/ledger.json
+examples/Results/**/spectra/
 examples/Results/**/Analysis*/

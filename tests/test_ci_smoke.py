@@ -8,8 +8,8 @@ These tests intentionally avoid hardware-dependent paths and interactive plottin
 import os
 from pathlib import Path
 
-from autoemx.runners.fit_and_quantify_spectrum_from_datacsv import (
-    fit_and_quantify_spectrum_fromDatacsv,
+from autoemx.runners.fit_and_quantify_spectrum_from_ledger import (
+    fit_and_quantify_spectrum_from_ledger,
 )
 
 
@@ -22,7 +22,7 @@ os.environ.setdefault("MPLBACKEND", "Agg")
 
 
 def test_single_spectrum_quantification_smoke():
-    quantifier = fit_and_quantify_spectrum_fromDatacsv(
+    quantifier = fit_and_quantify_spectrum_from_ledger(
         sample_ID="Wulfenite_example",
         spectrum_ID=4,
         results_path=str(RESULTS_PATH),
@@ -41,5 +41,5 @@ def test_single_spectrum_quantification_smoke():
     )
 
     assert quantifier is not None
-    assert hasattr(quantifier, "fit_res")
-    assert quantifier.fit_res is not None
+    assert hasattr(quantifier, "fit_result")
+    assert quantifier.fit_result is not None
