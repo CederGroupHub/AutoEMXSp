@@ -812,7 +812,11 @@ class XSp_Quantifier:
           For 15 keV, this corresponds to Ka1 lines up to Z=31 (Ga), La1 lines up to Z=78 (Pt),
           and Ma1 lines for Au and heavier elements.
         - Among candidates, selects the line with the highest fitted peak area.
+        - Rejects quantification when a higher-energy ideal reference line for the element is
+          missing from the fit, indicating the fitted low-energy line is likely a detector artifact.
         """
+        IDEAL_REF_LINE_OVERVOLTAGE = 1.65
+        IDEAL_REF_LINE_ENERGY_THRESHOLD = 2
         # Get list of fitted lines for element el (only Ka, La, Ma lines considered)
         el_lines_list = [
             el_line for el_line in self.fitted_xray_lines
@@ -835,7 +839,7 @@ class XSp_Quantifier:
             # Define ideal reference lines as those above 2 keV and overvoltage > 1.65
             best_lines = [
                 el_line for el_line, energy in zip(el_lines_list, lines_energies)
-                if energy > 2 and self.beam_energy / energy > 1.65
+                if energy > IDEAL_REF_LINE_ENERGY_THRESHOLD and self.beam_energy / energy > IDEAL_REF_LINE_OVERVOLTAGE
             ]
     
             # Select ideal el_line for quantification
@@ -847,6 +851,28 @@ class XSp_Quantifier:
             else:
                 # Select line with largest intensity among all available lines
                 el_line_qnt = max(el_lines_list, key=lambda el_line: self.fitted_peaks_info[el_line][cnst.PEAK_AREA_KEY])
+    
+        if el_line_qnt is not None:
+            selected_energy = self.fitted_peaks_info[el_line_qnt][cnst.PEAK_TH_ENERGY_KEY]
+            el_xray_lines = get_el_xray_lines(el)
+            for ref_line in self.xray_quant_ref_lines:
+                if ref_line not in el_xray_lines:
+                    continue
+                line_energy = el_xray_lines[ref_line]['energy (keV)']
+                if (
+                    line_energy > IDEAL_REF_LINE_ENERGY_THRESHOLD
+                    and self.beam_energy / line_energy > IDEAL_REF_LINE_OVERVOLTAGE
+                    and line_energy > selected_energy
+                    and f"{el}_{ref_line}" not in el_lines_list
+                ):
+                    warnings.warn(
+                        f'Element {el} was not quantified because {el}_{ref_line} '
+                        f'(ideal reference line at {line_energy:.2f} keV) is missing from the fit, '
+                        f'while {el_line_qnt} was fitted — the element is likely absent '
+                        f'(possible detector artifact).'
+                    )
+                    el_line_qnt = None
+                    break
     
         return el_line_qnt
     
