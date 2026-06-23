@@ -538,13 +538,12 @@ class EM_Controller:
             self.sample_cfg.is_particle_acquisition
             and self.powder_meas_cfg.img_shift_tracking
         ):
-            if self.verbose:
-                logger.info("Evaluating image drift...")
             try:
                 drift_vector = self.get_image_drift_pixels()
             except Exception as e:
                 drift_vector = None
                 logger.warning(f"Image drift detection generated an error: {e}")
+                logger.info("No drift applied.")
 
             if drift_vector:
                 if self.verbose:
