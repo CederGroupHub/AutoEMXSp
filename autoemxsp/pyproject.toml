@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autoemxsp"
+version = "0.1.8"
+description = "Deprecated PyPI name for AutoEMX; installs and re-exports autoemx"
+readme = "README.md"
+authors = [
+    { name = "Andrea Giunto", email = "agiunto@lbl.gov" }
+]
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "autoemx>=1.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["autoemxsp"]

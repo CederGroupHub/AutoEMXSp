@@ -9,13 +9,14 @@ from __future__ import annotations
 import importlib
 import sys
 import warnings
+
 from autoemx import *  # noqa: F401,F403
 import autoemx as _autoemx
 from autoemx._compat import warn_if_stale_autoemxsp_install
 
 warnings.warn(
     "Package 'autoemxsp' has been renamed to 'autoemx'. "
-    "Please update imports; compatibility aliases will be removed in a future release.",
+    "Please update imports and use: pip install autoemx",
     FutureWarning,
     stacklevel=2,
 )
@@ -26,7 +27,7 @@ warn_if_stale_autoemxsp_install()
 __path__ = _autoemx.__path__
 
 # Register top-level subpackage aliases to support imports like:
-# from autoemxsp.runners.Analyze_Sample import analyze_sample
+# from autoemxsp.runners.analyze_sample import analyze_sample
 for _subpkg in (
     "calibrations",
     "config",
