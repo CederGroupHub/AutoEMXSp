@@ -405,7 +405,12 @@ def batch_acquire_and_analyze(
             continue
     
     # Put microscope in standby after completion
-    if comp_analyzer is not None and not development_mode and len(samples) > 1:
+    if (
+        comp_analyzer is not None
+        and getattr(comp_analyzer, "EM_controller", None) is not None
+        and not development_mode
+        and len(samples) > 1
+    ):
         try:
             comp_analyzer.EM_controller.standby()
         except Exception as e:
