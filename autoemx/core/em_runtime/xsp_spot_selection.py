@@ -10,9 +10,7 @@ repeatedly on the same particle until the callback returns an empty list.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, List, Sequence, Tuple, TYPE_CHECKING
-
-import numpy as np
+from typing import Any, Callable, List, Sequence, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from autoemx.core.em_runtime.particle_finder import EM_Particle_Finder
@@ -29,13 +27,15 @@ class XSpSpotSelectionContext:
     a non-empty list of pixel coordinates to measure, then wait for the next
     invocation to supply more spots. Return ``[]`` when finished with this
     particle (including to skip it without measuring).
+
+    ``ref_image`` is the frame captured at spot-selection time. It is the same
+    image used as the drift-correction reference during subsequent acquisitions
+    on this particle (see ``EM_Controller.ref_image``).
     """
 
     particle_id: int
     n_tot_sp_collected: int
-    par_image: np.ndarray
-    par_mask: np.ndarray
-    usable_mask: np.ndarray
+    ref_image: Any
     pixel_size_um: float
     frame_label: str
     im_width: int

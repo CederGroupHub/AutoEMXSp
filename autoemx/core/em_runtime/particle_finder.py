@@ -688,6 +688,37 @@ class EM_Particle_Finder:
         return is_par_area_ok
 
 
+    def _capture_ref_frame(self, par_image=None, pixel_size_um=None):
+        '''
+        Capture (or accept) the grayscale frame used for spot selection.
+
+        At the microscope, a fresh frame is acquired via the driver. Offline, the
+        provided ``par_image`` is used and image dimensions / pixel size are
+        updated from it. This is the single place that defines how the reference
+        frame is obtained, shared by automated and callback spot selection.
+
+        Parameters
+        ----------
+        par_image : ndarray, optional
+            Grayscale frame to use when not running at the microscope.
+        pixel_size_um : float, optional
+            Pixel size in micrometers. Required together with ``par_image`` offline.
+
+        Returns
+        -------
+        ndarray
+            The grayscale frame image.
+        '''
+        if EM_driver.is_microscope_connected():
+            self._check_EM_controller_initialization()
+            return EM_driver.get_image_data(self._im_width, self._im_height, 1)
+        if par_image is not None and pixel_size_um is not None:
+            self._im_height, self._im_width = par_image.shape
+            self.EM.pixel_size_um = pixel_size_um
+            return par_image
+        raise ValueError('This function must be run at the microscope, or it needs to be passed both image and its pixel size')
+
+
     def _get_particle_mask(self, par_image=None, pixel_size_um=None, results_dir=None, centering=False):
         '''
         Returns a binary mask of the particle at the center of the image, if the particle is large enough.
@@ -719,16 +750,9 @@ class EM_Particle_Finder:
         - The commented `cv2.imshow` lines can be enabled for debugging visualization.
         '''
         # Get particle mask
-        if EM_driver.is_microscope_connected():
-            self._check_EM_controller_initialization()
-            par_image = EM_driver.get_image_data(self._im_width, self._im_height, 1)
-        elif par_image is not None and pixel_size_um is not None:
-            self._im_height, self._im_width = par_image.shape
-            self.EM.pixel_size_um = pixel_size_um
-            if results_dir:
-                self.results_dir = results_dir
-        else:
-            raise ValueError('This function must be run at the microscope, or it needs to be passed both image and its pixel size')
+        if not EM_driver.is_microscope_connected() and results_dir:
+            self.results_dir = results_dir
+        par_image = self._capture_ref_frame(par_image, pixel_size_um)
             
         # Apply the threshold to get a binary image
         _, par_mask = cv2.threshold(par_image, self.powder_meas_cfg.par_brightness_thresh, 255, cv2.THRESH_BINARY)
@@ -984,6 +1008,16 @@ class EM_Particle_Finder:
         - Exclude points that are close to larger particles along the X-ray emission path to the EDS detector,
           as these may absorb emitted X-rays and degrade spectral signal.
         '''
+        # In callback mode, spots are supplied by xsp_spot_selector. Skip the
+        # particle mask computation entirely and reuse a single reference frame
+        # per particle (see _get_callback_xsp_spots).
+        if self.powder_meas_cfg.par_spot_selection_mode == 'callback':
+            return self._get_callback_xsp_spots(
+                n_tot_sp_collected,
+                par_image=par_image,
+                pixel_size_um=pixel_size_um,
+            )
+
         # --- 1. Acquire or prepare the particle mask and image ---
         if EM_driver.is_microscope_connected():
             par_mask_return = self._get_particle_mask()
@@ -1006,14 +1040,6 @@ class EM_Particle_Finder:
         # --- 2. Erode the particle mask to avoid edge effects ---
         margin = max(10, int(self.powder_meas_cfg.par_mask_margin / self.EM.pixel_size_um))
         final_mask = self._erode_particle_mask(par_mask, margin)
-
-        if self.powder_meas_cfg.par_spot_selection_mode == 'callback':
-            return self._get_callback_xsp_spots(
-                n_tot_sp_collected=n_tot_sp_collected,
-                par_image=par_image,
-                par_mask=par_mask,
-                usable_mask=final_mask,
-            )
     
         # --- 3. Find bright points in image, which indicate highest regions on particle---
         thresholded_image, min_area_pixels = self._find_particle_bright_regions(final_mask, par_image)
@@ -1057,11 +1083,19 @@ class EM_Particle_Finder:
     def _get_callback_xsp_spots(
         self,
         n_tot_sp_collected: int,
-        par_image,
-        par_mask,
-        usable_mask,
+        par_image=None,
+        pixel_size_um=None,
     ) -> List[tuple]:
-        """Invoke xsp_spot_selector and validate returned pixel coordinates."""
+        """Invoke xsp_spot_selector and validate returned pixel coordinates.
+
+        The reference frame is captured once per particle (when ``self.ref_image``
+        is None) and reused for every spot batch on that particle, so the
+        drift-correction reference stays fixed across that particle's spectra. No
+        particle mask is computed in this mode.
+        """
+        if self.ref_image is None:
+            self.ref_image = self._capture_ref_frame(par_image, pixel_size_um)
+
         frame_label = getattr(self.EM, 'current_frame_label', '')
         if frame_label is None:
             frame_label = ''
@@ -1069,9 +1103,7 @@ class EM_Particle_Finder:
         context = XSpSpotSelectionContext(
             particle_id=self.tot_par_cntr,
             n_tot_sp_collected=n_tot_sp_collected,
-            par_image=par_image,
-            par_mask=par_mask,
-            usable_mask=usable_mask,
+            ref_image=self.ref_image,
             pixel_size_um=float(self.EM.pixel_size_um),
             frame_label=str(frame_label),
             im_width=int(self._im_width),
@@ -1085,7 +1117,6 @@ class EM_Particle_Finder:
             raise
 
         if not raw_spots:
-            self.ref_image = par_image
             return []
 
         selected_points = validate_xsp_spot_pixels(
@@ -1093,7 +1124,6 @@ class EM_Particle_Finder:
             im_width=int(self._im_width),
             im_height=int(self._im_height),
         )
-        self.ref_image = par_image
         return selected_points
 
         

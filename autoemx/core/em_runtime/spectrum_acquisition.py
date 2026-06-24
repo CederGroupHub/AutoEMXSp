@@ -192,6 +192,9 @@ class SpectrumAcquisition:
                     return False, None, None
                 self._xsp_callback_particle_active = True
                 self._xsp_callback_particle_cntr = particle_finder.tot_par_cntr
+                # Force a fresh reference frame capture for the new particle. It is
+                # then reused for every spot batch on this particle (no re-capture).
+                particle_finder.ref_image = None
             particle_cntr = self._xsp_callback_particle_cntr
         else:
             was_particle_found = particle_finder.go_to_next_particle()
