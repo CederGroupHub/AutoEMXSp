@@ -8,6 +8,9 @@ __all__ = [
     "SpectrumAcquisition",
     "EM_Sample_Finder",
     "EM_Particle_Finder",
+    "XSpSpotSelectionContext",
+    "XSpSpotSelectorCallback",
+    "validate_xsp_spot_pixels",
 ]
 
 
@@ -27,4 +30,7 @@ def __getattr__(name):
     if name == "EM_Particle_Finder":
         from autoemx.core.em_runtime.particle_finder import EM_Particle_Finder
         return EM_Particle_Finder
+    if name in ("XSpSpotSelectionContext", "XSpSpotSelectorCallback", "validate_xsp_spot_pixels"):
+        from autoemx.core.em_runtime import xsp_spot_selection
+        return getattr(xsp_spot_selection, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
