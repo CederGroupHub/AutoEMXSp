@@ -36,7 +36,10 @@ import logging
 from typing import List, Dict, Tuple, Any, Optional
 
 from autoemx.core.composition_analysis import EMXSp_Composition_Analyzer
-from autoemx.core.em_runtime.xsp_spot_selection import XSpSpotSelectorCallback
+from autoemx.core.em_runtime.xsp_spot_selection import (
+    XSpSpotSelectionContext,
+    XSpSpotSelectorCallback,
+)
 import autoemx.calibrations as calibs
 import autoemx.utils.constants as cnst
 from autoemx.utils import print_double_separator
@@ -60,7 +63,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-__all__ = ["batch_acquire_and_analyze"]
+__all__ = ["batch_acquire_and_analyze", "XSpSpotSelectionContext", "XSpSpotSelectorCallback"]
 
 def batch_acquire_and_analyze(
     samples: List[Dict[str, Any]],

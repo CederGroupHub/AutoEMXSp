@@ -10,9 +10,7 @@ repeatedly on the same particle until the callback returns an empty list.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, List, Sequence, Tuple, TYPE_CHECKING
-
-import numpy as np
+from typing import Any, Callable, List, Sequence, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from autoemx.core.em_runtime.particle_finder import EM_Particle_Finder
@@ -33,14 +31,14 @@ class XSpSpotSelectionContext:
 
     particle_id: int
     n_tot_sp_collected: int
-    par_image: np.ndarray
-    par_mask: np.ndarray
-    usable_mask: np.ndarray
+    par_image: Any
+    par_mask: Any
+    usable_mask: Any
     pixel_size_um: float
     frame_label: str
     im_width: int
     im_height: int
-    particle_finder: "EM_Particle_Finder"
+    particle_finder: EM_Particle_Finder
 
 
 def validate_xsp_spot_pixels(
