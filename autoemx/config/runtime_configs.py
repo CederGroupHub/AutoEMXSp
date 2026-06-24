@@ -26,7 +26,7 @@ Each dataclass includes attribute documentation and input validation.
 """
 import numpy as np
 import multiprocessing
-from typing import Any, ClassVar, Dict, List, Optional, Tuple
+from typing import Any, ClassVar, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -345,7 +345,7 @@ class PowderMeasurementConfig(BaseModel):
     Configuration for powder measurement.
 
     Attributes:
-        is_manual_particle_selection (bool): Whether to manually navigate sample to select particles to analyse (Default = False).
+        par_selection_mode (str): 'auto' for automatic particle navigation, 'manual' to prompt user to center each particle (default: 'auto').
         is_known_powder_mixture_meas (bool): Whether sample is a known binary mixture of powders. Used to characterize precursor extent of intermixing (Default = False).
         img_shift_tracking (bool): Whether to use image shift tracking during acquisition (Default = True).
         par_search_frame_width_um (float, optional): Frame width used when searching for particles, in um.
@@ -365,10 +365,13 @@ class PowderMeasurementConfig(BaseModel):
             Particle pixel intensities are scaled to 8-bit prior threhsolding, i.e., darkest pixel will be set to 0, and brightest to 255.
         par_feature_selection (str): 'random' for random selection of points within bright regions, 'peaks' for brightest peak spots (default: 'random').
         par_spot_spacing (str): 'random' for unbiased spot selecton, 'maximized' for maximized spot spacing over particle (default: 'random').
+        par_spot_selection_mode (str): 'auto' for built-in spot selection, 'callback' to supply spots via xsp_spot_selector (default: 'auto').
     """
     DEFAULT_PAR_SEGMENTATION_MODEL: ClassVar[str] = "threshold_bright"
+    AVAILABLE_SPOT_SELECTION_MODES: ClassVar[Tuple[str, ...]] = ('auto', 'callback')
+    AVAILABLE_PAR_SELECTION: ClassVar[Tuple[str, ...]] = ('auto', 'manual')
 
-    is_manual_particle_selection: bool = False
+    par_selection_mode: Literal['auto', 'manual'] = 'auto'
     is_known_powder_mixture_meas: bool = False
     img_shift_tracking: bool = True
     par_search_frame_width_um: Optional[float] = None
@@ -378,7 +381,8 @@ class PowderMeasurementConfig(BaseModel):
     min_area_par: float = 10.0     # µm²
     par_mask_margin: float = 1.0   # µm
     xsp_spots_distance_um: float = 1.0  # µm
-    par_segmentation_model: str = "threshold_bright"
+    par_spot_selection_mode: Literal['auto', 'callback'] = 'auto'
+    par_segmentation_model: str = DEFAULT_PAR_SEGMENTATION_MODEL    # "threshold_bright"    
     par_brightness_thresh: int = 100  # in 8-bit image
     par_xy_spots_thresh: int = 100
     par_feature_selection: str = 'random'
@@ -389,6 +393,17 @@ class PowderMeasurementConfig(BaseModel):
     AVAILABLE_SPOT_SPACING_SELECTION: ClassVar[Tuple[str, ...]] = ('random', 'maximized')
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_legacy_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            cleaned = dict(data)
+            legacy_manual = cleaned.pop("is_manual_particle_selection", None)
+            if legacy_manual is not None and "par_selection_mode" not in cleaned:
+                cleaned["par_selection_mode"] = "manual" if legacy_manual else "auto"
+            return cleaned
+        return data
 
     @model_validator(mode="after")
     def _validate(self) -> "PowderMeasurementConfig":
@@ -406,6 +421,16 @@ class PowderMeasurementConfig(BaseModel):
             raise ValueError(
                 f'Value of "par_spot_spacing" set to {self.par_spot_spacing} is invalid. '
                 f'Must be one of {self.AVAILABLE_SPOT_SPACING_SELECTION}.'
+            )
+        if self.par_spot_selection_mode not in self.AVAILABLE_SPOT_SELECTION_MODES:
+            raise ValueError(
+                f'Value of "par_spot_selection_mode" set to {self.par_spot_selection_mode} is invalid. '
+                f'Must be one of {self.AVAILABLE_SPOT_SELECTION_MODES}.'
+            )
+        if self.par_selection_mode not in self.AVAILABLE_PAR_SELECTION:
+            raise ValueError(
+                f'Value of "par_selection_mode" set to {self.par_selection_mode} is invalid. '
+                f'Must be one of {self.AVAILABLE_PAR_SELECTION}.'
             )
         if self.min_area_par < 0 or self.max_area_par < 0:
             raise ValueError("Particle area thresholds must be non-negative.")

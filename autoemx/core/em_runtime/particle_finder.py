@@ -72,6 +72,12 @@ import pandas as pd
 
 from typing import List, Optional
 
+from autoemx.core.em_runtime.xsp_spot_selection import (
+    XSpSpotSelectionContext,
+    XSpSpotSelectorCallback,
+    validate_xsp_spot_pixels,
+)
+
 # Local project imports
 from autoemx.utils.helper import (
     Prompt_User,
@@ -134,8 +140,8 @@ class EM_Particle_Finder:
         Reference to the parent EM_Controller instance (must be initialised before use).
     powder_meas_cfg : PowderMeasurementConfig
         Configuration object for powder measurement (see dataclass for details).
-    is_manual_particle_selection : bool
-        If True, prompts user to center image around next particle to analyse.
+    par_selection_mode : str
+        Particle navigation mode from ``powder_meas_cfg`` ('auto' or 'manual').
     results_dir : str or None
         Directory for saving result images and data.
     verbose : bool
@@ -167,7 +173,7 @@ class EM_Particle_Finder:
         self,
         EM_controller,
         powder_meas_cfg: PowderMeasurementConfig,
-        is_manual_particle_selection: bool = False,
+        xsp_spot_selector: Optional[XSpSpotSelectorCallback] = None,
         results_dir: Optional[str] = None,
         verbose: bool = True,
         development_mode: bool = True
@@ -181,10 +187,10 @@ class EM_Particle_Finder:
         ----------
         EM_controller : EM_Controller
             Reference to the parent EM_Controller instance (must be initialised before use).
-        powder_meas_cfg : PowderMeasurementConfig, optional
+        powder_meas_cfg : PowderMeasurementConfig
             Configuration object for powder measurement (see dataclass for details).
-        is_manual_particle_selection : bool, optional
-            If True, enables manual particle selection mode (default: False).
+        xsp_spot_selector : callable, optional
+            Required when ``powder_meas_cfg.par_spot_selection_mode='callback'``.
         results_dir : str, optional
             Directory to save result images and data (default: None).
         verbose : bool, optional
@@ -213,7 +219,11 @@ class EM_Particle_Finder:
             self._im_width = EM_controller.im_width
             self._im_height = EM_controller.im_height
         
-        self.is_manual_particle_selection = is_manual_particle_selection
+        self.xsp_spot_selector = xsp_spot_selector
+        if self.powder_meas_cfg.par_spot_selection_mode == 'callback' and self.xsp_spot_selector is None:
+            raise ValueError(
+                "powder_meas_cfg.par_spot_selection_mode='callback' requires xsp_spot_selector."
+            )
         # NOTE: self.tot_par_cntr is initialized below, so _select_par_prompt_title will be set on first use
         if self.is_manual_particle_selection:
             self._select_par_prompt_title = f"Select position for particle #{self.tot_par_cntr}"
@@ -234,7 +244,16 @@ class EM_Particle_Finder:
         self._num_par_in_frame = 0
         self.analyzed_pars: List[tuple(float, str)] = []
 
+    @property
+    def is_manual_particle_selection(self) -> bool:
+        """Whether particle navigation uses manual centering prompts."""
+        return self.powder_meas_cfg.par_selection_mode == 'manual'
 
+    @property
+    def par_selection_mode(self) -> str:
+        return self.powder_meas_cfg.par_selection_mode
+
+    
     def _check_EM_controller_initialization(self) -> None:
         """
         Check whether the associated EM_Controller instance is initialized.
@@ -987,6 +1006,14 @@ class EM_Particle_Finder:
         # --- 2. Erode the particle mask to avoid edge effects ---
         margin = max(10, int(self.powder_meas_cfg.par_mask_margin / self.EM.pixel_size_um))
         final_mask = self._erode_particle_mask(par_mask, margin)
+
+        if self.powder_meas_cfg.par_spot_selection_mode == 'callback':
+            return self._get_callback_xsp_spots(
+                n_tot_sp_collected=n_tot_sp_collected,
+                par_image=par_image,
+                par_mask=par_mask,
+                usable_mask=final_mask,
+            )
     
         # --- 3. Find bright points in image, which indicate highest regions on particle---
         thresholded_image, min_area_pixels = self._find_particle_bright_regions(final_mask, par_image)
@@ -1026,6 +1053,48 @@ class EM_Particle_Finder:
 
         self.ref_image = par_image
         return [tuple(map(int, pt)) for pt in selected_points]
+
+    def _get_callback_xsp_spots(
+        self,
+        n_tot_sp_collected: int,
+        par_image,
+        par_mask,
+        usable_mask,
+    ) -> List[tuple]:
+        """Invoke xsp_spot_selector and validate returned pixel coordinates."""
+        frame_label = getattr(self.EM, 'current_frame_label', '')
+        if frame_label is None:
+            frame_label = ''
+
+        context = XSpSpotSelectionContext(
+            particle_id=self.tot_par_cntr,
+            n_tot_sp_collected=n_tot_sp_collected,
+            par_image=par_image,
+            par_mask=par_mask,
+            usable_mask=usable_mask,
+            pixel_size_um=float(self.EM.pixel_size_um),
+            frame_label=str(frame_label),
+            im_width=int(self._im_width),
+            im_height=int(self._im_height),
+            particle_finder=self,
+        )
+        try:
+            raw_spots = self.xsp_spot_selector(context)
+        except Exception as exc:
+            logger.error(f"❌ xsp_spot_selector callback failed: {exc}")
+            raise
+
+        if not raw_spots:
+            self.ref_image = par_image
+            return []
+
+        selected_points = validate_xsp_spot_pixels(
+            raw_spots,
+            im_width=int(self._im_width),
+            im_height=int(self._im_height),
+        )
+        self.ref_image = par_image
+        return selected_points
 
         
     def _collect_candidate_points(self, thresholded_image, par_image, feature_selection, min_area_pixels):

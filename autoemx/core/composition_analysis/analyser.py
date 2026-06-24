@@ -79,6 +79,7 @@ import cvxpy as cp
 # Project-specific imports
 from autoemx.core.quantifier import XSp_Quantifier
 from autoemx.core.em_runtime.controller import EM_Controller
+from autoemx.core.em_runtime.xsp_spot_selection import XSpSpotSelectorCallback
 from autoemx.core.em_runtime.sample_finder import EM_Sample_Finder
 import autoemx.calibrations as calibs
 import autoemx.utils.constants as cnst
@@ -522,6 +523,7 @@ class EMXSp_Composition_Analyzer:
         verbose: bool = True,
         results_dir: Optional[str] = None,
         sample_id: Optional[str] = None,
+        xsp_spot_selector: Optional[XSpSpotSelectorCallback] = None,
     ):
         """
         Initialize the EMXSp_Composition_Analyzer with all configuration objects.
@@ -544,6 +546,7 @@ class EMXSp_Composition_Analyzer:
         # --- Define use of class instance
         self.is_acquisition = is_acquisition
         self.development_mode = development_mode
+        self.xsp_spot_selector = xsp_spot_selector
 
         measurement_cfg = measurement_cfg.model_copy(
             update={
@@ -806,6 +809,7 @@ class EMXSp_Composition_Analyzer:
             sample_id=self.sample_id,
             results_dir=EM_images_dir,
             verbose=self.verbose,
+            xsp_spot_selector=self.xsp_spot_selector,
         )
         self.EM_controller.initialise_SEM()
         self.EM_controller.initialise_sample_navigator(exclude_sample_margin=True)
@@ -1127,7 +1131,7 @@ class EMXSp_Composition_Analyzer:
             with open(summary_path, "w", encoding="utf-8") as fh:
                 fh.write("\n".join(lines))
         except OSError as e:
-            logging.warning(f"Could not write analysis config summary: {e}")
+            logger.warning(f"Could not write analysis config summary: {e}")
 
 
     def _resolve_active_analysis_config_ids(self) -> Tuple[int, int]:

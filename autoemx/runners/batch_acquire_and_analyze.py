@@ -36,6 +36,7 @@ import logging
 from typing import List, Dict, Tuple, Any, Optional
 
 from autoemx.core.composition_analysis import EMXSp_Composition_Analyzer
+from autoemx.core.em_runtime.xsp_spot_selection import XSpSpotSelectorCallback
 import autoemx.calibrations as calibs
 import autoemx.utils.constants as cnst
 from autoemx.utils import print_double_separator
@@ -104,7 +105,8 @@ def batch_acquire_and_analyze(
     save_raw_images: bool = dflt.save_raw_images,
     development_mode: bool = False,
     verbose: bool = True,
-    results_dir: Optional[str] = None
+    results_dir: Optional[str] = None,
+    xsp_spot_selector: Optional[XSpSpotSelectorCallback] = None,
 ) -> EMXSp_Composition_Analyzer:
     """
     Batch acquisition (and optional quantification) of X-ray spectra for a list of powder samples.
@@ -244,6 +246,18 @@ def batch_acquire_and_analyze(
     results_dir : str, optional
         Directory where results are saved.
         Default is `None`.
+    xsp_spot_selector : callable, optional
+        Callback invoked on each particle when
+        ``powder_meas_cfg.par_spot_selection_mode='callback'``. Called repeatedly on
+        the same particle until it returns ``[]``. Signature::
+
+            spots = xsp_spot_selector(context: XSpSpotSelectionContext)
+
+        Return pixel ``(x, y)`` coordinates in the current frame. Return ``[]``
+        to finish with the current particle (including to skip it). Spots are
+        validated against image bounds only. Stage navigation to the next
+        particle remains automatic; spots are measured via beam positioning
+        with drift correction like automated mode.
     
             
     Returns
@@ -257,6 +271,14 @@ def batch_acquire_and_analyze(
         els_substrate = ['C', 'O', 'Al']
     if quant_flags_accepted is None:
         quant_flags_accepted = [0, -1]
+
+    resolved_spot_selector = xsp_spot_selector
+    if powder_meas_cfg_kwargs and powder_meas_cfg_kwargs.get('par_spot_selection_mode') == 'callback':
+        if resolved_spot_selector is None:
+            raise ValueError(
+                "xsp_spot_selector is required when powder_meas_cfg_kwargs sets "
+                "par_spot_selection_mode='callback'."
+            )
     
     # --- Configuration objects
     microscope_cfg = MicroscopeConfig(
@@ -318,6 +340,12 @@ def batch_acquire_and_analyze(
         center_pos = sample['pos']
         ref_formulae = sample.get('cnd', [])
         smpl_type = sample.get('type', sample_type)
+        sample_spot_selector = sample.get('xsp_spot_selector', resolved_spot_selector)
+        if powder_meas_cfg.par_spot_selection_mode == 'callback' and sample_spot_selector is None:
+            raise ValueError(
+                f"Sample '{sample_ID}': xsp_spot_selector is required when "
+                "par_spot_selection_mode='callback'."
+            )
         
         print_double_separator()
         logging.info(f"Sample '{sample_ID}'")
@@ -395,7 +423,8 @@ def batch_acquire_and_analyze(
             standards_dict=standards_dict,
             output_filename_suffix=output_filename_suffix,
             verbose=verbose,
-            results_dir=results_dir
+            results_dir=results_dir,
+            xsp_spot_selector=sample_spot_selector,
         )
         
         try:

@@ -14,8 +14,12 @@ FrameNavigator
 Created on 2026
 @author: Andrea
 """
+from typing import Optional
+
 import time
 import numpy as np
+
+from autoemx.core.em_runtime.xsp_spot_selection import XSpSpotSelectorCallback
 
 import autoemx.utils.constants as cnst
 from autoemx.utils.helper import AlphabetMapper, Prompt_User, print_single_separator
@@ -68,7 +72,8 @@ class FrameNavigator:
     def __init__(self, EM_controller, sample_cfg, sample_substrate_cfg, measurement_cfg,
                  powder_meas_cfg, bulk_meas_cfg, center_pos, sample_hw_mm,
                  im_width, im_height, EM_driver_obj, results_dir=None,
-                 verbose=True, development_mode=False):
+                 verbose=True, development_mode=False,
+                 xsp_spot_selector: Optional[XSpSpotSelectorCallback] = None):
         self.EM_controller = EM_controller
         self.sample_cfg = sample_cfg
         self.sample_substrate_cfg = sample_substrate_cfg
@@ -83,6 +88,7 @@ class FrameNavigator:
         self.results_dir = results_dir
         self.verbose = verbose
         self.development_mode = development_mode
+        self.xsp_spot_selector = xsp_spot_selector
         
         # Frame tracking
         self._frame_cntr = 0
@@ -143,7 +149,7 @@ class FrameNavigator:
             self.particle_finder = EM_Particle_Finder(
                 self.EM_controller,
                 powder_meas_cfg=self.powder_meas_cfg,
-                is_manual_particle_selection=self.powder_meas_cfg.is_manual_particle_selection,
+                xsp_spot_selector=self.xsp_spot_selector,
                 results_dir=self.results_dir,
                 verbose=self.verbose,
                 development_mode=self.development_mode

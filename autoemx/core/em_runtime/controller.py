@@ -59,6 +59,7 @@ from autoemx.core.em_runtime.microscope_controller import MicroscopeController
 from autoemx.core.em_runtime.frame_navigator import FrameNavigator
 from autoemx.core.em_runtime.spectrum_acquisition import SpectrumAcquisition
 from autoemx.core.em_runtime import image_utilities
+from autoemx.core.em_runtime.xsp_spot_selection import XSpSpotSelectorCallback
 
 from autoemx._logging import get_logger
 logger = get_logger(__name__)
@@ -135,6 +136,7 @@ class EM_Controller:
         results_dir: Optional[str] = None,
         verbose: bool = True,
         development_mode: bool = False,
+        xsp_spot_selector: Optional[XSpSpotSelectorCallback] = None,
     ):
         """
         Initialize an EM_Controller object from a ``LedgerConfigs`` bundle.
@@ -245,7 +247,8 @@ class EM_Controller:
             EM_driver_obj=EM_driver,
             results_dir=results_dir,
             verbose=verbose,
-            development_mode=development_mode
+            development_mode=development_mode,
+            xsp_spot_selector=xsp_spot_selector,
         )
         
         self.spectrum_acq = SpectrumAcquisition(
@@ -274,6 +277,7 @@ class EM_Controller:
         results_dir: Optional[str] = None,
         verbose: bool = True,
         development_mode: Optional[bool] = False,
+        xsp_spot_selector: Optional[XSpSpotSelectorCallback] = None,
     ) -> "EM_Controller":
         """
         Construct an EM_Controller from individual config objects.
@@ -317,6 +321,7 @@ class EM_Controller:
             results_dir=results_dir,
             verbose=verbose,
             development_mode=development_mode,
+            xsp_spot_selector=xsp_spot_selector,
         )
 
     #%% Microscope initialization

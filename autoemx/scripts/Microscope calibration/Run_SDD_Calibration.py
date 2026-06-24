@@ -104,7 +104,7 @@ els_substrate = ['C', 'O', 'Al']  # Contaminants that may be present in the spec
 # Powder options
 # =============================================================================
 powder_meas_cfg_kwargs = dict(
-    is_manual_particle_selection = False,
+    par_selection_mode='auto',
     is_known_powder_mixture_meas = True,
     max_n_par_per_frame=30,
     max_spectra_per_par=3,

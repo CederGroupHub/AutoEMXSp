@@ -61,6 +61,12 @@ class SpectrumAcquisition:
         self.verbose = verbose
         
         self.analyzer = None
+        self._xsp_callback_particle_active = False
+        self._xsp_callback_particle_cntr: Optional[int] = None
+    
+    
+    def _uses_xsp_spot_callback(self) -> bool:
+        return self.EM_controller.powder_meas_cfg.par_spot_selection_mode == 'callback'
     
     
     def initialise_XS_analyzer(self, beam_voltage: float = None) -> None:
@@ -121,7 +127,7 @@ class SpectrumAcquisition:
             return self._get_grid_coords(frame_navigator, microscope_ctrl)
         
         elif self.sample_cfg.is_particle_acquisition:
-            return self._get_particle_coords(frame_navigator)
+            return self._get_particle_coords(n_tot_sp_collected, frame_navigator)
         
         logger.error(f"❌ Acquisition mode not implemented for sample type: {self.sample_cfg.type}")
         return False, None, None
@@ -172,25 +178,45 @@ class SpectrumAcquisition:
     
     
     def _get_particle_coords(
-        self, frame_navigator
+        self, n_tot_sp_collected: int, frame_navigator
     ) -> Tuple[bool, Optional[List[Tuple[float, float]]], Optional[int]]:
         """Get coordinates for particle-based acquisition."""
-        was_particle_found = frame_navigator.particle_finder.go_to_next_particle()
-        if not was_particle_found:
-            if self.verbose:
-                logger.warning('⚠️ No more particles could be found on the sample.')
-            return False, None, None
-        
-        particle_cntr = frame_navigator.particle_finder.tot_par_cntr
+        particle_finder = frame_navigator.particle_finder
+
+        if self._uses_xsp_spot_callback():
+            if not self._xsp_callback_particle_active:
+                was_particle_found = particle_finder.go_to_next_particle()
+                if not was_particle_found:
+                    if self.verbose:
+                        logger.warning('⚠️ No more particles could be found on the sample.')
+                    return False, None, None
+                self._xsp_callback_particle_active = True
+                self._xsp_callback_particle_cntr = particle_finder.tot_par_cntr
+            particle_cntr = self._xsp_callback_particle_cntr
+        else:
+            was_particle_found = particle_finder.go_to_next_particle()
+            if not was_particle_found:
+                if self.verbose:
+                    logger.warning('⚠️ No more particles could be found on the sample.')
+                return False, None, None
+            particle_cntr = particle_finder.tot_par_cntr
+
         try:
-            spots_xy_list = frame_navigator.particle_finder.get_XS_acquisition_spots_coord_list(
-                particle_cntr
+            spots_xy_list = particle_finder.get_XS_acquisition_spots_coord_list(
+                n_tot_sp_collected
             )
         except Exception as e:
             logger.error(f"❌ Error getting acquisition spot coordinates: {e}")
+            if self._uses_xsp_spot_callback():
+                self._xsp_callback_particle_active = False
+                self._xsp_callback_particle_cntr = None
             return False, None, None
 
-        self.EM_controller.ref_image = frame_navigator.particle_finder.ref_image
+        if self._uses_xsp_spot_callback() and not spots_xy_list:
+            self._xsp_callback_particle_active = False
+            self._xsp_callback_particle_cntr = None
+
+        self.EM_controller.ref_image = particle_finder.ref_image
         
         return True, spots_xy_list, particle_cntr
     

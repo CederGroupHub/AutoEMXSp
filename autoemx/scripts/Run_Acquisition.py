@@ -89,7 +89,7 @@ show_unused_comps_clust = True # Whether to show discarded compositions in clust
 # =============================================================================
 # To be used when sample_type = 'powder'
 powder_meas_cfg_kwargs = dict(
-    is_manual_particle_selection = False,
+    par_selection_mode='auto',
     is_known_powder_mixture_meas = False,
     img_shift_tracking = True,
     max_n_par_per_frame=30,
