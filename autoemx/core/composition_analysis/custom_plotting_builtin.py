@@ -5,6 +5,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import autoemx.utils.constants as cnst
+from autoemx.core.composition_analysis.clustering_plot_axes import (
+    apply_data_driven_axis_limits,
+    attach_dynamic_zoom_axis_callbacks,
+    gather_clustering_zoom_points,
+)
 from autoemx.utils.helper import to_latex_formula
 
 custom_dir = ''
@@ -35,11 +40,10 @@ def _save_clustering_plot_custom_3D(elements, els_comps_list, centroids, labels,
     plt.rcParams['ytick.labelsize'] = fontsize
 
     axis_label_add = ' (w%)' if str(clustering_features).startswith('w') else ' (at%)'
-    ticks = np.arange(0, 1, 0.1)
-    ticks_labels = [f"{x*100:.0f}" for x in ticks]
+    is_3d = len(elements) == 3
 
     fig = plt.figure(figsize=(6, 6))
-    if len(elements) == 3:
+    if is_3d:
         ax = fig.add_subplot(111, projection='3d')
     else:
         ax = fig.add_subplot(111)
@@ -106,30 +110,34 @@ def _save_clustering_plot_custom_3D(elements, els_comps_list, centroids, labels,
     ax.set_ylabel(elements[1] + axis_label_add, labelpad=labelpad)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    ax.set_xticks(ticks)
-    ax.set_xticklabels(ticks_labels)
-    ax.set_yticks(ticks)
-    ax.set_yticklabels(ticks_labels)
-
-    if len(elements) == 3:
+    if is_3d:
         ax.set_zlabel(elements[2] + axis_label_add, labelpad=labelpad)
         ax.set_zlim(0, 1)
-        ax.set_zticks(ticks)
-        ax.set_zticklabels(ticks_labels)
         elev = 24 if ideal_elev is None else ideal_elev
         azim = 35 if ideal_azim is None else ideal_azim
         ax.view_init(elev=elev, azim=azim)
 
+    all_points = gather_clustering_zoom_points(
+        els_comps_list,
+        centroids,
+        unused_compositions_list,
+        elements,
+        ref_phases_df=ref_phases_df,
+    )
+
+    apply_data_driven_axis_limits(ax, all_points, is_3d=is_3d)
+
     ax.set_title(f'Custom clustering {sample_ID}')
     ax.legend(fontsize=fontsize)
 
+    output_dir = analysis_dir if analysis_dir else custom_dir
+    fig.savefig(os.path.join(output_dir, plot_file_title), dpi=300, bbox_inches='tight', pad_inches=0.1)
+
     if show_plots:
+        attach_dynamic_zoom_axis_callbacks(ax, is_3d=is_3d)
         plt.ion()
         plt.show()
         plt.pause(0.001)
-
-    output_dir = analysis_dir if analysis_dir else custom_dir
-    fig.savefig(os.path.join(output_dir, plot_file_title), dpi=300, bbox_inches='tight', pad_inches=0.1)
 
     if not show_plots:
         plt.close(fig)

@@ -10,7 +10,6 @@ from typing import Any, List
 import matplotlib.cm as cm
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
-from matplotlib.ticker import FuncFormatter, MaxNLocator
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -18,6 +17,12 @@ from sklearn.cluster import KMeans
 
 import autoemx.calibrations as calibs
 from autoemx.core.composition_analysis import custom_plotting_builtin as builtin_custom_plotting
+from autoemx.core.composition_analysis.clustering_plot_axes import (
+    apply_data_driven_axis_limits,
+    apply_fixed_full_range_ticks,
+    configure_interactive_clustering_axes,
+    gather_clustering_zoom_points,
+)
 import autoemx.utils.constants as cnst
 from autoemx.utils.helper import print_single_separator, to_latex_formula
 
@@ -243,38 +248,14 @@ class PlottingModule:
         plt.rcParams['ytick.labelsize'] = fontsize
 
         axis_label_add = ' (w%)' if self.clustering_cfg.features == cnst.W_FR_CL_FEAT else ' (at%)'
-        ticks = np.arange(0, 1, 0.1)
-        ticks_labels = [f"{x*100:.0f}" for x in ticks]
+        is_3d = len(elements) == 3
 
-        def _compute_zoom_limits(
-            values: 'np.ndarray',
-            margin_ratio: float = 0.08,
-            min_span: float = 0.10,
-            central_fraction: float = 0.90,
-        ) -> tuple[float, float]:
-            values = np.asarray(values, dtype=float)
-            values = values[np.isfinite(values)]
-            if values.size == 0:
-                return 0.0, 1.0
-
-            lower_q = max(0.0, (1.0 - central_fraction) / 2.0)
-            upper_q = min(1.0, 1.0 - lower_q)
-            v_min = float(np.quantile(values, lower_q))
-            v_max = float(np.quantile(values, upper_q))
-            span = max(v_max - v_min, min_span)
-            margin = span * margin_ratio
-            low = max(0.0, v_min - margin)
-            high = min(1.0, v_max + margin)
-
-            if high <= low:
-                center = 0.5 * (v_min + v_max)
-                half = max(min_span * 0.5, 0.02)
-                low = max(0.0, center - half)
-                high = min(1.0, center + half)
-
-            return low, high
-
-        def _plot_clustering_scene(ax: Any, title_suffix: str = "", show_legend: bool = True) -> None:
+        def _plot_clustering_scene(
+            ax: Any,
+            title_suffix: str = "",
+            show_legend: bool = True,
+            use_fixed_full_range_ticks: bool = True,
+        ) -> None:
             ax.scatter(*els_comps_list, c=labels, cmap='viridis', marker='o')
             ax.scatter(*centroids.T, c='red', marker='x', s=100, label='Centroids')
 
@@ -322,18 +303,14 @@ class PlottingModule:
             ax.set_ylabel(elements[1] + axis_label_add, labelpad=labelpad)
             ax.set_xlim(0, 1)
             ax.set_ylim(0, 1)
-            ax.set_xticks(ticks)
-            ax.set_xticklabels(ticks_labels)
-            ax.set_yticks(ticks)
-            ax.set_yticklabels(ticks_labels)
-            if len(elements) == 3:
+            if is_3d:
                 ax.set_zlabel(elements[2] + axis_label_add, labelpad=labelpad * 0.95)
                 # Keep (0,0,0) at the back while preserving the chosen camera angle.
                 ax.set_xlim(1, 0)
                 ax.set_ylim(1, 0)
                 ax.set_zlim(0, 1)
-                ax.set_zticks(ticks)
-                ax.set_zticklabels(ticks_labels)
+            if use_fixed_full_range_ticks:
+                apply_fixed_full_range_ticks(ax, is_3d=is_3d)
             ax.set_title(f'{self.clustering_cfg.method} clustering {self.sample_id}{title_suffix}')
 
             if show_legend and getattr(self.plot_cfg, 'show_legend_clustering', None):
@@ -352,71 +329,48 @@ class PlottingModule:
         else:
             ax: Any = fig.add_subplot(111)
         _plot_clustering_scene(ax, show_legend=True)
-        if self.plot_cfg.show_plots:
-            plt.show()
         fig.savefig(
             os.path.join(self.analysis_dir, cnst.CLUSTERING_PLOT_FILENAME + cnst.CLUSTERING_PLOT_FILEEXT),
             dpi=300,
             bbox_inches='tight',
             pad_inches=0.1,
         )
+        if self.plot_cfg.show_plots:
+            configure_interactive_clustering_axes(
+                ax,
+                is_3d=is_3d,
+                reversed_xy=is_3d,
+            )
+            plt.show()
 
         fig_zoomed = plt.figure(figsize=(6, 6))
         if len(elements) == 3:
             ax_zoomed: Any = fig_zoomed.add_subplot(111, projection='3d')
         else:
             ax_zoomed: Any = fig_zoomed.add_subplot(111)
-        _plot_clustering_scene(ax_zoomed, title_suffix=' (zoomed)', show_legend=False)
+        _plot_clustering_scene(
+            ax_zoomed,
+            title_suffix=' (zoomed)',
+            show_legend=False,
+            use_fixed_full_range_ticks=False,
+        )
 
-        # Zoom includes most of total sample points, including discarded compositions.
-        zoom_points = [np.asarray(els_comps_list, dtype=float).T]
-        if unused_compositions_list:
-            zoom_points.append(np.asarray(unused_compositions_list, dtype=float))
-        zoom_points.append(np.asarray(centroids, dtype=float))
-        # Add reference phases within 10% of any outlier to zoom extent
-        if self.ref_formulae is not None and unused_compositions_list:
-            ref_phases_df_zoom = self.ref_phases_df[elements]
-            unused_arr = np.asarray(unused_compositions_list, dtype=float)
-            threshold = 20  # 20% distance
-            for _, row in ref_phases_df_zoom.iterrows():
-                ref_point = np.array(row.values, dtype=float)
-                dists = np.linalg.norm(unused_arr - ref_point, axis=1)
-                if np.any(dists < threshold):
-                    zoom_points.append(ref_point.reshape(1, -1))
-        all_points = np.vstack([pts for pts in zoom_points if pts.size > 0]) if zoom_points else np.empty((0, len(elements)))
-
-        # Compute zoom limits and expand by 20% of the span for better visibility
-        def expand_limits(low, high, margin_ratio=0.20):
-            span = high - low
-            margin = span * margin_ratio
-            return max(0.0, low - margin), min(1.0, high + margin)
-
-        x_low, x_high = _compute_zoom_limits(all_points[:, 0] if all_points.size > 0 else np.array([]))
-        y_low, y_high = _compute_zoom_limits(all_points[:, 1] if all_points.size > 0 else np.array([]))
-        x_low, x_high = expand_limits(x_low, x_high)
-        y_low, y_high = expand_limits(y_low, y_high)
-        if len(elements) == 3:
-            ax_zoomed.set_xlim(x_high, x_low)
-            ax_zoomed.set_ylim(y_high, y_low)
-        else:
-            ax_zoomed.set_xlim(x_low, x_high)
-            ax_zoomed.set_ylim(y_low, y_high)
-
-        int_percent_formatter = FuncFormatter(lambda value, _: f"{int(round(value * 100.0))}")
-        ax_zoomed.xaxis.set_major_locator(MaxNLocator(nbins=6))
-        ax_zoomed.yaxis.set_major_locator(MaxNLocator(nbins=6))
-        ax_zoomed.xaxis.set_major_formatter(int_percent_formatter)
-        ax_zoomed.yaxis.set_major_formatter(int_percent_formatter)
-
-        if len(elements) == 3:
-            z_low, z_high = _compute_zoom_limits(all_points[:, 2] if all_points.size > 0 else np.array([]))
-            z_low, z_high = expand_limits(z_low, z_high)
-            ax_zoomed.set_zlim(z_low, z_high)
-            ax_zoomed.zaxis.set_major_locator(MaxNLocator(nbins=6))
-            ax_zoomed.zaxis.set_major_formatter(int_percent_formatter)
+        all_points = gather_clustering_zoom_points(
+            els_comps_list,
+            centroids,
+            unused_compositions_list,
+            elements,
+            ref_phases_df=self.ref_phases_df if self.ref_formulae is not None else None,
+        )
+        apply_data_driven_axis_limits(
+            ax_zoomed,
+            all_points,
+            is_3d=is_3d,
+            reversed_xy=is_3d,
+        )
+        if is_3d and full_view_azim is not None:
             # Keep identical orientation to the full plot for direct visual comparison.
-            if full_view_azim is not None:
-                ax_zoomed.view_init(elev=full_view_elev, azim=full_view_azim)
+            ax_zoomed.view_init(elev=full_view_elev, azim=full_view_azim)
 
         fig_zoomed.savefig(
             os.path.join(

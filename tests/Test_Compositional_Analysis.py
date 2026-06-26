@@ -19,7 +19,9 @@ Created on Tue Jul 29 13:18:16 2025
 @author: Andrea
 """
 
-from autoemx.runners import analyze_sample
+import os
+
+from autoemx.runners.analyze_sample import analyze_sample
 
 # =============================================================================
 # Initializations - Uses default values if variable is set to None
@@ -36,7 +38,7 @@ k_finding_method = None
 sample_ID = 'K-412_NISTstd_example'
 
 
-results_path = None # Looks in default Results folder if left unspecified
+results_path = os.path.join(os.path.dirname(__file__), '..', 'examples', 'Results')
 # =============================================================================
 # Clustering and Plotting options
 # =============================================================================
