@@ -18,6 +18,8 @@ from sklearn.cluster import KMeans
 import autoemx.calibrations as calibs
 from autoemx.core.composition_analysis import custom_plotting_builtin as builtin_custom_plotting
 from autoemx.core.composition_analysis.clustering_plot_axes import (
+    CLUSTERING_3D_VIEW_AZIM,
+    CLUSTERING_3D_VIEW_ELEV,
     apply_data_driven_axis_limits,
     apply_fixed_full_range_ticks,
     compute_data_driven_axis_limits,
@@ -44,26 +46,6 @@ class PlottingModule:
     detectable_els_sample: List[str]
     all_els_sample: List[str]
     verbose: bool
-
-    @staticmethod
-    def _find_ideal_3d_azimuth(points_xyz: 'np.ndarray') -> float:
-        """Return azimuth that maximizes XY footprint after Z-axis rotation."""
-        points_xyz = np.asarray(points_xyz, dtype=float)
-        if points_xyz.size == 0:
-            return 35.0
-        centered = points_xyz - np.mean(points_xyz, axis=0, keepdims=True)
-        best_azimuth = 35.0
-        best_area = -1.0
-        for azimuth in np.arange(0.0, 360.0, 15.0):
-            theta = np.deg2rad(azimuth)
-            cos_t, sin_t = np.cos(theta), np.sin(theta)
-            x_rot = centered[:, 0] * cos_t - centered[:, 1] * sin_t
-            y_rot = centered[:, 0] * sin_t + centered[:, 1] * cos_t
-            area = (np.max(x_rot) - np.min(x_rot)) * (np.max(y_rot) - np.min(y_rot))
-            if area > best_area:
-                best_area = area
-                best_azimuth = float(azimuth)
-        return best_azimuth
 
     def _load_custom_plot_function(self):
         """Load a user-defined custom plotting callable from plot config."""
@@ -116,16 +98,6 @@ class PlottingModule:
             if custom_plot_func is None:
                 return False
 
-        ideal_elev = None
-        ideal_azim = None
-        if len(elements) == 3:
-            base_points = np.asarray(els_comps_list, dtype=float).T
-            base_azimuth = PlottingModule._find_ideal_3d_azimuth(
-                base_points if base_points.size > 0 else np.empty((0, 3))
-            )
-            ideal_elev = 24.0
-            ideal_azim = (base_azimuth + 180.0) % 360.0
-
         try:
             try:
                 custom_plot_func(
@@ -142,8 +114,6 @@ class PlottingModule:
                     self.sample_id,
                     analysis_dir=self.analysis_dir,
                     output_filename=cnst.CUSTOM_CLUSTERING_PLOT_FILENAME + cnst.CLUSTERING_PLOT_FILEEXT,
-                    ideal_elev=ideal_elev,
-                    ideal_azim=ideal_azim,
                 )
             except TypeError:
                 # Backward compatibility for legacy custom plotting signatures.
@@ -337,15 +307,9 @@ class PlottingModule:
                 ax.legend(fontsize=fontsize, loc='best')
 
         fig = plt.figure(figsize=(6, 6))
-        full_view_elev = 5.0
-        full_view_azim = None
         if len(elements) == 3:
             ax: Any = fig.add_subplot(111, projection='3d')
-            base_points = np.asarray(els_comps_list, dtype=float).T
-            base_azimuth = PlottingModule._find_ideal_3d_azimuth(base_points if base_points.size > 0 else np.empty((0, 3)))
-            # Keep 3D axes on the far side for a clearer foreground view of clusters.
-            full_view_azim = (base_azimuth + 180.0) % 360.0
-            ax.view_init(elev=full_view_elev, azim=full_view_azim)
+            ax.view_init(elev=CLUSTERING_3D_VIEW_ELEV, azim=CLUSTERING_3D_VIEW_AZIM)
         else:
             ax: Any = fig.add_subplot(111)
         _plot_clustering_scene(ax, show_legend=True)
@@ -390,9 +354,8 @@ class PlottingModule:
             is_3d=is_3d,
             reversed_xy=is_3d,
         )
-        if is_3d and full_view_azim is not None:
-            # Keep identical orientation to the full plot for direct visual comparison.
-            ax_zoomed.view_init(elev=full_view_elev, azim=full_view_azim)
+        if is_3d:
+            ax_zoomed.view_init(elev=CLUSTERING_3D_VIEW_ELEV, azim=CLUSTERING_3D_VIEW_AZIM)
 
         fig_zoomed.savefig(
             os.path.join(

@@ -6,6 +6,8 @@ import numpy as np
 
 import autoemx.utils.constants as cnst
 from autoemx.core.composition_analysis.clustering_plot_axes import (
+    CLUSTERING_3D_VIEW_AZIM,
+    CLUSTERING_3D_VIEW_ELEV,
     apply_data_driven_axis_limits,
     attach_dynamic_zoom_axis_callbacks,
     gather_clustering_zoom_points,
@@ -24,8 +26,6 @@ def _save_clustering_plot_custom_3D(elements, els_comps_list, centroids, labels,
                                     sample_ID,
                                     analysis_dir=None,
                                     output_filename=None,
-                                    ideal_elev=None,
-                                    ideal_azim=None,
                                     ):
 
     plot_file_title = output_filename or cnst.CUSTOM_CLUSTERING_PLOT_FILENAME + cnst.CLUSTERING_PLOT_FILEEXT
@@ -113,9 +113,7 @@ def _save_clustering_plot_custom_3D(elements, els_comps_list, centroids, labels,
     if is_3d:
         ax.set_zlabel(elements[2] + axis_label_add, labelpad=labelpad)
         ax.set_zlim(0, 1)
-        elev = 24 if ideal_elev is None else ideal_elev
-        azim = 35 if ideal_azim is None else ideal_azim
-        ax.view_init(elev=elev, azim=azim)
+        ax.view_init(elev=CLUSTERING_3D_VIEW_ELEV, azim=CLUSTERING_3D_VIEW_AZIM)
 
     all_points = gather_clustering_zoom_points(
         els_comps_list,

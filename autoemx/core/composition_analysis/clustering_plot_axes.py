@@ -9,6 +9,9 @@ from typing import Any, List, Optional, Sequence
 import numpy as np
 from matplotlib.ticker import FuncFormatter, MaxNLocator
 
+CLUSTERING_3D_VIEW_ELEV = 15.0
+CLUSTERING_3D_VIEW_AZIM = -135.0
+
 
 def _clamp_fraction_limits(low: float, high: float) -> tuple[float, float]:
     """Clamp composition axis limits to the valid [0, 1] fraction range."""
