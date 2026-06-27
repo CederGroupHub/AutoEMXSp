@@ -20,8 +20,10 @@ from autoemx.core.composition_analysis import custom_plotting_builtin as builtin
 from autoemx.core.composition_analysis.clustering_plot_axes import (
     apply_data_driven_axis_limits,
     apply_fixed_full_range_ticks,
+    compute_data_driven_axis_limits,
     configure_interactive_clustering_axes,
     gather_clustering_zoom_points,
+    point_within_composition_limits,
 )
 import autoemx.utils.constants as cnst
 from autoemx.utils.helper import print_single_separator, to_latex_formula
@@ -257,6 +259,7 @@ class PlottingModule:
             title_suffix: str = "",
             show_legend: bool = True,
             use_fixed_full_range_ticks: bool = True,
+            ref_phase_limits: Optional[tuple[tuple[float, float], tuple[float, float], Optional[tuple[float, float]]]] = None,
         ) -> None:
             labels_arr = np.asarray(labels)
             noise_mask = labels_arr == -1
@@ -299,7 +302,14 @@ class PlottingModule:
             if self.ref_formulae is not None:
                 first_ref = True
                 ref_phases_df = self.ref_phases_df[elements]
+                ref_xlim = ref_ylim = ref_zlim = None
+                if ref_phase_limits is not None:
+                    ref_xlim, ref_ylim, ref_zlim = ref_phase_limits
                 for index, row in ref_phases_df.iterrows():
+                    if ref_xlim is not None and not point_within_composition_limits(
+                        row.values, ref_xlim, ref_ylim, ref_zlim
+                    ):
+                        continue
                     label = 'Candidate phases' if first_ref else None
                     ax.scatter(*row.values, c='blue', marker='*', s=100, label=label)
                     ref_label = to_latex_formula(self.ref_formulae[index])
@@ -353,6 +363,15 @@ class PlottingModule:
             )
             plt.show()
 
+        all_points = gather_clustering_zoom_points(
+            els_comps_list,
+            centroids,
+            unused_compositions_list,
+            elements,
+            ref_phases_df=self.ref_phases_df if self.ref_formulae is not None else None,
+        )
+        zoom_limits = compute_data_driven_axis_limits(all_points, is_3d=is_3d)
+
         fig_zoomed = plt.figure(figsize=(6, 6))
         if len(elements) == 3:
             ax_zoomed: Any = fig_zoomed.add_subplot(111, projection='3d')
@@ -363,14 +382,7 @@ class PlottingModule:
             title_suffix=' (zoomed)',
             show_legend=False,
             use_fixed_full_range_ticks=False,
-        )
-
-        all_points = gather_clustering_zoom_points(
-            els_comps_list,
-            centroids,
-            unused_compositions_list,
-            elements,
-            ref_phases_df=self.ref_phases_df if self.ref_formulae is not None else None,
+            ref_phase_limits=zoom_limits,
         )
         apply_data_driven_axis_limits(
             ax_zoomed,

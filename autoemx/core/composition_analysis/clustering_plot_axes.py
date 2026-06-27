@@ -183,6 +183,51 @@ def gather_clustering_zoom_points(
     return np.vstack([pts for pts in zoom_points if pts.size > 0])
 
 
+def point_within_composition_limits(
+    point: Sequence[float],
+    xlim: tuple[float, float],
+    ylim: tuple[float, float],
+    zlim: Optional[tuple[float, float]] = None,
+) -> bool:
+    """Return True when a composition-space point lies inside the given axis limits."""
+    x_lo, x_hi = _clamp_fraction_limits(min(xlim), max(xlim))
+    y_lo, y_hi = _clamp_fraction_limits(min(ylim), max(ylim))
+    coords = np.asarray(point, dtype=float)
+    if not (x_lo <= coords[0] <= x_hi and y_lo <= coords[1] <= y_hi):
+        return False
+    if zlim is None:
+        return True
+    z_lo, z_hi = _clamp_fraction_limits(min(zlim), max(zlim))
+    return z_lo <= coords[2] <= z_hi
+
+
+def compute_data_driven_axis_limits(
+    all_points: np.ndarray,
+    *,
+    is_3d: bool = False,
+    margin_ratio: float = 0.20,
+) -> tuple[tuple[float, float], tuple[float, float], Optional[tuple[float, float]]]:
+    """Return data-driven composition axis limits for clustering zoom plots."""
+    default = (0.0, 1.0)
+    if all_points.size == 0:
+        return default, default, default if is_3d else None
+
+    x_low, x_high = compute_zoom_limits(all_points[:, 0])
+    y_low, y_high = compute_zoom_limits(all_points[:, 1])
+    x_low, x_high = expand_limits(x_low, x_high, margin_ratio=margin_ratio)
+    y_low, y_high = expand_limits(y_low, y_high, margin_ratio=margin_ratio)
+    x_low, x_high = _clamp_fraction_limits(x_low, x_high)
+    y_low, y_high = _clamp_fraction_limits(y_low, y_high)
+
+    zlim = None
+    if is_3d:
+        z_low, z_high = compute_zoom_limits(all_points[:, 2])
+        z_low, z_high = expand_limits(z_low, z_high, margin_ratio=margin_ratio)
+        zlim = _clamp_fraction_limits(z_low, z_high)
+
+    return (x_low, x_high), (y_low, y_high), zlim
+
+
 def apply_data_driven_axis_limits(
     ax: Any,
     all_points: np.ndarray,
@@ -192,14 +237,13 @@ def apply_data_driven_axis_limits(
     margin_ratio: float = 0.20,
 ) -> None:
     """Set axis limits from clustered data and apply adaptive tick formatting."""
-    if all_points.size == 0:
-        apply_dynamic_axis_formatting(ax, is_3d=is_3d)
-        return
-
-    x_low, x_high = compute_zoom_limits(all_points[:, 0])
-    y_low, y_high = compute_zoom_limits(all_points[:, 1])
-    x_low, x_high = expand_limits(x_low, x_high, margin_ratio=margin_ratio)
-    y_low, y_high = expand_limits(y_low, y_high, margin_ratio=margin_ratio)
+    xlim, ylim, zlim = compute_data_driven_axis_limits(
+        all_points,
+        is_3d=is_3d,
+        margin_ratio=margin_ratio,
+    )
+    x_low, x_high = xlim
+    y_low, y_high = ylim
 
     if is_3d and reversed_xy:
         ax.set_xlim(x_high, x_low)
@@ -208,10 +252,8 @@ def apply_data_driven_axis_limits(
         ax.set_xlim(x_low, x_high)
         ax.set_ylim(y_low, y_high)
 
-    if is_3d:
-        z_low, z_high = compute_zoom_limits(all_points[:, 2])
-        z_low, z_high = expand_limits(z_low, z_high, margin_ratio=margin_ratio)
-        ax.set_zlim(z_low, z_high)
+    if is_3d and zlim is not None:
+        ax.set_zlim(*zlim)
 
     clamp_composition_axis_limits(ax, is_3d=is_3d)
     apply_dynamic_axis_formatting(ax, is_3d=is_3d)
