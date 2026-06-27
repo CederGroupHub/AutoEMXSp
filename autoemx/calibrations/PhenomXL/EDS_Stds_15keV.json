@@ -275,23 +275,6 @@
             }
           },
           {
-            "Corrected_PB": 4055.1,
-            "Rel_stdev_PB (%)": 17.14,
-            "Measured_PB": 430.6,
-            "Stdev_PB": 73.8,
-            "ID": "SrTiO3",
-            "datetime": "2026-05-28 19:49:39",
-            "Formula": "SrTiO3",
-            "Std_type": "bulk",
-            "Use_for_mean_calc": false,
-            "Mean_Z": {
-              "Statham2016": 23.13,
-              "Markowicz1984": 25.24,
-              "mass-averaged": 25.98,
-              "atomic-averaged": 16.8
-            }
-          },
-          {
             "Corrected_PB": 8783.9,
             "Rel_stdev_PB (%)": 3.0,
             "Measured_PB": 891.0,
@@ -324,13 +307,30 @@
               "mass-averaged": 41.41,
               "atomic-averaged": 14.31
             }
+          },
+          {
+            "Corrected_PB": 7257.9,
+            "Rel_stdev_PB (%)": 6.98,
+            "Measured_PB": 770.7,
+            "Stdev_PB": 53.8,
+            "ID": "SrTiO3",
+            "datetime": "2026-06-27 11:17:26",
+            "Formula": "SrTiO3",
+            "Std_type": "bulk",
+            "Use_for_mean_calc": false,
+            "Mean_Z": {
+              "Statham2016": 23.13,
+              "Markowicz1984": 25.24,
+              "mass-averaged": 25.98,
+              "atomic-averaged": 16.8
+            }
           }
         ],
         "reference_mean": {
           "Corrected_PB": 7701.9,
           "Rel_stdev_PB (%)": 2.35,
           "Stdev_PB": 181.3,
-          "datetime": "2026-06-18 14:27:46"
+          "datetime": "2026-06-27 11:17:26"
         }
       },
       "F_Ka1": {
@@ -823,12 +823,12 @@
             }
           },
           {
-            "Corrected_PB": 8418.0,
-            "Rel_stdev_PB (%)": 2.44,
-            "Measured_PB": 1975.3,
-            "Stdev_PB": 48.2,
+            "Corrected_PB": 8300.4,
+            "Rel_stdev_PB (%)": 1.82,
+            "Measured_PB": 1947.7,
+            "Stdev_PB": 35.5,
             "ID": "SrTiO3",
-            "datetime": "2026-05-28 19:49:39",
+            "datetime": "2026-06-27 11:17:26",
             "Formula": "SrTiO3",
             "Std_type": "bulk",
             "Use_for_mean_calc": false,
@@ -844,7 +844,7 @@
           "Corrected_PB": 8062.9,
           "Rel_stdev_PB (%)": 0.0,
           "Stdev_PB": 0.0,
-          "datetime": "2026-05-28 19:49:39"
+          "datetime": "2026-06-27 11:17:26"
         }
       },
       "Ti_La1": {
@@ -867,12 +867,12 @@
             }
           },
           {
-            "Corrected_PB": 161.4,
-            "Rel_stdev_PB (%)": 35.67,
-            "Measured_PB": 31.4,
-            "Stdev_PB": 11.2,
+            "Corrected_PB": 110.0,
+            "Rel_stdev_PB (%)": 17.29,
+            "Measured_PB": 21.4,
+            "Stdev_PB": 3.7,
             "ID": "SrTiO3",
-            "datetime": "2026-05-28 19:49:39",
+            "datetime": "2026-06-27 11:17:26",
             "Formula": "SrTiO3",
             "Std_type": "bulk",
             "Use_for_mean_calc": false,
@@ -888,7 +888,7 @@
           "Corrected_PB": 178.4,
           "Rel_stdev_PB (%)": 0.0,
           "Stdev_PB": 0.0,
-          "datetime": "2026-05-28 19:49:39"
+          "datetime": "2026-06-27 11:17:26"
         }
       },
       "V_Ka1": {
@@ -1515,12 +1515,12 @@
       "Sr_La1": {
         "entries": [
           {
-            "Corrected_PB": 3382.2,
-            "Rel_stdev_PB (%)": 1.55,
-            "Measured_PB": 1927.5,
-            "Stdev_PB": 29.8,
+            "Corrected_PB": 3403.8,
+            "Rel_stdev_PB (%)": 1.53,
+            "Measured_PB": 1939.8,
+            "Stdev_PB": 29.7,
             "ID": "SrTiO3",
-            "datetime": "2026-05-28 19:49:39",
+            "datetime": "2026-06-27 11:17:26",
             "Formula": "SrTiO3",
             "Std_type": "bulk",
             "Use_for_mean_calc": true,
@@ -1533,10 +1533,10 @@
           }
         ],
         "reference_mean": {
-          "Corrected_PB": 3382.2,
+          "Corrected_PB": 3403.8,
           "Rel_stdev_PB (%)": 0.0,
           "Stdev_PB": 0.0,
-          "datetime": "2026-05-28 19:49:39"
+          "datetime": "2026-06-27 11:17:26"
         }
       },
       "Y_La1": {
