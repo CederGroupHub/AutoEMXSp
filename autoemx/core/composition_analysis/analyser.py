@@ -2449,6 +2449,7 @@ class EMXSp_Composition_Analyzer:
             max_analytical_error_percent=self.clustering_cfg.max_analytical_error_percent,
             min_bckgrnd_cnts=self.clustering_cfg.min_bckgrnd_cnts,
             quant_flags_accepted=list(self.clustering_cfg.quant_flags_accepted),
+            dbscan=self.clustering_cfg.dbscan.model_copy(deep=True),
         )
 
 
@@ -3584,9 +3585,21 @@ class EMXSp_Composition_Analyzer:
             centroids = kmeans.cluster_centers_
             wcss = kmeans.inertia_
         elif self.clustering_cfg.method == 'dbscan':
-            # labels, num_labels = self._get_clustering_dbscan(compositions_df)
-            logger.warning('⚠️ Clustering via DBSCAN is not implemented yet')
-            return False, 0, 0  # zeroes are placeholders
+            # DBSCAN determines the number of clusters from data density; k_forced/k_finding
+            # settings are ignored. No KMeans model exists, so plotting must handle kmeans=None.
+            kmeans = None
+            labels, centroids, k, sil_score, wcss = ClusteringModule._run_dbscan_clustering(self, compositions_df)
+            self._persist_resolved_k_on_active_clustering_config(k)
+            if k < 1:
+                print_single_separator()
+                logger.warning(
+                    "⚠️ DBSCAN found no clusters (all points classified as noise). "
+                    "Try increasing 'eps' or lowering 'min_samples'."
+                )
+                self._save_analysis_summary(None, None)
+                return False, 0, 0  # zeroes are placeholders
+        else:
+            raise ValueError(f"Unsupported clustering method: {self.clustering_cfg.method}")
     
         # 5. Compute cluster statistics
         (wcss_per_cluster, rms_dist_cluster, rms_dist_cluster_other_fr, 
@@ -4445,11 +4458,11 @@ class EMXSp_Composition_Analyzer:
     
         print_single_separator()
         logger.info("📊 Summary of Discarded Spectra")
-        print("  → For details, see the 'Comments' column in Compositions.csv.")
+        logger.info("  → For details, see the 'Comments' column in Compositions.csv.")
     
         # Discarded due to low counts, insufficient background, or acquisition/fitting errors
         if self.n_sp_too_low_counts > 0:
-            print(
+            logger.info(
                 f"  • {self.n_sp_too_low_counts} spectra were discarded due to insufficient total counts, "
                 f"background counts below the threshold ({self.clustering_cfg.min_bckgrnd_cnts}), "
                 "or errors during spectrum collection/fitting."
@@ -4457,7 +4470,7 @@ class EMXSp_Composition_Analyzer:
     
         # Discarded due to quantification flags
         if self.n_sp_bad_quant > 0:
-            print(
+            logger.info(
                 f"  • {self.n_sp_bad_quant} spectra were discarded because they were flagged during quantification."
             )
     
@@ -4465,7 +4478,7 @@ class EMXSp_Composition_Analyzer:
         if self.n_sp_bad_quant / n_datapts > 0.5:
             print_single_separator()
             logger.warning("  ⚠️ Warning: More than 50% of spectra were flagged during quantification!")
-            print(
+            logger.info(
                 "  Common causes for poor fits (quant_flag = 4) include missing elements in the fit.\n"
                 "  Ensure that all elements present in your sample have been specified in the 'elements' argument "
                 "  when initializing EMXSp_Composition_Analyzer."
@@ -4473,7 +4486,7 @@ class EMXSp_Composition_Analyzer:
             
         # Discarded due to high analytical error
         if self.n_sp_too_high_an_err > 0:
-            print(
+            logger.info(
                 f"  • {self.n_sp_too_high_an_err} spectra were discarded because their analytical error "
                 f"exceeded the maximum allowed value of {max_analytical_error*100:.1f}%."
             )

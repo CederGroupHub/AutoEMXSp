@@ -471,40 +471,125 @@ class ClusteringModule:
     ) -> Tuple['np.ndarray', int]:
         """
         Perform DBSCAN clustering on the given compositions.
-        CURRENTLY NOT SUPPORTED
-    
+
         Parameters
         ----------
         compositions_df : pd.DataFrame
             DataFrame of samples (rows) and features (columns) to cluster.
-    
+
         Returns
         -------
         labels : np.ndarray
             Array of cluster labels for each composition point. Noise points are labeled as -1.
         num_labels : int
             Number of unique clusters found (excluding noise points).
-    
+
         Raises
         ------
         ValueError
             If clustering is unsuccessful due to invalid data or parameters.
-    
+
         Notes
         -----
-        - Uses eps=0.1 and min_samples=1 as DBSCAN parameters by default.
+        - eps, min_samples and metric are read from ``self.clustering_cfg.dbscan``.
         - The number of clusters excludes noise points (label -1).
         """
+        dbscan_cfg = self.clustering_cfg.dbscan
         try:
-            dbscan = DBSCAN(eps=0.1, min_samples=1)
+            dbscan = DBSCAN(
+                eps=dbscan_cfg.eps,
+                min_samples=dbscan_cfg.min_samples,
+                metric=dbscan_cfg.metric,
+            )
             labels = dbscan.fit_predict(compositions_df)
         except Exception as e:
             raise ValueError(f"Clustering unsuccessful due to the following error:\n{e}")
-    
+
         # Get the number of unique labels, excluding noise (-1)
         num_labels = len(set(labels)) - (1 if -1 in labels else 0)
-    
+
         return labels, num_labels
+
+
+    @staticmethod
+    def _normalize_dbscan_labels(labels: 'np.ndarray') -> 'np.ndarray':
+        """
+        Remap DBSCAN cluster labels to a contiguous ``0..k-1`` range.
+
+        DBSCAN may emit arbitrary, non-contiguous integer labels (e.g. ``{-1, 0, 3, 7}``)
+        depending on density-reachability ordering. Downstream statistics, reference
+        matching and mixture assignment assume contiguous labels indexed like k-means.
+        Noise points (``-1``) are preserved as ``-1``.
+
+        Parameters
+        ----------
+        labels : np.ndarray
+            Raw DBSCAN labels.
+
+        Returns
+        -------
+        np.ndarray
+            Labels with non-noise clusters renumbered to ``0..k-1``.
+        """
+        labels = np.asarray(labels)
+        unique_clusters = sorted(int(lbl) for lbl in set(labels.tolist()) if lbl != -1)
+        remap = {old: new for new, old in enumerate(unique_clusters)}
+        return np.array([remap[int(lbl)] if lbl != -1 else -1 for lbl in labels])
+
+
+    def _run_dbscan_clustering(
+        self,
+        compositions_df: 'pd.DataFrame'
+    ) -> Tuple['np.ndarray', 'np.ndarray', int, float, float]:
+        """
+        Run DBSCAN clustering and derive k-means-compatible artifacts.
+
+        DBSCAN does not expose centroids or an inertia value, so they are computed
+        here from the resulting clusters to keep downstream statistics, plotting and
+        reference matching agnostic to the clustering method.
+
+        Parameters
+        ----------
+        compositions_df : pd.DataFrame
+            DataFrame of samples (rows) and features (columns) to cluster.
+
+        Returns
+        -------
+        labels : np.ndarray
+            Cluster labels normalized to ``0..k-1``; noise points are labeled ``-1``.
+        centroids : np.ndarray
+            Mean composition of each cluster, shape ``(k, n_features)``.
+        k : int
+            Number of clusters found (excluding noise).
+        sil_score : float
+            Silhouette score over non-noise points (``nan`` if fewer than 2 clusters).
+        wcss : float
+            Within-cluster sum of squares (analogous to k-means inertia).
+        """
+        labels_raw, _ = ClusteringModule._get_clustering_dbscan(self, compositions_df)
+        labels = ClusteringModule._normalize_dbscan_labels(labels_raw)
+
+        X = compositions_df.to_numpy()
+        k = len({int(lbl) for lbl in labels if lbl != -1})
+
+        if k > 0:
+            centroids = np.array([X[labels == i].mean(axis=0) for i in range(k)])
+        else:
+            centroids = np.empty((0, X.shape[1]))
+
+        wcss = 0.0
+        for i in range(k):
+            cluster_points = X[labels == i]
+            wcss += float(np.sum((cluster_points - centroids[i]) ** 2))
+
+        # Silhouette is only defined for 2+ clusters; restrict to non-noise points.
+        non_noise_mask = labels != -1
+        if k >= 2 and int(np.sum(non_noise_mask)) > k:
+            sil_score = float(silhouette_score(compositions_df[non_noise_mask], labels[non_noise_mask]))
+        else:
+            sil_score = np.nan
+
+        return labels, centroids, k, sil_score, wcss
 
 
     def _compute_cluster_statistics(self, compositions_df, compositions_df_other_fr, centroids, labels):

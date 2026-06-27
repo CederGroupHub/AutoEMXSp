@@ -3,7 +3,7 @@
 
 import hashlib
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -58,8 +58,47 @@ def _collect_payload_differences(
         out[path or "root"] = {"old": left, "new": right}
 
 
+class DBSCANParams(BaseModel):
+    """Parameters for DBSCAN clustering.
+
+    Only relevant when :attr:`ClusteringConfig.method` is ``"dbscan"``. Grouped in
+    a dedicated sub-model so method-specific knobs do not pollute the top-level
+    clustering config and remain individually typed and validated.
+    """
+
+    eps: float = 0.05
+    min_samples: int = 3
+    metric: str = "euclidean"
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("eps")
+    @classmethod
+    def validate_eps(cls, value: float) -> float:
+        if not np.isfinite(value) or value <= 0:
+            raise ValueError("DBSCAN eps must be a positive, finite number")
+        return float(value)
+
+    @field_validator("min_samples")
+    @classmethod
+    def validate_min_samples(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("DBSCAN min_samples must be >= 1")
+        return int(value)
+
+    @field_validator("metric")
+    @classmethod
+    def validate_metric(cls, value: str) -> str:
+        normalized = str(value).strip()
+        if not normalized:
+            raise ValueError("DBSCAN metric cannot be empty")
+        return normalized
+
+
 class ClusteringConfig(BaseModel):
     """Configuration for clustering of compositions and their filtering."""
+
+    ALLOWED_METHODS: ClassVar[Tuple[str, ...]] = ("kmeans", "dbscan")
 
     clustering_id: int = 0
     method: str = "kmeans"
@@ -73,6 +112,7 @@ class ClusteringConfig(BaseModel):
     max_analytical_error_percent: Optional[float] = 5.0
     min_bckgrnd_cnts: Optional[float] = 5.0
     quant_flags_accepted: List[int] = Field(default_factory=lambda: [0, -1])
+    dbscan: DBSCANParams = Field(default_factory=DBSCANParams)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -96,6 +136,16 @@ class ClusteringConfig(BaseModel):
         normalized = str(value).strip()
         if not normalized:
             raise ValueError("Clustering string fields cannot be empty")
+        return normalized
+
+    @field_validator("method")
+    @classmethod
+    def validate_method(cls, value: str) -> str:
+        normalized = str(value).strip().lower()
+        if normalized not in cls.ALLOWED_METHODS:
+            raise ValueError(
+                f"Clustering method must be one of {cls.ALLOWED_METHODS}, got '{value}'."
+            )
         return normalized
 
     @field_validator("max_k")
@@ -162,7 +212,7 @@ class ClusteringConfig(BaseModel):
         return normalized
 
     def fingerprint_payload(self) -> Dict[str, Any]:
-        return {
+        payload: Dict[str, Any] = {
             "method": self.method,
             "features": self.features,
             "k_forced": self.k_forced,
@@ -174,6 +224,11 @@ class ClusteringConfig(BaseModel):
             "min_bckgrnd_cnts": self.min_bckgrnd_cnts,
             "quant_flags_accepted": sorted(self.quant_flags_accepted),
         }
+        # Only fold method-specific params into the fingerprint when they are
+        # actually in use, so existing k-means configs keep their current hash.
+        if self.method == "dbscan":
+            payload["dbscan"] = self.dbscan.model_dump()
+        return payload
 
     def fingerprint(self) -> str:
         canonical_payload = _canonicalize_json_value(self.fingerprint_payload())

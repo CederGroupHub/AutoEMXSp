@@ -29,6 +29,8 @@ from autoemx.runners.analyze_sample import analyze_sample
 els_excluded_clust_plot = None
 ref_formulae = None
 clustering_features = None
+clustering_method = None  # 'kmeans' or 'dbscan'; uses saved value if None
+dbscan_params = None  # e.g. {'eps': 0.04, 'min_samples': 4}; only used for dbscan
 k_finding_method = None
 
 # =============================================================================
@@ -60,6 +62,9 @@ comp_analyzer = analyze_sample(
     results_path=results_path,
     ref_formulae=ref_formulae,
     k_forced = k_forced,
+    clustering_features = clustering_features,
+    clustering_method = clustering_method,
+    dbscan_params = dbscan_params,
     els_excluded_clust_plot=els_excluded_clust_plot,
     k_finding_method = k_finding_method,
     max_analytical_error_percent=max_analytical_error_percent,

@@ -48,7 +48,7 @@ from autoemx.utils.plotting_helpers import (
     refresh_custom_plot_template_file,
 )
 from autoemx.config import config_classes_dict, load_sample_ledger
-from autoemx.config.ledger_schemas import ClusteringConfig
+from autoemx.config.ledger_schemas import ClusteringConfig, DBSCANParams
 from autoemx.core.composition_analysis import EMXSp_Composition_Analyzer
 
 # Configure logging
@@ -101,6 +101,8 @@ def analyze_sample(
     ref_formulae: Optional[List[str]] = None,
     els_excluded_clust_plot: Optional[List[str]] = None,
     clustering_features: Optional[str] = None,
+    clustering_method: Optional[str] = None,
+    dbscan_params: Optional[dict] = None,
     k_finding_method: Optional[str] = None,
     k_forced: Optional[int] = None,
     do_matrix_decomposition: bool = True,
@@ -126,6 +128,13 @@ def analyze_sample(
         Elements to exclude from cluster plot.
     clustering_features : list of str, optional
         Features to use for clustering.
+    clustering_method : str, optional
+        Clustering algorithm to use. One of ``"kmeans"`` or ``"dbscan"``. If None,
+        the value stored in the sample's clustering config is kept.
+    dbscan_params : dict, optional
+        Overrides for DBSCAN parameters (only used when ``clustering_method="dbscan"``).
+        Recognized keys: ``eps`` (float), ``min_samples`` (int), ``metric`` (str).
+        Unspecified keys keep their existing/default values.
     k_finding_method : str, optional
         Method for determining optimal number of clusters. Set to "forced" if a value of 'k' is specified manually.
             Allowed methods are "silhouette", "calinski_harabasz", "elbow".
@@ -232,6 +241,13 @@ def analyze_sample(
             clustering_cfg.ref_formulae = ref_formulae
     if clustering_features is not None:
         clustering_cfg.features = clustering_features
+    if clustering_method is not None:
+        clustering_cfg.method = clustering_method
+    if dbscan_params is not None:
+        # Merge overrides onto existing DBSCAN params and re-validate (model_copy(update=...)
+        # bypasses field validators in pydantic v2).
+        merged_dbscan = {**clustering_cfg.dbscan.model_dump(), **dbscan_params}
+        clustering_cfg.dbscan = DBSCANParams.model_validate(merged_dbscan)
     if isinstance(k_forced, int):
         # Forces the k to be the provided number of clusters
         clustering_cfg.k_forced = k_forced

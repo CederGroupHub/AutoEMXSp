@@ -5,7 +5,7 @@
 import importlib.util
 import os
 import warnings
-from typing import Any, List
+from typing import Any, List, Optional
 
 import matplotlib.cm as cm
 import matplotlib.patches as patches
@@ -168,15 +168,17 @@ class PlottingModule:
 
     def _save_plots(
         self,
-        kmeans: 'KMeans',
+        kmeans: 'Optional[KMeans]',
         compositions_df: 'pd.DataFrame',
         centroids: 'np.ndarray',
         labels: 'np.ndarray',
         els_std_dev_per_cluster: list,
         unused_compositions_list: list
     ) -> None:
-        # Silhouette plot (only if more than one cluster)
-        if len(centroids) > 1:
+        # Silhouette plot (only if more than one cluster). The Yellowbrick
+        # visualizer requires a fitted KMeans model, so it is skipped for methods
+        # (e.g. DBSCAN) that do not provide one.
+        if kmeans is not None and len(centroids) > 1:
             PlottingModule._save_silhouette_plot(
                 kmeans, compositions_df, self.analysis_dir, show_plot=self.plot_cfg.show_plots
             )
@@ -256,7 +258,15 @@ class PlottingModule:
             show_legend: bool = True,
             use_fixed_full_range_ticks: bool = True,
         ) -> None:
-            ax.scatter(*els_comps_list, c=labels, cmap='viridis', marker='o')
+            labels_arr = np.asarray(labels)
+            noise_mask = labels_arr == -1
+            comps_arr = np.asarray(els_comps_list)
+            if np.any(noise_mask):
+                # DBSCAN noise points: render in grey, separate from clustered points.
+                ax.scatter(*comps_arr[:, ~noise_mask], c=labels_arr[~noise_mask], cmap='viridis', marker='o')
+                ax.scatter(*comps_arr[:, noise_mask], c='lightgrey', marker='o', label='Noise (unclustered)')
+            else:
+                ax.scatter(*comps_arr, c=labels_arr, cmap='viridis', marker='o')
             ax.scatter(*centroids.T, c='red', marker='x', s=100, label='Centroids')
 
             first_ellipse = True
