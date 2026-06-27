@@ -33,13 +33,20 @@ results_dir = os.path.dirname(os.path.abspath(__file__)) # Default: save and loa
 # =============================================================================
 clustering_features = None # 'w_fr', 'at_fr'. Uses default value if variable is set to None
 
-# Number of clusters to use, if manually specified.
+# Clustering algorithm: 'kmeans' or 'dbscan'. Uses the saved value if set to None.
+clustering_method: str | None = None
+
+# DBSCAN parameters (only used when clustering_method == 'dbscan').
+# Recognized keys: 'eps' (float), 'min_samples' (int), 'metric' (str).
+# Unspecified keys keep their existing/default values. Ignored for k-means.
+dbscan_params: dict | None = None  # e.g. {'eps': 0.04, 'min_samples': 4}
+
+# Number of clusters to use, if manually specified (k-means only).
 # If None, the number of clusters will be determined automatically.
 k_forced: int | None = None  
 
-# Method used to determine the number of clusters.
-# Allowed methods are "silhouette", "calinski_harabasz", "elbow".
-# Only applied if `k_forced` is None. Forces re-computation of the optimal k value.
+# Method used to determine the number of clusters (see ClusteringConfig.ALLOWED_K_FINDING_METHODS).
+# Only applied if `k_forced` is None. Forces re-computation of the optimal k value. (k-means only)
 k_finding_method: str | None = None  
 
 # Behavior:
@@ -76,6 +83,8 @@ comp_analyzer = analyze_sample(
     results_path=results_dir,
     ref_formulae=ref_formulae,
     k_forced = k_forced,
+    clustering_method = clustering_method,
+    dbscan_params = dbscan_params,
     clustering_features = clustering_features,
     els_excluded_clust_plot=els_excluded_clust_plot,
     k_finding_method = k_finding_method,
