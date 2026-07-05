@@ -40,9 +40,9 @@ Mode: point | current: 4.3
     - ID=EuPO4; Corrected_PB=7025.6; Use_for_mean_calc=False
     - ID=DyPO4; Corrected_PB=7053; Use_for_mean_calc=False
     - ID=GdPO4; Corrected_PB=7167.3; Use_for_mean_calc=False
-    - ID=SrTiO3; Corrected_PB=4055.1; Use_for_mean_calc=False
     - ID=PrPO4; Corrected_PB=8783.9; Use_for_mean_calc=False
     - ID=ErPO4; Corrected_PB=9143.1; Use_for_mean_calc=False
+    - ID=SrTiO3; Corrected_PB=7257.9; Use_for_mean_calc=False
     - Mean Corrected_PB=7701.9
   Peak F_Ka1
     - ID=CaF2; Corrected_PB=7334; Use_for_mean_calc=True
@@ -92,11 +92,11 @@ Mode: point | current: 4.3
     - Mean Corrected_PB=140.8
   Peak Ti_Ka1
     - ID=Ti; Corrected_PB=8062.9; Use_for_mean_calc=True
-    - ID=SrTiO3; Corrected_PB=8418; Use_for_mean_calc=False
+    - ID=SrTiO3; Corrected_PB=8300.4; Use_for_mean_calc=False
     - Mean Corrected_PB=8062.9
   Peak Ti_La1
     - ID=Ti; Corrected_PB=178.4; Use_for_mean_calc=True
-    - ID=SrTiO3; Corrected_PB=161.4; Use_for_mean_calc=False
+    - ID=SrTiO3; Corrected_PB=110; Use_for_mean_calc=False
     - Mean Corrected_PB=178.4
   Peak V_Ka1
     - ID=V; Corrected_PB=7556.3; Use_for_mean_calc=True
@@ -168,8 +168,8 @@ Mode: point | current: 4.3
     - ID=KBr; Corrected_PB=3926.4; Use_for_mean_calc=True
     - Mean Corrected_PB=3926.4
   Peak Sr_La1
-    - ID=SrTiO3; Corrected_PB=3382.2; Use_for_mean_calc=True
-    - Mean Corrected_PB=3382.2
+    - ID=SrTiO3; Corrected_PB=3403.8; Use_for_mean_calc=True
+    - Mean Corrected_PB=3403.8
   Peak Y_La1
     - ID=Y; Corrected_PB=3441.8; Use_for_mean_calc=True
     - Mean Corrected_PB=3441.8
