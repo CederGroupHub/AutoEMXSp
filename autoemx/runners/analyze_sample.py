@@ -37,11 +37,7 @@ import time
 import logging
 from typing import Optional, List
 
-from autoemx.utils import (
-    print_single_separator,
-    print_double_separator,
-    get_sample_dir,
-)
+import autoemx.utils as utils
 import autoemx.utils.constants as cnst
 from autoemx.utils.plotting_helpers import (
     ensure_custom_plot_file,
@@ -159,10 +155,10 @@ def analyze_sample(
     if results_path is None:
         results_path = os.path.join(os.getcwd(), cnst.RESULTS_DIR)
         
-    print_double_separator()
+    utils.print_double_separator()
     logging.info(f"Sample '{sample_ID}'")
     
-    sample_dir = get_sample_dir(results_path, sample_ID)
+    sample_dir = utils.get_sample_dir(results_path, sample_ID)
     ledger_path = os.path.join(sample_dir, f"{cnst.LEDGER_FILENAME}{cnst.LEDGER_FILEEXT}")
     spectral_info_f_path = ledger_path
     try:
@@ -317,10 +313,10 @@ def analyze_sample(
     
     if analysis_successful:
         comp_analyzer.print_results()
-        print_single_separator()
+        utils.print_single_separator()
         logging.info(f"Sample '{sample_ID}' successfully analysed in {total_process_time:.1f} sec.")
     else:
-        print_single_separator()
+        utils.print_single_separator()
         logging.info(f"Analysis was not successful for '{sample_ID}'.")
     
     return comp_analyzer
