@@ -137,7 +137,13 @@ def apply_fixed_full_range_ticks(ax: Any, *, is_3d: bool = False) -> None:
 
 
 def attach_dynamic_zoom_axis_callbacks(ax: Any, *, is_3d: bool = False, nbins: int = 6) -> None:
-    """Refresh tick locators/formatters whenever the visible axis limits change."""
+    """Refresh tick locators/formatters whenever the visible axis limits change.
+
+    The view itself is left free to zoom/pan beyond the 0-100% composition
+    range; only the ticks/labels are restricted to that range (handled by
+    ``composition_axis_ticks``), so users can zoom out past the data without
+    the view snapping back.
+    """
     updating = {"active": False}
 
     def _refresh_ticks(event_ax: Any = ax) -> None:
@@ -145,7 +151,6 @@ def attach_dynamic_zoom_axis_callbacks(ax: Any, *, is_3d: bool = False, nbins: i
             return
         updating["active"] = True
         try:
-            clamp_composition_axis_limits(event_ax, is_3d=is_3d)
             apply_dynamic_axis_formatting(event_ax, is_3d=is_3d, nbins=nbins)
             event_ax.figure.canvas.draw_idle()
         finally:
