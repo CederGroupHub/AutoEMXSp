@@ -9,7 +9,6 @@ from autoemx.core.composition_analysis.clustering_plot_axes import (
     CLUSTERING_3D_VIEW_AZIM,
     CLUSTERING_3D_VIEW_ELEV,
     apply_data_driven_axis_limits,
-    attach_dynamic_zoom_axis_callbacks,
     gather_clustering_zoom_points,
 )
 from autoemx.utils.helper import to_latex_formula
@@ -132,7 +131,6 @@ def _save_clustering_plot_custom_3D(elements, els_comps_list, centroids, labels,
     fig.savefig(os.path.join(output_dir, plot_file_title), dpi=300, bbox_inches='tight', pad_inches=0.1)
 
     if show_plots:
-        attach_dynamic_zoom_axis_callbacks(ax, is_3d=is_3d)
         plt.ion()
         plt.show()
         plt.pause(0.001)

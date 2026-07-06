@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any, List, Optional, Sequence
 
 import numpy as np
-from matplotlib.ticker import FuncFormatter, MaxNLocator
+from matplotlib.ticker import FuncFormatter, Locator, MaxNLocator
 
 CLUSTERING_3D_VIEW_ELEV = 15.0
 CLUSTERING_3D_VIEW_AZIM = -135.0
@@ -58,11 +58,27 @@ def composition_axis_ticks(lo: float, hi: float, *, nbins: int = 6) -> np.ndarra
     return ticks
 
 
-def _apply_axis_ticks(ax: Any, axis_name: str, *, nbins: int) -> None:
-    get_lim = getattr(ax, f"get_{axis_name}lim")
-    set_ticks = getattr(ax, f"set_{axis_name}ticks")
-    lo, hi = get_lim()
-    set_ticks(composition_axis_ticks(lo, hi, nbins=nbins))
+class _CompositionTickLocator(Locator):
+    """Locator that only proposes tick positions within the [0, 1] range.
+
+    Unlike calling ``Axes.set_xticks``/``set_yticks``/``set_zticks``
+    reactively (whose ``_set_tick_locations`` implicitly *expands* the axis
+    view limits to keep every tick visible, via ``Axis.set_view_interval``),
+    a ``Locator`` subclass is queried fresh on every draw without ever
+    mutating the view limits. This lets the view zoom/pan completely freely
+    while the ticks/labels still never show anything outside 0-100%.
+    """
+
+    def __init__(self, nbins: int = 6) -> None:
+        super().__init__()
+        self._nbins = nbins
+
+    def tick_values(self, vmin: float, vmax: float) -> np.ndarray:
+        return composition_axis_ticks(vmin, vmax, nbins=self._nbins)
+
+    def __call__(self) -> np.ndarray:
+        vmin, vmax = self.axis.get_view_interval()
+        return self.tick_values(vmin, vmax)
 
 
 def compute_zoom_limits(
@@ -112,14 +128,20 @@ def int_percent_formatter() -> FuncFormatter:
 
 
 def apply_dynamic_axis_formatting(ax: Any, *, is_3d: bool = False, nbins: int = 6) -> None:
-    """Use adaptive tick locators/formatters for the current axis limits."""
+    """Install self-updating tick locators/formatters for the composition axes.
+
+    The locator recomputes tick positions from the *current* view limits on
+    every draw (e.g. after an interactive pan/zoom/rotate) and always clamps
+    them to [0, 1], so labels never appear outside the 0-100% range, while
+    the view itself remains free to zoom/pan without limit.
+    """
     formatter = int_percent_formatter()
-    _apply_axis_ticks(ax, "x", nbins=nbins)
-    _apply_axis_ticks(ax, "y", nbins=nbins)
+    ax.xaxis.set_major_locator(_CompositionTickLocator(nbins=nbins))
     ax.xaxis.set_major_formatter(formatter)
+    ax.yaxis.set_major_locator(_CompositionTickLocator(nbins=nbins))
     ax.yaxis.set_major_formatter(formatter)
     if is_3d:
-        _apply_axis_ticks(ax, "z", nbins=nbins)
+        ax.zaxis.set_major_locator(_CompositionTickLocator(nbins=nbins))
         ax.zaxis.set_major_formatter(formatter)
 
 
@@ -134,32 +156,6 @@ def apply_fixed_full_range_ticks(ax: Any, *, is_3d: bool = False) -> None:
     if is_3d:
         ax.set_zticks(ticks)
         ax.set_zticklabels(tick_labels)
-
-
-def attach_dynamic_zoom_axis_callbacks(ax: Any, *, is_3d: bool = False, nbins: int = 6) -> None:
-    """Refresh tick locators/formatters whenever the visible axis limits change.
-
-    The view itself is left free to zoom/pan beyond the 0-100% composition
-    range; only the ticks/labels are restricted to that range (handled by
-    ``composition_axis_ticks``), so users can zoom out past the data without
-    the view snapping back.
-    """
-    updating = {"active": False}
-
-    def _refresh_ticks(event_ax: Any = ax) -> None:
-        if updating["active"]:
-            return
-        updating["active"] = True
-        try:
-            apply_dynamic_axis_formatting(event_ax, is_3d=is_3d, nbins=nbins)
-            event_ax.figure.canvas.draw_idle()
-        finally:
-            updating["active"] = False
-
-    ax.callbacks.connect("xlim_changed", _refresh_ticks)
-    ax.callbacks.connect("ylim_changed", _refresh_ticks)
-    if is_3d:
-        ax.callbacks.connect("zlim_changed", _refresh_ticks)
 
 
 def gather_clustering_zoom_points(
@@ -285,4 +281,3 @@ def configure_interactive_clustering_axes(
     else:
         clamp_composition_axis_limits(ax, is_3d=is_3d)
         apply_dynamic_axis_formatting(ax, is_3d=is_3d)
-    attach_dynamic_zoom_axis_callbacks(ax, is_3d=is_3d)
