@@ -814,6 +814,8 @@ class XSp_Quantifier:
         - Among candidates, selects the line with the highest fitted peak area.
         - Rejects quantification when a higher-energy ideal reference line for the element is
           missing from the fit, indicating the fitted low-energy line is likely a detector artifact.
+          The warning is suppressed when the missing line lies outside the fitted spectrum range
+          (e.g. after cutting the spectrum below that line energy).
         """
         IDEAL_REF_LINE_OVERVOLTAGE = 1.65
         IDEAL_REF_LINE_ENERGY_THRESHOLD = 2
@@ -863,6 +865,7 @@ class XSp_Quantifier:
                     line_energy > IDEAL_REF_LINE_ENERGY_THRESHOLD
                     and self.beam_energy / line_energy > IDEAL_REF_LINE_OVERVOLTAGE
                     and line_energy > selected_energy
+                    and self.energy_vals[0] < line_energy < self.energy_vals[-1]
                     and f"{el}_{ref_line}" not in el_lines_list
                 ):
                     warnings.warn(
