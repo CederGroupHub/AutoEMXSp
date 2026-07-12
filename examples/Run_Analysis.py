@@ -46,9 +46,12 @@ clustering_method: str | None = None
 # Unspecified keys keep their existing/default values. Ignored for k-means.
 dbscan_params: dict | None = None  # e.g. {'eps': 0.04, 'min_samples': 4}
 
-# Number of clusters to use, if manually specified (k-means only).
-# If None, the number of clusters will be determined automatically.
-k_forced: int | None = None  
+# Number of clusters to use (k-means only).
+# - int  : force clustering to use exactly this number of clusters.
+# - False: force recomputation of the optimal number of clusters, discarding any
+#          previously saved forced k.
+# - None : reuse the clustering settings saved in the ledger.
+k_forced: int | bool | None = None  
 
 # Method used to determine the number of clusters (see ClusteringConfig.ALLOWED_K_FINDING_METHODS).
 # Only applied if `k_forced` is None. Forces re-computation of the optimal k value. (k-means only)

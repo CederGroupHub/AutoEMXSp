@@ -35,7 +35,7 @@ Created on Tue Jul 29 13:18:16 2025
 import os
 import time
 import logging
-from typing import Optional, List
+from typing import Optional, List, Union
 
 import autoemx.utils as utils
 import autoemx.utils.constants as cnst
@@ -100,7 +100,7 @@ def analyze_sample(
     clustering_method: Optional[str] = None,
     dbscan_params: Optional[dict] = None,
     k_finding_method: Optional[str] = None,
-    k_forced: Optional[int] = None,
+    k_forced: Optional[Union[int, bool]] = None,
     do_matrix_decomposition: bool = True,
     max_analytical_error_percent: float = 5,
     quant_flags_accepted: Optional[List[int]] = None,
@@ -134,8 +134,13 @@ def analyze_sample(
     k_finding_method : str, optional
         Method for determining optimal number of clusters. Set to "forced" if a value of 'k' is specified manually.
             Allowed methods are "silhouette", "calinski_harabasz", "elbow".
-    k_forced : int, optional
-        Forced number of clusters.
+    k_forced : int or bool, optional
+        Controls the number of clusters:
+            - ``int``: force clustering to use exactly this number of clusters.
+            - ``False``: force recomputation of the optimal number of clusters,
+              discarding any previously saved forced k. Uses ``k_finding_method``
+              when provided, otherwise the saved (or default) finding method.
+            - ``None`` (default): reuse the clustering settings saved in the ledger.
     do_matrix_decomposition : bool, optional
         Whether to compute matrix decomposition for intermixed phases. Slow if many candidate phases are provided. Default: True..
     max_analytical_error_percent : float, optional
@@ -244,7 +249,22 @@ def analyze_sample(
         # bypasses field validators in pydantic v2).
         merged_dbscan = {**clustering_cfg.dbscan.model_dump(), **dbscan_params}
         clustering_cfg.dbscan = DBSCANParams.model_validate(merged_dbscan)
-    if isinstance(k_forced, int):
+    if k_forced is False:
+        # Force recomputation of the optimal number of clusters, discarding any
+        # previously saved forced k. Prefer an explicitly provided finding method,
+        # then the saved one, falling back to the default when it was 'forced'.
+        clustering_cfg.k_forced = None
+        if k_finding_method is not None and k_finding_method != forced_key:
+            clustering_cfg.k_finding_method = k_finding_method
+        elif clustering_cfg.k_finding_method == forced_key:
+            clustering_cfg.k_finding_method = ClusteringConfig.model_fields["k_finding_method"].default
+    elif k_forced is True:
+        raise ValueError(
+            "k_forced=True is not supported. Pass an integer to force a specific "
+            "number of clusters, False to force recomputation of the optimal k, or "
+            "None to reuse the saved clustering settings."
+        )
+    elif isinstance(k_forced, int):
         # Forces the k to be the provided number of clusters
         clustering_cfg.k_forced = k_forced
         clustering_cfg.k_finding_method = forced_key
