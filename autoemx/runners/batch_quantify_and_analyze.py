@@ -88,6 +88,8 @@ def batch_quantify_and_analyze(
     use_project_specific_std_dict: Optional[bool] = None,
     is_known_precursor_mixture: Optional[bool] = None,
     standards_dict: Optional[dict] = None,
+    spectrum_lims: Optional[tuple] = None,
+    els_substrate: Optional[List[str]] = None,
 ) -> List[EMXSp_Composition_Analyzer]:
     """
     Batch quantification and analysis for a list of samples.
@@ -99,8 +101,16 @@ def batch_quantify_and_analyze(
     els_sample : list(str), optional
         List of elements in the sample. If the first entry is "" or None, the rest of the list is appended to the 
         list loaded from the ledger; otherwise, the provided list replaces it.
+    els_substrate : list(str), optional
+        List of substrate elements. If None, uses the substrate elements from the
+        active quantification configuration in each ledger. If the first entry is
+        "" or None, the remaining entries are appended; otherwise, the provided
+        list replaces the ledger value.
     quantification_method : str, optional
         Method to use for quantification. Uses quant_cfg.method if unspecified. Currently only supports 'PB'.
+    spectrum_lims : tuple, optional
+        Lower and upper channel-index limits for spectrum fitting. If None, uses
+        ``spectrum_lims`` from the active quantification configuration in each ledger.
     results_path : str, optional
         Base directory where results are stored. Default: autoemx/Results
     min_bckgrnd_cnts : float, optional
@@ -162,6 +172,8 @@ def batch_quantify_and_analyze(
 
     if els_sample is not None and len(els_sample) > 0 and len(non_empty_sample_IDs) > 0:
         logging.info(f"⚠️ Warning: More than one sample ID provided. Using the same provided sample elements list for all samples: {els_sample}.\nEnsure this behaviour is intended, or provide sample-specific element lists by leaving els_sample as None and specifying them in the ledgers.")
+    if els_substrate is not None and len(els_substrate) > 0 and len(non_empty_sample_IDs) > 0:
+        logging.info(f"⚠️ Warning: More than one sample ID provided. Using the same provided substrate elements list for all samples: {els_substrate}.\nEnsure this behaviour is intended, or provide sample-specific substrate element lists by leaving els_substrate as None and specifying them in the ledgers.")
     
     quant_results = []
     for sample_ID in sample_IDs:
@@ -181,6 +193,7 @@ def batch_quantify_and_analyze(
         
         try:
             ledger = load_sample_ledger(ledger_path)
+            active_quant_config = None
             configs = {
                 cnst.MICROSCOPE_CFG_KEY: ledger.configs.microscope_cfg,
                 cnst.SAMPLE_CFG_KEY: ledger.configs.sample_cfg,
@@ -244,6 +257,20 @@ def batch_quantify_and_analyze(
         elif els_sample is not None and len(els_sample) > 0:
             sample_cfg.elements = els_sample
 
+        # Sample substrate elements. By default, retain the elements recorded for
+        # the active quantification rather than the ledger's current base config.
+        ledger_substrate_elements = (
+            list(active_quant_config.substrate_elements)
+            if active_quant_config is not None
+            else list(sample_substrate_cfg.elements)
+        )
+        if els_substrate is None:
+            sample_substrate_cfg.elements = ledger_substrate_elements
+        elif len(els_substrate) > 0 and (els_substrate[0] == "" or els_substrate[0] is None):
+            sample_substrate_cfg.elements = ledger_substrate_elements + els_substrate[1:]
+        elif len(els_substrate) > 0:
+            sample_substrate_cfg.elements = els_substrate
+
         if clustering_cfg is None:
             clustering_cfg = ClusteringConfig()
         if quant_cfg is None:
@@ -253,6 +280,8 @@ def batch_quantify_and_analyze(
             clustering_cfg.min_bckgrnd_cnts = min_bckgrnd_cnts
         if quantification_method is not None:
             quant_cfg.method = quantification_method
+        if spectrum_lims is not None:
+            quant_cfg.spectrum_lims = spectrum_lims
         if use_project_specific_std_dict is not None:
             quant_cfg.use_project_specific_std_dict = use_project_specific_std_dict
         if use_instrument_background is not None:
