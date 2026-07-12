@@ -172,9 +172,9 @@ def batch_quantify_and_analyze(
 
     non_empty_sample_IDs = [s for s in sample_IDs if s]  # filters out None, empty strings, etc.
 
-    if els_sample is not None and len(els_sample) > 0 and len(non_empty_sample_IDs) > 0:
+    if els_sample is not None and len([el for el in els_sample if el]) > 0 and len(non_empty_sample_IDs) > 1:
         logging.info(f"⚠️ Warning: More than one sample ID provided. Using the same provided sample elements list for all samples: {els_sample}.\nEnsure this behaviour is intended, or provide sample-specific element lists by leaving els_sample as None and specifying them in the ledgers.")
-    if els_substrate is not None and len(els_substrate) > 0 and len(non_empty_sample_IDs) > 0:
+    if els_substrate is not None and len([el for el in els_substrate if el]) > 0 and len(non_empty_sample_IDs) > 1:
         logging.info(f"⚠️ Warning: More than one sample ID provided. Using the same provided substrate elements list for all samples: {els_substrate}.\nEnsure this behaviour is intended, or provide sample-specific substrate element lists by leaving els_substrate as None and specifying them in the ledgers.")
     
     quant_results = []
