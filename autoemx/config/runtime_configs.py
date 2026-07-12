@@ -529,8 +529,8 @@ class ExpStandardsConfig(BaseModel):
                 - 0  : Quantification is ok, although it may be affected by large analytical error.
                 - -1  : As above, but quantification did not converge within 30 steps.
                 - 1  : Error during EDS acquisition. No fit executed.
-                - 2  : Total counts < 95% of target counts, likely due to wrong segmentation. No fit executed.
-                - 3  : Too little low-energy signal, causing poor quantification in that region. No fit executed.
+            2  : Total counts < 90% of target counts, likely due to wrong segmentation. Fit interrupted if interrupt_fits_bad_spectra=True.
+                - 3  : Too little low-energy signal, causing poor quantification in that region. Fit interrupted if interrupt_fits_bad_spectra=True.
                 - 4  : Poor fit. Fit interrupted if interrupt_fits_bad_spectra=True.
                 - 5  : High analytical error (>50%), possibly due to missing element or other major error. Fit interrupted if interrupt_fits_bad_spectra=True.
                 - 6  : Excessive X-ray absorption. Fit interrupted if interrupt_fits_bad_spectra=True.

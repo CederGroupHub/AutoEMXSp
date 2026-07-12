@@ -138,6 +138,8 @@ def batch_quantify_and_analyze(
         - Reduced chi-squared exceeds 20 % of total spectrum counts (poor fit, flag 4).
         - Analytical error exceeds 50 w% (flag 5).
         - Excessive X-ray absorption around reference peaks (flag 6).
+        - Total counts below 90 % of target (flag 2).
+        - Low-energy background counts below threshold (flag 3).
 
         The aborted spectrum is stored with ``QuantificationDiagnostics.interrupted=True``
         and no composition is saved.  This speeds up batch quantification significantly

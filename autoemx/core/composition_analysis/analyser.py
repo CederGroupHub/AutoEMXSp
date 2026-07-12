@@ -153,21 +153,21 @@ def _resolve_parallel_mode(requested_cores: int) -> tuple[int, Optional[str], bo
     return n_cores, backend, use_parallel
 
 
-def _worker_is_spectrum_valid_for_fitting(
+def _detect_prefit_spectrum_issues(
     *,
-    spectrum: np.ndarray,
+    spectrum: Optional[np.ndarray],
     energy_vals: Sequence[float],
     sp_start: int,
     sp_end: int,
     target_acquisition_counts: int,
     min_bckgrnd_cnts: Optional[float],
-) -> tuple[bool, Optional[int], Optional[str]]:
-    """Pure worker-safe version of spectrum pre-fit validation."""
+) -> tuple[Optional[int], Optional[str]]:
+    """Detect pre-fit spectrum quality issues that map to quant flags 1-3."""
     if spectrum is None:
-        return False, 1, "No spectral data present"
+        return 1, "No spectral data present"
 
     if np.sum(spectrum) < 0.9 * target_acquisition_counts:
-        return False, 2, "Total counts too low"
+        return 2, "Total counts too low"
 
     n_vals_considered = 20
     filter_len = 3
@@ -176,7 +176,7 @@ def _worker_is_spectrum_valid_for_fitting(
     xy_data = zip(energy_vals, spectrum[sp_start:sp_end])
     spectrum_data_to_consider = [cnts for en, cnts in xy_data if cnts > 0 and en < en_threshold]
     if len(spectrum_data_to_consider) == 0:
-        return False, 3, "Background counts too low"
+        return 3, "Background counts too low"
 
     spectrum_smooth = np.convolve(
         spectrum_data_to_consider,
@@ -185,9 +185,35 @@ def _worker_is_spectrum_valid_for_fitting(
     )
     min_vals = np.sort(spectrum_smooth)[:n_vals_considered]
     if min_bckgrnd_cnts is not None and len(min_vals) > 0 and all(min_vals < min_bckgrnd_cnts):
-        return False, 3, "Background counts too low"
+        return 3, "Background counts too low"
 
-    return True, None, None
+    return None, None
+
+
+def _should_interrupt_prefit_issue(
+    prefit_quant_flag: Optional[int],
+    interrupt_fits_bad_spectra: bool,
+) -> bool:
+    """Return whether a detected pre-fit issue should skip fitting entirely."""
+    if prefit_quant_flag is None:
+        return False
+    if prefit_quant_flag == 1:
+        return True
+    if prefit_quant_flag in (2, 3):
+        return interrupt_fits_bad_spectra
+    return False
+
+
+def _merge_prefit_quant_flag(
+    quant_flag: int,
+    comment: str,
+    prefit_quant_flag: Optional[int],
+    prefit_comment: Optional[str],
+) -> tuple[int, str]:
+    """Apply pre-fit flags 2/3 when fitting proceeded without interruption."""
+    if prefit_quant_flag in (2, 3) and quant_flag == 0:
+        return prefit_quant_flag, prefit_comment or comment
+    return quant_flag, comment
 
 
 def _worker_flag_spectrum_for_clustering(
@@ -270,7 +296,8 @@ def _quantify_spectrum_worker(worker_payload: Dict[str, Any]) -> tuple[int, Opti
         background = EMXSp_Composition_Analyzer._load_background_vector_from_file(Path(background_abs))
 
     start_quant_time = time.time()
-    is_sp_valid_for_fitting, quant_flag, comment = _worker_is_spectrum_valid_for_fitting(
+    interrupt_fits_bad_spectra = bool(worker_payload['interrupt_fits_bad_spectra'])
+    prefit_quant_flag, prefit_comment = _detect_prefit_spectrum_issues(
         spectrum=spectrum,
         energy_vals=worker_payload['energy_vals'],
         sp_start=int(worker_payload['sp_start']),
@@ -278,11 +305,11 @@ def _quantify_spectrum_worker(worker_payload: Dict[str, Any]) -> tuple[int, Opti
         target_acquisition_counts=int(worker_payload['target_acquisition_counts']),
         min_bckgrnd_cnts=worker_payload['min_bckgrnd_cnts'],
     )
-    if not is_sp_valid_for_fitting:
+    if _should_interrupt_prefit_issue(prefit_quant_flag, interrupt_fits_bad_spectra):
         quant_record = QuantificationResult(
             quantification_id=int(worker_payload['quantification_id']),
-            quant_flag=quant_flag,
-            comment=comment,
+            quant_flag=prefit_quant_flag,
+            comment=prefit_comment,
             diagnostics=QuantificationDiagnostics(
                 converged=False,
                 interrupted=True,
@@ -356,6 +383,12 @@ def _quantify_spectrum_worker(worker_payload: Dict[str, Any]) -> tuple[int, Opti
         min_bckgrnd_ref_lines=min_bckgrnd_ref_lines,
         detectable_els_substrate=worker_payload['detectable_els_substrate'],
         min_bckgrnd_cnts=worker_payload['min_bckgrnd_cnts'],
+    )
+    quant_flag, comment = _merge_prefit_quant_flag(
+        quant_flag,
+        comment,
+        prefit_quant_flag,
+        prefit_comment,
     )
     quant_record = quantifier.export_quantification_result(
         quantification_id=int(worker_payload['quantification_id']),
@@ -1393,6 +1426,7 @@ class EMXSp_Composition_Analyzer:
         sp_collection_time: float = None,
         els_w_frs: Optional[Dict[str,float]] = None,
         sp_id: str = '',
+        interrupt_fits_bad_spectra: bool = True,
         verbose: bool = True
     ) -> QuantificationResult:
         """
@@ -1435,12 +1469,12 @@ class EMXSp_Composition_Analyzer:
             start_quant_time = time.time()
                             
         # Check if spectrum is worth fitting
-        is_sp_valid_for_fitting, quant_flag, comment = self._is_spectrum_valid_for_fitting(spectrum, background)
-        if not is_sp_valid_for_fitting:
+        prefit_quant_flag, prefit_comment = self._detect_prefit_spectrum_issues(spectrum)
+        if _should_interrupt_prefit_issue(prefit_quant_flag, interrupt_fits_bad_spectra):
             quant_record = QuantificationResult(
                 quantification_id=self.current_quantification_id,
-                quant_flag=quant_flag,
-                comment=comment,
+                quant_flag=prefit_quant_flag,
+                comment=prefit_comment,
                 diagnostics=QuantificationDiagnostics(
                     converged=False,
                     interrupted=True,
@@ -1496,6 +1530,12 @@ class EMXSp_Composition_Analyzer:
         
         if are_all_ref_peaks_present:
             quant_flag, comment = self._check_fit_quant_validity(is_fit_valid, bad_quant_flag, quantifier, min_bckgrnd_ref_lines)
+            quant_flag, comment = _merge_prefit_quant_flag(
+                quant_flag,
+                comment,
+                prefit_quant_flag,
+                prefit_comment,
+            )
         else:
             comment = "Reference peak missing"
             quant_flag = 10
@@ -1619,12 +1659,16 @@ class EMXSp_Composition_Analyzer:
             logger.info('🔬 Quantifying spectrum' + sp_id_str)
             start_quant_time = time.time()
                             
-        is_sp_valid_for_fitting, quant_flag, comment = self._is_spectrum_valid_for_fitting(spectrum, background)
+        is_sp_valid_for_fitting, prefit_quant_flag, prefit_comment = self._resolve_prefit_spectrum_gate(
+            spectrum,
+            background,
+            interrupt_fits_bad_spectra=interrupt_fits_bad_spectra,
+        )
         if not is_sp_valid_for_fitting:
             quant_record = QuantificationResult(
                 quantification_id=self.current_quantification_id,
-                quant_flag=quant_flag,
-                comment=comment,
+                quant_flag=prefit_quant_flag,
+                comment=prefit_comment,
                 diagnostics=QuantificationDiagnostics(
                     converged=False,
                     interrupted=True,
@@ -1686,6 +1730,12 @@ class EMXSp_Composition_Analyzer:
             return None, quant_record, quantification_time
         else:
             quant_flag, comment = self._check_fit_quant_validity(is_quant_fit_valid, bad_quant_flag, quantifier, min_bckgrnd_ref_lines)
+            quant_flag, comment = _merge_prefit_quant_flag(
+                quant_flag,
+                comment,
+                prefit_quant_flag,
+                prefit_comment,
+            )
             quant_record = quantifier.export_quantification_result(
                 quantification_id=self.current_quantification_id,
                 quant_result=quant_result,
@@ -2767,86 +2817,96 @@ class EMXSp_Composition_Analyzer:
         
         return quant_flag, comment
         
+    def _detect_prefit_spectrum_issues(
+        self,
+        spectrum: Optional[np.ndarray],
+        background: Optional[np.ndarray] = None,
+    ) -> tuple[Optional[int], Optional[str]]:
+        """Detect pre-fit spectrum quality issues for the current analyzer configuration."""
+        _ = background  # Reserved for interface compatibility with call sites.
+        return _detect_prefit_spectrum_issues(
+            spectrum=spectrum,
+            energy_vals=self.energy_vals,
+            sp_start=self.sp_start,
+            sp_end=self.sp_end,
+            target_acquisition_counts=int(self.measurement_cfg.target_acquisition_counts),
+            min_bckgrnd_cnts=self.clustering_cfg.min_bckgrnd_cnts,
+        )
+
+    def _resolve_prefit_spectrum_gate(
+        self,
+        spectrum: Optional[np.ndarray],
+        background: Optional[np.ndarray] = None,
+        *,
+        interrupt_fits_bad_spectra: bool,
+    ) -> tuple[bool, Optional[int], Optional[str]]:
+        """
+        Decide whether fitting should be skipped based on pre-fit checks.
+
+        Flags 2 and 3 only block fitting when ``interrupt_fits_bad_spectra`` is
+        True. Flag 1 (missing spectrum data) always blocks fitting.
+        """
+        prefit_quant_flag, prefit_comment = self._detect_prefit_spectrum_issues(
+            spectrum,
+            background,
+        )
+        if prefit_quant_flag == 1 and self.verbose:
+            logger.error("❌ Error during spectrum collection. No quantification was done.")
+        elif prefit_quant_flag == 2 and self.verbose:
+            if _should_interrupt_prefit_issue(prefit_quant_flag, interrupt_fits_bad_spectra):
+                logger.info(
+                    "⏭️ Quantification skipped due to spectrum counts lower than 90% of the "
+                    f"target counts of {self.measurement_cfg.target_acquisition_counts}"
+                )
+            else:
+                logger.info(
+                    "⚠️ Spectrum counts are lower than 90% of the target counts of "
+                    f"{self.measurement_cfg.target_acquisition_counts}; proceeding with "
+                    "quantification because interrupt_fits_bad_spectra=False."
+                )
+        elif prefit_quant_flag == 3 and self.verbose:
+            n_vals_considered = 20
+            en_threshold = 2
+            min_background_threshold = self.clustering_cfg.min_bckgrnd_cnts
+            if _should_interrupt_prefit_issue(prefit_quant_flag, interrupt_fits_bad_spectra):
+                logger.info(
+                    f"⏭️ Quantification skipped due to at least {n_vals_considered} spectrum "
+                    f"points with E < {en_threshold} keV having a count lower than "
+                    f"{min_background_threshold}"
+                )
+                logger.warning(
+                    "⚠️ This generally indicates an excessive absorption of X-rays before they "
+                    "reach the detector, which compromises accurate measurements of PB ratios."
+                )
+            else:
+                logger.info(
+                    f"⚠️ At least {n_vals_considered} spectrum points with E < {en_threshold} keV "
+                    f"have counts below {min_background_threshold}; proceeding with quantification "
+                    "because interrupt_fits_bad_spectra=False."
+                )
+
+        should_interrupt = _should_interrupt_prefit_issue(
+            prefit_quant_flag,
+            interrupt_fits_bad_spectra,
+        )
+        return not should_interrupt, prefit_quant_flag, prefit_comment
+
     def _is_spectrum_valid_for_fitting(
         self, 
         spectrum: np.ndarray, 
         background: Optional[np.ndarray] = None,
-    ) -> tuple[bool, int, str]:
+        interrupt_fits_bad_spectra: bool = True,
+    ) -> tuple[bool, Optional[int], Optional[str]]:
         """
-        Check if a spectrum is valid for quantification fitting.
-    
-        This method applies several criteria to determine if a spectrum should be processed:
-          - No spectrum data present.
-          - Total counts are too low.
-          - Too many low-count channels in the low-energy range.
-    
-        For each failure, a comment and quantification flag are appended to `self.spectral_data`, and
-        a message is printed if `self.verbose` is True.
-    
-        Parameters
-        ----------
-        spectrum : np.ndarray
-            The spectrum data to be validated.
-        background : Optional[np.ndarray], optional
-            Reserved for interface compatibility with call sites and potential
-            future checks. Currently not used.
-    
-        Returns
-        -------
-        is_spectrum_valid : bool
-            True if the spectrum is valid for fitting, False otherwise.
-        quant_flag : int
-            Numerical flag representing the spectrum quality after fit/quantification.
-        comment : str
-            Human-readable comment describing the outcome or issue detected.
-    
-        Notes
-        -----
-        - Assumes all class attributes and keys are correctly initialized.
-        - Uses constants from `cnst` for comment and flag keys.
+        Check if a spectrum should proceed to fitting based on pre-fit validation.
+
+        Flags 2 and 3 only skip fitting when ``interrupt_fits_bad_spectra`` is True.
         """
-        is_spectrum_valid = True
-        quant_flag = None
-        comment = None
-        
-        if spectrum is None:
-            # Check if spectrum data is present
-            is_spectrum_valid = False
-            comment = "No spectral data present"
-            quant_flag = 1
-            if self.verbose:
-                logger.error("❌ Error during spectrum collection. No quantification was done.")
-        elif np.sum(spectrum) < 0.9 * self.measurement_cfg.target_acquisition_counts:
-            # Skip quantification of spectrum when counts are too low
-            is_spectrum_valid = False
-            comment = "Total counts too low"
-            quant_flag = 2
-            if self.verbose:
-                logger.info(f"⏭️ Quantification skipped due to spectrum counts lower than 90% of the target counts of {self.measurement_cfg.target_acquisition_counts}")
-        else:
-            # Skip quantification if too many low values, which leads to errors due to imprecise fitting
-            n_vals_considered = 20  # Number of data channels that must be low for spectrum to be excluded
-            filter_len = 3
-            en_threshold = 2  # keV
-    
-            # Prepare (energy, counts) pairs for the relevant region
-            xy_data = zip(self.energy_vals, spectrum[self.sp_start: self.sp_end])
-            # Consider only data with counts > 0 and energy < threshold
-            spectrum_data_to_consider = [cnts for en, cnts in xy_data if cnts > 0 and en < en_threshold]
-            # Smoothen spectrum to reduce noise
-            spectrum_smooth = np.convolve(spectrum_data_to_consider, np.ones(filter_len)/filter_len, mode='same')
-            # Get the n lowest values in the smoothed spectrum
-            min_vals = np.sort(spectrum_smooth)[:n_vals_considered]
-            min_background_threshold = self.clustering_cfg.min_bckgrnd_cnts
-            if min_background_threshold is not None and all(min_vals < min_background_threshold):
-                is_spectrum_valid = False
-                comment = "Background counts too low"
-                quant_flag = 3
-                if self.verbose:
-                    logger.info(f"⏭️ Quantification skipped due to at least {n_vals_considered} spectrum points with E < {en_threshold} keV having a count lower than {min_background_threshold}")
-                    logger.warning("⚠️ This generally indicates an excessive absorption of X-rays before they reach the detector, which compromises accurate measurements of PB ratios.")
-    
-        return is_spectrum_valid, quant_flag, comment
+        return self._resolve_prefit_spectrum_gate(
+            spectrum,
+            background,
+            interrupt_fits_bad_spectra=interrupt_fits_bad_spectra,
+        )
     
     
     def _flag_spectrum_for_clustering(
@@ -4443,8 +4503,8 @@ class EMXSp_Composition_Analyzer:
             0: Quantification is ok, although it may be affected by large analytical error
            -1: As above, but quantification did not converge within 30 steps
             1: Error during EDS acquisition. No fit executed
-            2: Total number of counts is lower than 95% of target counts, likely due to wrong segmentation. No fit executed
-            3: Spectrum has too low signal in its low-energy portion, leading to poor quantification in this region. No fit executed
+            2: Total number of counts is lower than 90% of target counts, likely due to wrong segmentation. Fit interrupted if interrupt_fits_bad_spectra=True
+            3: Spectrum has too low signal in its low-energy portion, leading to poor quantification in this region. Fit interrupted if interrupt_fits_bad_spectra=True
             4: Poor fit. Fit interrupted if interrupt_fits_bad_spectra=True
             5: Too high analytical error (>50%) indicating a missing element or other major sources of error. Fit interrupted if interrupt_fits_bad_spectra=True
             6: Excessive X-ray absorption. Fit interrupted if interrupt_fits_bad_spectra=True
