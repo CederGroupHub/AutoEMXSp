@@ -16,10 +16,42 @@ from __future__ import annotations
 import shutil
 from glob import glob
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 import autoemx.utils.constants as cnst
 from autoemx.config.ledger_schemas import SampleLedger
+
+
+def _normalize_quant_config_ids(
+    quant_config_ids: Optional[Union[int, Sequence[int]]],
+) -> Optional[List[int]]:
+    """Normalize the quant-config-id selector into a sorted list of unique ints.
+
+    Returns None when no selection was requested (full-reset mode).
+    """
+    if quant_config_ids is None:
+        return None
+
+    if isinstance(quant_config_ids, bool):
+        raise ValueError("quant_config_ids must be an int or a list of ints, not a bool")
+
+    if isinstance(quant_config_ids, int):
+        raw_ids: Iterable[int] = [quant_config_ids]
+    elif isinstance(quant_config_ids, Iterable):
+        raw_ids = list(quant_config_ids)
+    else:
+        raise ValueError("quant_config_ids must be an int or a list of ints")
+
+    normalized: List[int] = []
+    for value in raw_ids:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("quant_config_ids entries must be integers")
+        if value < 0:
+            raise ValueError("quant_config_ids entries must be non-negative")
+        if value not in normalized:
+            normalized.append(value)
+
+    return sorted(normalized)
 
 
 def _resolve_sample_dir(
@@ -54,9 +86,23 @@ def _resolve_sample_dir(
     return resolved
 
 
-def _collect_analysis_targets(sample_dir: Path) -> List[Path]:
-    """Collect analysis directories produced by quantification/clustering runs."""
+def _collect_analysis_targets(
+    sample_dir: Path,
+    quant_config_ids: Optional[Sequence[int]] = None,
+) -> List[Path]:
+    """Collect analysis directories produced by quantification/clustering runs.
+
+    When ``quant_config_ids`` is provided, only the ``analysis_quant<id>_clust*``
+    directories for those quantification ids are collected; the shared analysis
+    directories are left untouched.
+    """
     targets: List[Path] = []
+
+    if quant_config_ids is not None:
+        for quant_id in quant_config_ids:
+            for path in glob(str(sample_dir / f"analysis_quant{quant_id}_clust*")):
+                targets.append(Path(path))
+        return targets
 
     for path in glob(str(sample_dir / "analysis_quant*_clust*")):
         targets.append(Path(path))
@@ -99,6 +145,61 @@ def _reset_ledger_quant_history(ledger_path: Path, dry_run: bool) -> Tuple[bool,
     return ledger_reset, quant_configs_removed, total_results_removed
 
 
+def _remove_ledger_quant_configs(
+    ledger_path: Path,
+    quant_config_ids: Sequence[int],
+    dry_run: bool,
+) -> Tuple[bool, int, int, List[int], List[int], Optional[int]]:
+    """Remove specific quantification configs (and their results) from the ledger.
+
+    The active quantification pointer is reverted to the latest remaining config
+    (highest quantification id), or None when no configs remain.
+
+    Returns
+    -------
+    (ledger_reset, quant_configs_removed, quant_results_removed, removed_ids,
+     missing_ids, new_active_quant)
+    """
+    ledger = SampleLedger.from_json_file(ledger_path)
+
+    existing_ids = {cfg.quantification_id for cfg in ledger.quantifications}
+    removed_ids = [qid for qid in quant_config_ids if qid in existing_ids]
+    missing_ids = [qid for qid in quant_config_ids if qid not in existing_ids]
+    removal_set = set(removed_ids)
+
+    total_results_removed = 0
+    for spectrum in ledger.spectra:
+        kept_results = [
+            result
+            for result in spectrum.quantification_results
+            if result.quantification_id not in removal_set
+        ]
+        total_results_removed += len(spectrum.quantification_results) - len(kept_results)
+        spectrum.quantification_results = kept_results
+
+    ledger.quantifications = [
+        cfg for cfg in ledger.quantifications if cfg.quantification_id not in removal_set
+    ]
+    quant_configs_removed = len(removed_ids)
+
+    remaining_ids = [cfg.quantification_id for cfg in ledger.quantifications]
+    new_active_quant: Optional[int] = max(remaining_ids) if remaining_ids else None
+    ledger.active_quant = new_active_quant
+
+    if not dry_run:
+        ledger.to_json_file(ledger_path)
+
+    ledger_reset = quant_configs_removed > 0 or total_results_removed > 0
+    return (
+        ledger_reset,
+        quant_configs_removed,
+        total_results_removed,
+        removed_ids,
+        missing_ids,
+        new_active_quant,
+    )
+
+
 def _delete_path(path: Path, dry_run: bool) -> None:
     """Delete a file or directory, unless dry-run is active."""
     if dry_run:
@@ -114,10 +215,11 @@ def reinitialize_ledger(
     sample_path: Optional[str] = None,
     sample_ID: Optional[str] = None,
     project_path: Optional[str] = None,
+    quant_config_ids: Optional[Union[int, Sequence[int]]] = None,
     dry_run: bool = False,
     force: bool = False,
     verbose: bool = True,
-) -> Dict[str, int | bool | str]:
+) -> Dict[str, object]:
     """
     Remove quantification/clustering state and outputs for one sample.
 
@@ -129,6 +231,12 @@ def reinitialize_ledger(
         Sample identifier. Used only when sample_path is not provided.
     project_path : str, optional
         Parent directory containing sample folders. Used with sample_ID.
+    quant_config_ids : int or list of int, optional
+        When provided, only the specified quantification config id(s) are removed
+        (together with their per-spectrum results and matching
+        ``analysis_quant<id>_clust*`` directories), and the active quantification
+        pointer is reverted to the latest remaining config. When None (default),
+        all quantification/clustering history is cleared.
     dry_run : bool, optional
         If True, only print planned actions.
     force : bool, optional
@@ -142,22 +250,36 @@ def reinitialize_ledger(
         Dictionary with cleanup results and counts, including
         ``quant_configs_removed`` (number of saved quantification configs
         cleared from the ledger) and ``quant_results_removed`` (number of
-        per-spectrum quantification result records cleared).
+        per-spectrum quantification result records cleared). In targeted mode it
+        also includes ``requested_quant_config_ids``, ``removed_quant_config_ids``,
+        ``missing_quant_config_ids`` and ``active_quant`` (the new active id).
     """
+    normalized_ids = _normalize_quant_config_ids(quant_config_ids)
+    targeted_mode = normalized_ids is not None
+
     sample_dir = _resolve_sample_dir(sample_path, sample_ID, project_path)
     ledger_path = sample_dir / f"{cnst.LEDGER_FILENAME}{cnst.LEDGER_FILEEXT}"
 
-    analysis_targets = _collect_analysis_targets(sample_dir)
-    root_csv_targets = _collect_legacy_root_csv_targets(sample_dir)
+    analysis_targets = _collect_analysis_targets(sample_dir, normalized_ids)
+    root_csv_targets = [] if targeted_mode else _collect_legacy_root_csv_targets(sample_dir)
 
     if verbose:
         print("=" * 72)
-        print("WARNING: This action removes quantification/clustering history and results.")
+        if targeted_mode:
+            print("WARNING: This action removes specific quantification configs and their results.")
+        else:
+            print("WARNING: This action removes quantification/clustering history and results.")
         print("WARNING: It cannot be undone.")
         print(f"Sample directory: {sample_dir}")
         print("=" * 72)
         print("Planned actions:")
-        print(f"- Remove saved quantification configs and reset quantification history inside ledger: {ledger_path}")
+        if targeted_mode:
+            print(
+                f"- Remove quantification config id(s) {normalized_ids} and their results "
+                f"from ledger, reverting active config to the latest remaining one: {ledger_path}"
+            )
+        else:
+            print(f"- Remove saved quantification configs and reset quantification history inside ledger: {ledger_path}")
         for path in analysis_targets:
             print(f"- Remove analysis directory: {path}")
         for path in root_csv_targets:
@@ -181,10 +303,31 @@ def reinitialize_ledger(
                 "legacy_files_removed": 0,
             }
 
-    ledger_reset, quant_configs_removed, result_records_removed = _reset_ledger_quant_history(
-        ledger_path=ledger_path,
-        dry_run=dry_run,
-    )
+    removed_ids: List[int] = []
+    missing_ids: List[int] = []
+    new_active_quant: Optional[int] = None
+    if targeted_mode:
+        (
+            ledger_reset,
+            quant_configs_removed,
+            result_records_removed,
+            removed_ids,
+            missing_ids,
+            new_active_quant,
+        ) = _remove_ledger_quant_configs(
+            ledger_path=ledger_path,
+            quant_config_ids=normalized_ids,
+            dry_run=dry_run,
+        )
+        if verbose and missing_ids:
+            print(f"- Note: quantification config id(s) not found and skipped: {missing_ids}")
+        # Only delete analysis directories for configs that were actually removed.
+        analysis_targets = _collect_analysis_targets(sample_dir, removed_ids)
+    else:
+        ledger_reset, quant_configs_removed, result_records_removed = _reset_ledger_quant_history(
+            ledger_path=ledger_path,
+            dry_run=dry_run,
+        )
 
     deleted_dirs = 0
     deleted_files = 0
@@ -196,7 +339,7 @@ def reinitialize_ledger(
             else:
                 deleted_files += 1
 
-    summary: Dict[str, int | bool | str] = {
+    summary: Dict[str, object] = {
         "sample_dir": str(sample_dir),
         "aborted": False,
         "ledger_reset": ledger_reset,
@@ -205,6 +348,11 @@ def reinitialize_ledger(
         "analysis_dirs_removed": deleted_dirs,
         "legacy_files_removed": deleted_files,
     }
+    if targeted_mode:
+        summary["requested_quant_config_ids"] = list(normalized_ids)
+        summary["removed_quant_config_ids"] = removed_ids
+        summary["missing_quant_config_ids"] = missing_ids
+        summary["active_quant"] = new_active_quant
 
     if verbose:
         print("\nSummary:")
@@ -213,8 +361,15 @@ def reinitialize_ledger(
         print(f"- Quantification result records removed from ledger: {result_records_removed}")
         print(f"- Analysis directories removed: {deleted_dirs}")
         print(f"- Legacy result CSV files removed: {deleted_files}")
+        if targeted_mode:
+            print(f"- Removed quantification config id(s): {removed_ids}")
+            if missing_ids:
+                print(f"- Quantification config id(s) not found: {missing_ids}")
+            print(f"- Active quantification config is now: {new_active_quant}")
         if dry_run:
             print("\nDry run complete. No changes were written.")
+        elif targeted_mode:
+            print("\nRemoval complete.")
         else:
             print("\nReinitialization complete. The next quantification will start from scratch.")
 

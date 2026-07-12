@@ -31,6 +31,12 @@ project_path = str(Path(__file__).resolve().parents[2] / "examples" / cnst.RESUL
 # =============================================================================
 # Reset options
 # =============================================================================
+# Targeted removal: set to a quantification config id (int) or a list of ids to
+# remove only those quantifications (their results, saved configs, and matching
+# analysis_quant<id>_clust* folders). The active config is reverted to the latest
+# remaining one. Leave as None to clear ALL quantification/clustering history.
+quant_config_ids = None  # e.g. 2  or  [0, 3]
+
 dry_run = False  # If True, prints the changes that would be made without modifying any files.
 # Always recommended to run with dry_run=True first to verify the intended changes before applying them.
 
@@ -45,6 +51,7 @@ summary = reinitialize_ledger(
     sample_path=sample_path,
     sample_ID=sample_ID,
     project_path=project_path,
+    quant_config_ids=quant_config_ids,
     dry_run=dry_run,
     force=force,
     verbose=True,
