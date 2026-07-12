@@ -2246,7 +2246,6 @@ class EMXSp_Composition_Analyzer:
         ):
             self.current_quant_config = active_quant_config
             self.current_quantification_id = active_quant_config.quantification_id
-            self._apply_active_quant_element_configs(active_quant_config)
             # Even when reusing quantification settings, clustering inputs (e.g., ref_formulae
             # passed via runners as sample['cnd']) may have changed for this run.
             self._ensure_current_clustering_run(
@@ -2470,32 +2469,6 @@ class EMXSp_Composition_Analyzer:
         payload = clustering_cfg.model_dump(mode="json")
         payload.pop("clustering_id", None)
         return payload
-
-
-    def _apply_active_quant_element_configs(self, quant_config: Optional[QuantificationConfig]) -> None:
-        """Load sample/substrate element lists from the active quantification config."""
-        if quant_config is None:
-            return
-
-        if quant_config.sample_elements:
-            self.sample_cfg.elements = list(quant_config.sample_elements)
-        if quant_config.substrate_elements:
-            self.sample_substrate_cfg.elements = list(quant_config.substrate_elements)
-
-        if not hasattr(self, "all_els_sample"):
-            return
-
-        self.all_els_sample = list(dict.fromkeys(self.sample_cfg.elements))
-        self.detectable_els_sample = [
-            el for el in self.all_els_sample if el not in calibs.undetectable_els
-        ]
-        self.all_els_substrate = list(dict.fromkeys(self.sample_substrate_cfg.elements))
-        detectable_els_substrate = [
-            el for el in self.all_els_substrate if el not in calibs.undetectable_els
-        ]
-        self.detectable_els_substrate = [
-            el for el in detectable_els_substrate if el not in self.detectable_els_sample
-        ]
 
 
     def _apply_active_clustering_config(self, quant_config: QuantificationConfig) -> None:
@@ -3615,7 +3588,26 @@ class EMXSp_Composition_Analyzer:
             if active_quant_config is not None:
                 self.current_quant_config = active_quant_config
                 self.current_quantification_id = active_quant_config.quantification_id
-                self._apply_active_quant_element_configs(active_quant_config)
+                # Use the elements and spectrum limits recorded for the active quantification
+                # run, falling back to the base sample config when they are not stored.
+                self.all_els_sample = list(dict.fromkeys(
+                    active_quant_config.sample_elements or self.sample_cfg.elements
+                ))
+                self.detectable_els_sample = [el for el in self.all_els_sample if el not in calibs.undetectable_els]
+                self.all_els_substrate = list(dict.fromkeys(
+                    active_quant_config.substrate_elements or self.sample_substrate_cfg.elements
+                ))
+                detectable_els_substrate = [el for el in self.all_els_substrate if el not in calibs.undetectable_els]
+                self.detectable_els_substrate = [el for el in detectable_els_substrate if el not in self.detectable_els_sample]
+                active_spectrum_lims = (active_quant_config.options or {}).get("spectrum_lims")
+                if active_spectrum_lims is not None:
+                    self.sp_start = int(round(active_spectrum_lims[0]))
+                    self.sp_end = int(round(active_spectrum_lims[1]))
+                    if self.det_ch_offset is not None and self.det_ch_width:
+                        self.energy_vals = np.array([
+                            self.det_ch_offset + self.det_ch_width * i
+                            for i in range(self.sp_start, self.sp_end)
+                        ])
                 self._ensure_current_clustering_run(self.current_quant_config)
                 self._persist_current_quantification_config()
                 self._apply_active_clustering_config(self.current_quant_config)
