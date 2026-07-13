@@ -12,6 +12,14 @@ name = "autoemx"
 version = "1.0.1"
 description = "AutoEMX - Automated Electron Microscopy X-Ray Spectroscopy for Compositional Characterization of Materials"
 readme = "README.md"
+keywords = [
+    "SEM",
+    "EDS",
+    "EDX",
+    "composition",
+    "microscopy",
+    "spectroscopy"
+]
 license = "LicenseRef-AcademicNonCommercial"
 license-files = ["LICENSE.txt"]
 authors = [
