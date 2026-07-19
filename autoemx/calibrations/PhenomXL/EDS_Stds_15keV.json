@@ -353,20 +353,20 @@
             }
           },
           {
-            "Corrected_PB": 8913.7,
-            "Rel_stdev_PB (%)": 2.94,
-            "Measured_PB": 1037.0,
-            "Stdev_PB": 30.5,
+            "Corrected_PB": 8170.7,
+            "Rel_stdev_PB (%)": 3.16,
+            "Measured_PB": 1004.5,
+            "Stdev_PB": 31.7,
             "ID": "NdF3",
-            "datetime": "2026-07-18 19:23:23",
+            "datetime": "2026-07-18 19:40:49",
             "Formula": "NdF3",
             "Std_type": "bulk",
             "Use_for_mean_calc": false,
             "Mean_Z": {
-              "Statham2016": 38.6,
-              "Markowicz1984": 44.17,
-              "mass-averaged": 45.56,
-              "atomic-averaged": 21.75
+              "Statham2016": 36.52,
+              "Markowicz1984": 42.31,
+              "mass-averaged": 43.78,
+              "atomic-averaged": 20.23
             }
           }
         ],
@@ -374,7 +374,7 @@
           "Corrected_PB": 7334.0,
           "Rel_stdev_PB (%)": 0.0,
           "Stdev_PB": 0.0,
-          "datetime": "2026-07-18 19:23:23"
+          "datetime": "2026-07-18 19:40:49"
         }
       },
       "Na_Ka1": {
@@ -2251,82 +2251,82 @@
       "Nd_La1": {
         "entries": [
           {
-            "Corrected_PB": 1998.0,
-            "Rel_stdev_PB (%)": 1.56,
-            "Measured_PB": 1683.6,
-            "Stdev_PB": 26.3,
+            "Corrected_PB": 2289.4,
+            "Rel_stdev_PB (%)": 1.65,
+            "Measured_PB": 1767.4,
+            "Stdev_PB": 29.1,
             "ID": "NdF3",
-            "datetime": "2026-07-18 19:23:23",
+            "datetime": "2026-07-18 19:40:49",
             "Formula": "NdF3",
             "Std_type": "bulk",
             "Use_for_mean_calc": true,
             "Mean_Z": {
-              "Statham2016": 38.6,
-              "Markowicz1984": 44.17,
-              "mass-averaged": 45.56,
-              "atomic-averaged": 21.75
+              "Statham2016": 36.52,
+              "Markowicz1984": 42.31,
+              "mass-averaged": 43.78,
+              "atomic-averaged": 20.23
             }
           }
         ],
         "reference_mean": {
-          "Corrected_PB": 1998.0,
+          "Corrected_PB": 2289.4,
           "Rel_stdev_PB (%)": 0.0,
           "Stdev_PB": 0.0,
-          "datetime": "2026-07-18 19:23:23"
+          "datetime": "2026-07-18 19:40:49"
         }
       },
       "Nd_Ma1": {
         "entries": [
           {
-            "Corrected_PB": 176.3,
-            "Rel_stdev_PB (%)": 4.27,
-            "Measured_PB": 124.0,
-            "Stdev_PB": 5.3,
+            "Corrected_PB": 185.7,
+            "Rel_stdev_PB (%)": 4.61,
+            "Measured_PB": 117.2,
+            "Stdev_PB": 5.4,
             "ID": "NdF3",
-            "datetime": "2026-07-18 19:23:23",
+            "datetime": "2026-07-18 19:40:49",
             "Formula": "NdF3",
             "Std_type": "bulk",
             "Use_for_mean_calc": true,
             "Mean_Z": {
-              "Statham2016": 38.6,
-              "Markowicz1984": 44.17,
-              "mass-averaged": 45.56,
-              "atomic-averaged": 21.75
+              "Statham2016": 36.52,
+              "Markowicz1984": 42.31,
+              "mass-averaged": 43.78,
+              "atomic-averaged": 20.23
             }
           }
         ],
         "reference_mean": {
-          "Corrected_PB": 176.3,
+          "Corrected_PB": 185.7,
           "Rel_stdev_PB (%)": 0.0,
           "Stdev_PB": 0.0,
-          "datetime": "2026-07-18 19:23:23"
+          "datetime": "2026-07-18 19:40:49"
         }
       },
       "Nd_Mz1": {
         "entries": [
           {
-            "Corrected_PB": 265.0,
-            "Rel_stdev_PB (%)": 4.53,
-            "Measured_PB": 178.9,
-            "Stdev_PB": 8.1,
+            "Corrected_PB": 274.8,
+            "Rel_stdev_PB (%)": 5.0,
+            "Measured_PB": 165.9,
+            "Stdev_PB": 8.3,
             "ID": "NdF3",
-            "datetime": "2026-07-18 19:23:23",
+            "datetime": "2026-07-18 19:40:49",
             "Formula": "NdF3",
             "Std_type": "bulk",
             "Use_for_mean_calc": true,
             "Mean_Z": {
-              "Statham2016": 38.6,
-              "Markowicz1984": 44.17,
-              "mass-averaged": 45.56,
-              "atomic-averaged": 21.75
+              "Statham2016": 36.52,
+              "Markowicz1984": 42.31,
+              "mass-averaged": 43.78,
+              "atomic-averaged": 20.23
             }
           }
         ],
         "reference_mean": {
-          "Corrected_PB": 265.0,
+          "Corrected_PB": 274.8,
           "Rel_stdev_PB (%)": 0.0,
           "Stdev_PB": 0.0,
-          "datetime": "2026-07-18 19:23:23"
+          "datetime": "2026-07-18 19:40:49"
         }
       },
       "Eu_La1": {
