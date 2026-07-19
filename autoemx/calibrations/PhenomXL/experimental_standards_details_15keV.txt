@@ -46,7 +46,7 @@ Mode: point | current: 4.3
     - Mean Corrected_PB=7701.9
   Peak F_Ka1
     - ID=CaF2; Corrected_PB=7334; Use_for_mean_calc=True
-    - ID=NdF3; Corrected_PB=8211.4; Use_for_mean_calc=False
+    - ID=NdF3; Corrected_PB=8913.7; Use_for_mean_calc=False
     - Mean Corrected_PB=7334
   Peak Na_Ka1
     - ID=NaCl; Corrected_PB=9575.9; Use_for_mean_calc=True
@@ -248,14 +248,14 @@ Mode: point | current: 4.3
     - ID=PrPO4; Corrected_PB=334.7; Use_for_mean_calc=True
     - Mean Corrected_PB=334.7
   Peak Nd_La1
-    - ID=NdF3; Corrected_PB=2030.3; Use_for_mean_calc=True
-    - Mean Corrected_PB=2030.3
+    - ID=NdF3; Corrected_PB=1998; Use_for_mean_calc=True
+    - Mean Corrected_PB=1998
   Peak Nd_Ma1
-    - ID=NdF3; Corrected_PB=253.2; Use_for_mean_calc=True
-    - Mean Corrected_PB=253.2
+    - ID=NdF3; Corrected_PB=176.3; Use_for_mean_calc=True
+    - Mean Corrected_PB=176.3
   Peak Nd_Mz1
-    - ID=NdF3; Corrected_PB=141.3; Use_for_mean_calc=True
-    - Mean Corrected_PB=141.3
+    - ID=NdF3; Corrected_PB=265; Use_for_mean_calc=True
+    - Mean Corrected_PB=265
   Peak Eu_La1
     - ID=EuPO4; Corrected_PB=1610.6; Use_for_mean_calc=True
     - Mean Corrected_PB=1610.6

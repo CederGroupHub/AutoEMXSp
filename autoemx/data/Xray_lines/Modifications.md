@@ -47,6 +47,8 @@ Recalibrated weights for Si, Bi, Pb, V, and In, along with the following:
 | 57 | La Mζ     | Previously calibrated, but at 60% of the actual signal |
 | 59 | Pr Lα     | Slight recalibration of Lb1 and Lb4 |
 | 59 | Pr Mα     | Recalibration                                        |
+| 60 | Nd Lα     | Slight recalibration of Lb1, Lb4, Ll, Lb3             |
+| 60 | Nd Mα     | Recalibration of M2N4, Mz1, Mz2             |
 | 69 | Er Lα     | Slight recalibration of Lb1, Lb4, Lb7, Lb10, Lb3, Lb6, Ll|
 | 69 | Er Mα     | Recalibration of Mb, Mg, M2N4, Mz1, Mz2              |
 | 72 | Hf Mα + N | Mostly uncalibrated from NIST                       |

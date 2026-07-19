@@ -353,12 +353,12 @@
             }
           },
           {
-            "Corrected_PB": 8211.4,
-            "Rel_stdev_PB (%)": 2.9,
-            "Measured_PB": 955.3,
-            "Stdev_PB": 27.7,
+            "Corrected_PB": 8913.7,
+            "Rel_stdev_PB (%)": 2.94,
+            "Measured_PB": 1037.0,
+            "Stdev_PB": 30.5,
             "ID": "NdF3",
-            "datetime": "2026-05-28 19:19:28",
+            "datetime": "2026-07-18 19:23:23",
             "Formula": "NdF3",
             "Std_type": "bulk",
             "Use_for_mean_calc": false,
@@ -374,7 +374,7 @@
           "Corrected_PB": 7334.0,
           "Rel_stdev_PB (%)": 0.0,
           "Stdev_PB": 0.0,
-          "datetime": "2026-05-28 19:19:28"
+          "datetime": "2026-07-18 19:23:23"
         }
       },
       "Na_Ka1": {
@@ -2251,12 +2251,12 @@
       "Nd_La1": {
         "entries": [
           {
-            "Corrected_PB": 2030.3,
-            "Rel_stdev_PB (%)": 2.0,
-            "Measured_PB": 1710.8,
-            "Stdev_PB": 34.3,
+            "Corrected_PB": 1998.0,
+            "Rel_stdev_PB (%)": 1.56,
+            "Measured_PB": 1683.6,
+            "Stdev_PB": 26.3,
             "ID": "NdF3",
-            "datetime": "2026-05-28 19:19:28",
+            "datetime": "2026-07-18 19:23:23",
             "Formula": "NdF3",
             "Std_type": "bulk",
             "Use_for_mean_calc": true,
@@ -2269,21 +2269,21 @@
           }
         ],
         "reference_mean": {
-          "Corrected_PB": 2030.3,
+          "Corrected_PB": 1998.0,
           "Rel_stdev_PB (%)": 0.0,
           "Stdev_PB": 0.0,
-          "datetime": "2026-05-28 19:19:28"
+          "datetime": "2026-07-18 19:23:23"
         }
       },
       "Nd_Ma1": {
         "entries": [
           {
-            "Corrected_PB": 253.2,
-            "Rel_stdev_PB (%)": 8.09,
-            "Measured_PB": 178.1,
-            "Stdev_PB": 14.4,
+            "Corrected_PB": 176.3,
+            "Rel_stdev_PB (%)": 4.27,
+            "Measured_PB": 124.0,
+            "Stdev_PB": 5.3,
             "ID": "NdF3",
-            "datetime": "2026-05-28 19:19:28",
+            "datetime": "2026-07-18 19:23:23",
             "Formula": "NdF3",
             "Std_type": "bulk",
             "Use_for_mean_calc": true,
@@ -2296,21 +2296,21 @@
           }
         ],
         "reference_mean": {
-          "Corrected_PB": 253.2,
+          "Corrected_PB": 176.3,
           "Rel_stdev_PB (%)": 0.0,
           "Stdev_PB": 0.0,
-          "datetime": "2026-05-28 19:19:28"
+          "datetime": "2026-07-18 19:23:23"
         }
       },
       "Nd_Mz1": {
         "entries": [
           {
-            "Corrected_PB": 141.3,
-            "Rel_stdev_PB (%)": 9.96,
-            "Measured_PB": 95.4,
-            "Stdev_PB": 9.5,
+            "Corrected_PB": 265.0,
+            "Rel_stdev_PB (%)": 4.53,
+            "Measured_PB": 178.9,
+            "Stdev_PB": 8.1,
             "ID": "NdF3",
-            "datetime": "2026-05-28 19:19:28",
+            "datetime": "2026-07-18 19:23:23",
             "Formula": "NdF3",
             "Std_type": "bulk",
             "Use_for_mean_calc": true,
@@ -2323,10 +2323,10 @@
           }
         ],
         "reference_mean": {
-          "Corrected_PB": 141.3,
+          "Corrected_PB": 265.0,
           "Rel_stdev_PB (%)": 0.0,
           "Stdev_PB": 0.0,
-          "datetime": "2026-05-28 19:19:28"
+          "datetime": "2026-07-18 19:23:23"
         }
       },
       "Eu_La1": {
