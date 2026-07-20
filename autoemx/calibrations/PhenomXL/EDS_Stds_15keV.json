@@ -324,13 +324,30 @@
               "mass-averaged": 25.98,
               "atomic-averaged": 16.8
             }
+          },
+          {
+            "Corrected_PB": 7131.1,
+            "Rel_stdev_PB (%)": 4.93,
+            "Measured_PB": 539.3,
+            "Stdev_PB": 26.6,
+            "ID": "CeO2_powder",
+            "datetime": "2026-07-20 14:21:33",
+            "Formula": "CeO2",
+            "Std_type": "powder",
+            "Use_for_mean_calc": false,
+            "Mean_Z": {
+              "Statham2016": 42.42,
+              "Markowicz1984": 47.19,
+              "mass-averaged": 48.7,
+              "atomic-averaged": 24.67
+            }
           }
         ],
         "reference_mean": {
           "Corrected_PB": 7701.9,
           "Rel_stdev_PB (%)": 2.35,
           "Stdev_PB": 181.3,
-          "datetime": "2026-06-27 11:17:26"
+          "datetime": "2026-07-20 14:21:33"
         }
       },
       "F_Ka1": {
@@ -2165,6 +2182,60 @@
           "Rel_stdev_PB (%)": 0.0,
           "Stdev_PB": 0.0,
           "datetime": "2025-06"
+        }
+      },
+      "Ce_La1": {
+        "entries": [
+          {
+            "Corrected_PB": 2384.5,
+            "Rel_stdev_PB (%)": 2.65,
+            "Measured_PB": 2100.0,
+            "Stdev_PB": 55.6,
+            "ID": "CeO2_powder",
+            "datetime": "2026-07-20 14:21:33",
+            "Formula": "CeO2",
+            "Std_type": "powder",
+            "Use_for_mean_calc": true,
+            "Mean_Z": {
+              "Statham2016": 42.42,
+              "Markowicz1984": 47.19,
+              "mass-averaged": 48.7,
+              "atomic-averaged": 24.67
+            }
+          }
+        ],
+        "reference_mean": {
+          "Corrected_PB": 2384.5,
+          "Rel_stdev_PB (%)": 0.0,
+          "Stdev_PB": 0.0,
+          "datetime": "2026-07-20 14:21:33"
+        }
+      },
+      "Ce_Mz1": {
+        "entries": [
+          {
+            "Corrected_PB": 308.2,
+            "Rel_stdev_PB (%)": 6.42,
+            "Measured_PB": 230.4,
+            "Stdev_PB": 14.8,
+            "ID": "CeO2_powder",
+            "datetime": "2026-07-20 14:21:33",
+            "Formula": "CeO2",
+            "Std_type": "powder",
+            "Use_for_mean_calc": true,
+            "Mean_Z": {
+              "Statham2016": 42.42,
+              "Markowicz1984": 47.19,
+              "mass-averaged": 48.7,
+              "atomic-averaged": 24.67
+            }
+          }
+        ],
+        "reference_mean": {
+          "Corrected_PB": 308.2,
+          "Rel_stdev_PB (%)": 0.0,
+          "Stdev_PB": 0.0,
+          "datetime": "2026-07-20 14:21:33"
         }
       },
       "Pr_La1": {

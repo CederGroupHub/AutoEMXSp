@@ -157,7 +157,7 @@ class Peaks_Model:
 
         # Elements/lines whose area is fitted freely (for weight calibration)
         if free_area_el_lines is None:
-            free_area_el_lines = ['Ge_Lb1']
+            free_area_el_lines = ['Ge_Lb1', 'Ce_Mz1']
         self.free_area_el_lines = free_area_el_lines
 
         # Elements whose peak shapes are calibrated (for shape calibration)

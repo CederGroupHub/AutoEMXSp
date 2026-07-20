@@ -10,7 +10,7 @@ Standards files found: 1
 Coverage by voltage and current
 --------------------------------------------------------------------------------
 Voltage 15 keV (EDS_Stds_15keV.json)
-  - Mode=point; current=4.3; n_elements=54; n_peaks=105; elements=[B, C, N, O, F, Na, Mg, Al, Si, P, S, Cl, K, Ca, Sc, Ti, V, Cr, Mn, Fe, Co, Ni, Cu, Zn, Ga, Ge, Se, Br, Sr, Y, Zr, Nb, Mo, Ag, Cd, In, Sn, Sb, Ba, La, Pr, Nd, Eu, Gd, Dy, Er, Lu, Hf, Ta, W, Re, Ir, Pb, Bi]
+  - Mode=point; current=4.3; n_elements=55; n_peaks=107; elements=[B, C, N, O, F, Na, Mg, Al, Si, P, S, Cl, K, Ca, Sc, Ti, V, Cr, Mn, Fe, Co, Ni, Cu, Zn, Ga, Ge, Se, Br, Sr, Y, Zr, Nb, Mo, Ag, Cd, In, Sn, Sb, Ba, La, Ce, Pr, Nd, Eu, Gd, Dy, Er, Lu, Hf, Ta, W, Re, Ir, Pb, Bi]
   - Mode=map; current=5.1; n_elements=0; n_peaks=0; elements=[none]
 
 
@@ -43,6 +43,7 @@ Mode: point | current: 4.3
     - ID=PrPO4; Corrected_PB=8783.9; Use_for_mean_calc=False
     - ID=ErPO4; Corrected_PB=9143.1; Use_for_mean_calc=False
     - ID=SrTiO3; Corrected_PB=7257.9; Use_for_mean_calc=False
+    - ID=CeO2_powder; Corrected_PB=7131.1; Use_for_mean_calc=False
     - Mean Corrected_PB=7701.9
   Peak F_Ka1
     - ID=CaF2; Corrected_PB=7334; Use_for_mean_calc=True
@@ -238,6 +239,12 @@ Mode: point | current: 4.3
   Peak La_Mz1
     - ID=LaB6; Corrected_PB=289.8; Use_for_mean_calc=True
     - Mean Corrected_PB=289.8
+  Peak Ce_La1
+    - ID=CeO2_powder; Corrected_PB=2384.5; Use_for_mean_calc=True
+    - Mean Corrected_PB=2384.5
+  Peak Ce_Mz1
+    - ID=CeO2_powder; Corrected_PB=308.2; Use_for_mean_calc=True
+    - Mean Corrected_PB=308.2
   Peak Pr_La1
     - ID=PrPO4; Corrected_PB=2205; Use_for_mean_calc=True
     - Mean Corrected_PB=2205
