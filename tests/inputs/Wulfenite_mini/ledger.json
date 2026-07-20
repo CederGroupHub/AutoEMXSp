@@ -1,0 +1,208 @@
+{
+  "sample_id": "Wulfenite_mini",
+  "sample_path": "E:\\Desktop\\AutoEMX\\tests\\inputs\\Wulfenite_mini",
+  "configs": {
+    "microscope_cfg": {
+      "ID": "PhenomXL",
+      "type": "SEM",
+      "detector_type": "BSD",
+      "is_auto_BC": true,
+      "brightness": null,
+      "contrast": null,
+      "energy_zero": -0.034245,
+      "bin_width": 0.009972
+    },
+    "sample_cfg": {
+      "elements": [
+        "Pb",
+        "Mo",
+        "O"
+      ],
+      "type": "powder",
+      "w_frs": null,
+      "center_pos": [
+        0.0,
+        0.0
+      ],
+      "half_width_mm": 3.0,
+      "is_powder_sample": true,
+      "is_surface_rough": true,
+      "is_grid_acquisition": false,
+      "is_particle_acquisition": true
+    },
+    "measurement_cfg": {
+      "type": "EDS",
+      "mode": "point",
+      "working_distance": null,
+      "working_distance_tolerance": 1.0,
+      "beam_energy_keV": 15.0,
+      "beam_current": 4.3,
+      "emergence_angle": 28.5,
+      "is_manual_navigation": false,
+      "max_acquisition_time": 25.0,
+      "target_acquisition_counts": 50000,
+      "min_n_spectra": 103,
+      "max_n_spectra": 103,
+      "powder_meas_cfg": {
+        "is_manual_particle_selection": false,
+        "is_known_powder_mixture_meas": false,
+        "img_shift_tracking": true,
+        "par_search_frame_width_um": 500.0,
+        "max_n_par_per_frame": 30,
+        "max_spectra_per_par": 3,
+        "max_area_par": 100000.0,
+        "min_area_par": 10.0,
+        "par_mask_margin": 1.0,
+        "xsp_spots_distance_um": 1.0,
+        "par_segmentation_model": "threshold_bright",
+        "par_brightness_thresh": 100,
+        "par_xy_spots_thresh": 100,
+        "par_feature_selection": "random",
+        "par_spot_spacing": "random"
+      },
+      "bulk_meas_cfg": null,
+      "exp_stds_cfg": null,
+      "saved_images_extension": "png",
+      "save_raw_images": false
+    },
+    "sample_substrate_cfg": {
+      "elements": [
+        "C",
+        "O",
+        "Al"
+      ],
+      "type": "Ctape",
+      "shape": "circle",
+      "auto_detection": true,
+      "stub_w_mm": 12.0
+    },
+    "plot_cfg": {
+      "show_unused_comps_clust": true,
+      "els_excluded_clust_plot": [],
+      "show_legend_clustering": true,
+      "save_plots": true,
+      "show_plots": false,
+      "use_custom_plots": false,
+      "custom_plot_file": null
+    }
+  },
+  "spectra": [
+    {
+      "spectrum_id": "0",
+      "total_counts": 54423,
+      "live_acquisition_time": 5.73,
+      "acquisition_details": {
+        "frame_id": null,
+        "particle_id": 1,
+        "spot_coordinates": {
+          "machine_coordinates": {
+            "x": 0.108,
+            "y": 0.305
+          },
+          "pixel_coordinates": [
+            1167,
+            1186
+          ]
+        }
+      },
+      "spectrum_relpath": "spectra/spectrum_0.msa",
+      "instrument_background_relpath": null,
+      "quantification_results": []
+    },
+    {
+      "spectrum_id": "1",
+      "total_counts": 52223,
+      "live_acquisition_time": 6.76,
+      "acquisition_details": {
+        "frame_id": null,
+        "particle_id": 1,
+        "spot_coordinates": {
+          "machine_coordinates": {
+            "x": 0.108,
+            "y": 0.216
+          },
+          "pixel_coordinates": [
+            1167,
+            1015
+          ]
+        }
+      },
+      "spectrum_relpath": "spectra/spectrum_1.msa",
+      "instrument_background_relpath": null,
+      "quantification_results": []
+    }
+  ],
+  "active_quant": 0,
+  "quantifications": [
+    {
+      "quantification_id": 0,
+      "label": "Legacy import",
+      "sample_elements": [
+        "Pb",
+        "Mo",
+        "O"
+      ],
+      "substrate_elements": [
+        "C",
+        "O",
+        "Al"
+      ],
+      "els_w_fr": null,
+      "options": {
+        "method": "PB",
+        "fit_tolerance": 0.001,
+        "use_instrument_background": false,
+        "spectrum_lims": [
+          14,
+          1100
+        ],
+        "is_particle": true,
+        "beam_energy_keV": 15.0,
+        "emergence_angle": 28.5,
+        "det_ch_offset": -0.034245,
+        "det_ch_width": 0.009972
+      },
+      "reference_values_by_el_line": {
+        "Al_Ka1": 10258.1,
+        "C_Ka1": 5544.8,
+        "Mo_La1": 3628.3,
+        "Mo_Mz1": 271.3,
+        "O_Ka1": 7701.9,
+        "Pb_La1": 262.2,
+        "Pb_Ma1": 1103.1
+      },
+      "reference_lines_by_element": {
+        "Al": "Al_Ka1",
+        "C": "C_Ka1",
+        "Mo": "Mo_La1",
+        "O": "O_Ka1",
+        "Pb": "Pb_La1"
+      },
+      "active_clustering_analysis_index": 0,
+      "clustering_analyses": [
+        {
+          "config": {
+            "clustering_id": 0,
+            "method": "kmeans",
+            "features": "at_fr",
+            "k_forced": null,
+            "k_resolved": null,
+            "k_finding_method": "silhouette",
+            "max_k": 6,
+            "ref_formulae": [
+              "PbMoO4"
+            ],
+            "do_matrix_decomposition": true,
+            "max_analytical_error_percent": 5.0,
+            "min_bckgrnd_cnts": 5.0,
+            "quant_flags_accepted": [
+              0,
+              -1
+            ]
+          },
+          "result": null
+        }
+      ]
+    }
+  ]
+}

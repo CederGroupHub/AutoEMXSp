@@ -7,7 +7,7 @@
 [![CI](https://github.com/CederGroupHub/AutoEMX/actions/workflows/ci.yml/badge.svg)](https://github.com/CederGroupHub/AutoEMX/actions/workflows/ci.yml)
 [![License: Custom Non-Commercial](https://img.shields.io/badge/license-Custom%20Non--Commercial-blue.svg)](https://github.com/CederGroupHub/AutoEMX/blob/main/LICENSE.txt)
 [![Research Square Preprint](https://img.shields.io/badge/Research%20Square-preprint-orange)](https://doi.org/10.21203/rs.3.rs-7837297/v2)
-[![DOI](https://zenodo.org/badge/1059083951.svg)](https://doi.org/10.5281/zenodo.20882117)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20882117.svg)](https://doi.org/10.5281/zenodo.20882117)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://cedergrouphub.github.io/AutoEMX/)
 [![PR Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat)](https://pypi.org/project/autoemx/)
 
@@ -126,8 +126,8 @@ AutoEMX/
 │   ├── utils/                  # Utility functions and strings employed by the program
 │
 ├── examples/                  # Example scripts for fitting, quantification and compositional analysis of example data
-├── tests/                     # Unit tests for fitting, quantification, compositional analysis and image processing
-│                               # (Acquisition tests require proper EM drivers)
+├── tests/                     # CI smoke suite (`test_ci_smoke.py`) + offline workflow/unit tests
+│                               # Hardware-only scripts stay capitalized (`Test_EM_driver.py`)
 ├── paper_data/                # Raw paper data uploaded on Git LFS (Dowload instructions in Paper Data section below)
 │
 ├── LICENSE.txt
