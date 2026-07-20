@@ -1693,7 +1693,7 @@ class XSp_Quantifier:
                 None if quantification is considered reliable.
         """
         # Thresholds for unreliable quantification
-        redchi_threshold = 0.2    # Threshold of reduced-chi squared value as % of total counts
+        redchi_threshold = 0.16    # Threshold of reduced-chi squared value as % of total counts
         redchi_threshold_val = self.tot_sp_counts * redchi_threshold / 100
         an_err_threshold = 0.5    # Analytical error threshold (50 w%)
         abs_increase_threshold = 0.7  # Absorption increase threshold (170% of bulk absorption)
