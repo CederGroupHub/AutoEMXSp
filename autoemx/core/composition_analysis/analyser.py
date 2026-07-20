@@ -2254,6 +2254,21 @@ class EMXSp_Composition_Analyzer:
             self._apply_active_clustering_config(self.current_quant_config)
             return
 
+        # Same science as a prior (non-active) run: reuse the latest matching fingerprint.
+        if not force_new and existing_ledger is not None:
+            matching_prior = [
+                config
+                for config in existing_ledger.quantifications
+                if self._quantification_configs_match(config, candidate_config)
+            ]
+            if matching_prior:
+                latest_match = max(matching_prior, key=lambda config: config.quantification_id)
+                self.current_quant_config = latest_match
+                self.current_quantification_id = latest_match.quantification_id
+                self._ensure_current_clustering_run(self.current_quant_config)
+                self._apply_active_clustering_config(self.current_quant_config)
+                return
+
         if not force_new and active_quant_config is not None:
             changes = active_quant_config.fingerprint_differences(candidate_config)
             if changes:
@@ -2637,25 +2652,27 @@ class EMXSp_Composition_Analyzer:
 
 
     def _upsert_current_quantification_config_on_ledger(self, ledger: SampleLedger) -> None:
-        """Insert or replace the current quantification config inside the provided ledger, checking for true scientific equivalence using fingerprint."""
+        """Insert or replace the current quantification config inside the provided ledger.
+
+        Same scientific fingerprint with the same quantification_id updates that slot in place.
+        Same fingerprint with a different id is treated as a distinct run (no id remapping),
+        so force_requantification can keep a newly allocated id.
+        """
         if self.current_quant_config is None:
             return
 
-        # Check if an equivalent quantification config already exists in the ledger
+        # Same science and same id: refresh that slot (clustering history, etc.).
         for idx, config in enumerate(ledger.quantifications):
-            if self._quantification_configs_match(config, self.current_quant_config):
-                # Equivalent quantification inputs found: preserve the existing quantification_id
-                # while updating clustering history and active clustering index from current runtime state.
-                merged_config = self.current_quant_config.model_copy(
-                    update={"quantification_id": config.quantification_id}
-                )
-                ledger.quantifications[idx] = merged_config
-                self.current_quant_config = merged_config
-                self.current_quantification_id = merged_config.quantification_id
-                ledger.active_quant = merged_config.quantification_id
+            if (
+                config.quantification_id == self.current_quant_config.quantification_id
+                and self._quantification_configs_match(config, self.current_quant_config)
+            ):
+                ledger.quantifications[idx] = self.current_quant_config
+                self.current_quantification_id = self.current_quant_config.quantification_id
+                ledger.active_quant = self.current_quant_config.quantification_id
                 return
 
-        # Otherwise, upsert by quantification_id as before
+        # Upsert by quantification_id only (do not collapse distinct ids onto fingerprint matches).
         existing_index = next(
             (
                 i
@@ -2723,7 +2740,8 @@ class EMXSp_Composition_Analyzer:
         ----------
         overwrite : bool
             If True and a result with the same quantification_id already exists for this spectrum,
-            replace it (used when requantify_only_unquantified_spectra=True).
+            replace it (used for force_requantification, requantify_only_unquantified_spectra,
+            and interrupted re-runs).
         """
         existing_ledger = self._load_or_create_ledger()
         ledger = existing_ledger
@@ -3446,7 +3464,11 @@ class EMXSp_Composition_Analyzer:
                     print_single_separator("\n".join(lines))
 
                 if quant_record is not None:
-                    overwrite = (requantify_only_unquantified_spectra and had_prior_record) or was_interrupted
+                    overwrite = (
+                        force_requantification
+                        or (requantify_only_unquantified_spectra and had_prior_record)
+                        or was_interrupted
+                    )
                     self._persist_quantification_record(idx, quant_record, overwrite=overwrite)
             
             try:
