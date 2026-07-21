@@ -276,7 +276,7 @@ class PlottingModule:
                 if ref_phase_limits is not None:
                     ref_xlim, ref_ylim, ref_zlim = ref_phase_limits
                 for index, row in ref_phases_df.iterrows():
-                    if ref_xlim is not None and not point_within_composition_limits(
+                    if ref_xlim is not None and ref_ylim is not None and not point_within_composition_limits(
                         row.values, ref_xlim, ref_ylim, ref_zlim
                     ):
                         continue
@@ -313,11 +313,14 @@ class PlottingModule:
         else:
             ax: Any = fig.add_subplot(111)
         _plot_clustering_scene(ax, show_legend=True)
+        if is_3d:
+            # Reserve extra space on the right so the z-axis label is visible in exports.
+            fig.subplots_adjust(right=0.88)
         fig.savefig(
             os.path.join(self.analysis_dir, cnst.CLUSTERING_PLOT_FILENAME + cnst.CLUSTERING_PLOT_FILEEXT),
             dpi=300,
             bbox_inches='tight',
-            pad_inches=0.1,
+            pad_inches=0.2 if is_3d else 0.1,
         )
         if self.plot_cfg.show_plots:
             configure_interactive_clustering_axes(
@@ -356,6 +359,8 @@ class PlottingModule:
         )
         if is_3d:
             ax_zoomed.view_init(elev=CLUSTERING_3D_VIEW_ELEV, azim=CLUSTERING_3D_VIEW_AZIM)
+            # Match base-plot spacing to avoid clipping the z-axis label.
+            fig_zoomed.subplots_adjust(right=0.88)
 
         fig_zoomed.savefig(
             os.path.join(
@@ -364,7 +369,7 @@ class PlottingModule:
             ),
             dpi=300,
             bbox_inches='tight',
-            pad_inches=0.1,
+            pad_inches=0.2 if is_3d else 0.1,
         )
 
     def _save_violin_plot_powder_mixture(
