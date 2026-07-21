@@ -2,6 +2,9 @@
 Installation
 =========================
 
+On a normal desktop computer, installation typically takes at most a few
+minutes.
+
 You can install the package using pip:
 
 .. code-block:: bash
