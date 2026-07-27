@@ -2276,8 +2276,7 @@ class EMXSp_Composition_Analyzer:
                 if not active_quant_has_results:
                     logger.info(
                         "🆕 Quantification scientific fingerprint changed; "
-                        "replacing unused active quantification config. "
-                        "Changed fields: %s",
+                        "replacing unused active quantification config.\n%s",
                         changed_summary,
                     )
                     self.current_quant_config = candidate_config
@@ -2289,8 +2288,7 @@ class EMXSp_Composition_Analyzer:
                     return
                 logger.info(
                     "🆕 Quantification scientific fingerprint changed; "
-                    "creating a new quantification config. "
-                    "Changed fields: %s",
+                    "creating a new quantification config.\n%s",
                     changed_summary,
                 )
 
@@ -2500,22 +2498,22 @@ class EMXSp_Composition_Analyzer:
         max_items: int = 8,
         max_value_length: int = 80,
     ) -> str:
-        """Return a concise deterministic summary of config changes with old->new values."""
+        """Return a concise deterministic summary of config changes, one field per line."""
         if not changes:
-            return "none"
+            return "  • none"
 
         sorted_items = sorted(changes.items(), key=lambda item: item[0])
         formatted_entries: List[str] = []
         for path, change in sorted_items[:max_items]:
             old_val = EMXSp_Composition_Analyzer._short_repr(change.get("old"), max_value_length)
             new_val = EMXSp_Composition_Analyzer._short_repr(change.get("new"), max_value_length)
-            formatted_entries.append(f"{path}: {old_val} -> {new_val}")
+            formatted_entries.append(f"  • {path}: {old_val} -> {new_val}")
 
         remaining = len(sorted_items) - len(formatted_entries)
         if remaining > 0:
-            formatted_entries.append(f"... and {remaining} more")
+            formatted_entries.append(f"  • ... and {remaining} more")
 
-        return "; ".join(formatted_entries)
+        return "\n".join(formatted_entries)
 
     @staticmethod
     def _short_repr(value: Any, max_length: int) -> str:
@@ -2599,8 +2597,7 @@ class EMXSp_Composition_Analyzer:
                 changed_summary = self._format_quantification_config_changes(changes)
                 logger.info(
                     "🆕 Clustering scientific fingerprint changed; "
-                    "appending a new clustering config to the active quantification config. "
-                    "Changed fields: %s",
+                    "appending a new clustering config to the active quantification config.\n%s",
                     changed_summary,
                 )
 
