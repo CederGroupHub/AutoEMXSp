@@ -4,6 +4,7 @@
 
 from types import SimpleNamespace
 from typing import Any, Dict
+from unittest.mock import patch
 
 import pytest
 
@@ -130,13 +131,17 @@ def test_get_reference_values_loads_standards_when_standards_dict_is_none():
         _reference_values_changed=EMXSp_Composition_Analyzer._reference_values_changed,
     )
 
-    with pytest.warns(UserWarning, match="Reference values in standards differ"):
+    import autoemx.core.composition_analysis.analyser as analyser_mod
+
+    with patch.object(analyser_mod.logger, "info") as mock_info:
         result = EMXSp_Composition_Analyzer._get_reference_values_by_el_line(
             analyzer,
             active_quant_config=active,
         )
 
     assert result == live_refs
+    assert mock_info.called
+    assert "Reference values in standards differ" in mock_info.call_args.args[0]
 
 
 def test_get_reference_values_reuses_cache_when_live_refs_match_within_tolerance():

@@ -2274,10 +2274,11 @@ class EMXSp_Composition_Analyzer:
             if changes:
                 changed_summary = self._format_quantification_config_changes(changes)
                 if not active_quant_has_results:
-                    warnings.warn(
-                        "Quantification scientific inputs changed; replacing unused active quantification config. "
-                        f"Changed fields: {changed_summary}",
-                        UserWarning,
+                    logger.info(
+                        "🆕 Quantification scientific fingerprint changed; "
+                        "replacing unused active quantification config. "
+                        "Changed fields: %s",
+                        changed_summary,
                     )
                     self.current_quant_config = candidate_config
                     self.current_quantification_id = candidate_config.quantification_id
@@ -2286,10 +2287,11 @@ class EMXSp_Composition_Analyzer:
                     )
                     self._apply_active_clustering_config(self.current_quant_config)
                     return
-                warnings.warn(
-                    "Quantification scientific inputs changed; creating a new quantification config. "
-                    f"Changed fields: {changed_summary}",
-                    UserWarning,
+                logger.info(
+                    "🆕 Quantification scientific fingerprint changed; "
+                    "creating a new quantification config. "
+                    "Changed fields: %s",
+                    changed_summary,
                 )
 
         quantification_id = self._next_quantification_id(existing_ledger)
@@ -2352,11 +2354,10 @@ class EMXSp_Composition_Analyzer:
                 decimals=2,
                 relevant_elements=relevant_elements,
             ):
-                warnings.warn(
-                    "Reference values in standards differ from active quantification config "
+                logger.info(
+                    "🆕 Reference values in standards differ from active quantification config "
                     "(beyond 2-decimal tolerance) for sample/substrate elements; "
-                    "a new quantification config will be created.",
-                    UserWarning,
+                    "a new quantification config will be created."
                 )
                 return current_reference_values
             return cached_reference_values
@@ -2596,11 +2597,11 @@ class EMXSp_Composition_Analyzer:
             changes = active_clustering_config.fingerprint_differences(candidate_clustering_config)
             if changes:
                 changed_summary = self._format_quantification_config_changes(changes)
-                warnings.warn(
-                    "Clustering scientific inputs changed; appending a new clustering config to the active "
-                    "quantification config. "
-                    f"Changed fields: {changed_summary}",
-                    UserWarning,
+                logger.info(
+                    "🆕 Clustering scientific fingerprint changed; "
+                    "appending a new clustering config to the active quantification config. "
+                    "Changed fields: %s",
+                    changed_summary,
                 )
 
         quant_config.clustering_analyses.append(
