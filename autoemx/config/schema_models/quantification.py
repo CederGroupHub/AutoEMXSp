@@ -340,19 +340,19 @@ class QuantificationConfig(BaseModel):
         """Return canonical scientific inputs used to decide quantification reuse.
 
         ``reference_values_by_el_line`` / ``reference_lines_by_element`` are scoped to
-        ``sample_elements`` and ``substrate_elements`` so reuse decisions react when
-        per-line reference values for those elements change.
+        ``sample_elements`` only (substrate reference lines are never part of the
+        scientific signature and should not be stored).
         """
-        relevant_elements = set(self.sample_elements) | set(self.substrate_elements)
+        sample_elements = set(self.sample_elements)
         reference_values_for_signature = {
             str(el_line): value
             for el_line, value in self.reference_values_by_el_line.items()
-            if str(el_line).split("_", maxsplit=1)[0] in relevant_elements
+            if str(el_line).split("_", maxsplit=1)[0] in sample_elements
         }
         reference_lines_for_signature = {
             str(element): str(el_line)
             for element, el_line in self.reference_lines_by_element.items()
-            if str(element) in relevant_elements
+            if str(element) in sample_elements
         }
         return {
             "sample_elements": sorted(self.sample_elements),

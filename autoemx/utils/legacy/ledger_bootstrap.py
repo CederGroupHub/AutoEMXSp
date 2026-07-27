@@ -624,7 +624,8 @@ def build_legacy_import_quantification_config(
                 std_f_dir=std_f_dir,
             )
             standards_by_line = standards_by_mode.get(ledger_configs.measurement_cfg.mode, {})
-            relevant_elements = set(ledger_configs.sample_cfg.elements) | set(ledger_configs.sample_substrate_cfg.elements)
+            # Store only sample-element reference lines (never substrate).
+            relevant_elements = set(ledger_configs.sample_cfg.elements)
             reference_values_by_el_line = _extract_reference_values_for_quantification(
                 standards_by_line,
                 relevant_elements,

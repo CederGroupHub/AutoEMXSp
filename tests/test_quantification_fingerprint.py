@@ -55,19 +55,35 @@ def test_fingerprint_includes_sample_element_reference_values():
     assert payload["reference_values_by_el_line"]["Pb_Ma1"] == pytest.approx(4.56)
 
 
-def test_fingerprint_scopes_reference_values_to_sample_and_substrate_elements():
+def test_fingerprint_scopes_reference_values_to_sample_elements_only():
     payload = _quant_config(
         sample_elements=["Mo"],
         substrate_elements=["C"],
         reference_values_by_el_line={
             "Mo_La1": 1.0,
-            "C_Ka1": 2.0,
+            "C_Ka1": 2.0,  # substrate must not affect the signature
             "Zn_Ka1": 9.0,  # unrelated element must not affect the signature
         },
     ).fingerprint_payload()
 
-    assert set(payload["reference_values_by_el_line"]) == {"C_Ka1", "Mo_La1"}
+    assert set(payload["reference_values_by_el_line"]) == {"Mo_La1"}
+    assert "C_Ka1" not in payload["reference_values_by_el_line"]
     assert "Zn_Ka1" not in payload["reference_values_by_el_line"]
+
+
+def test_fingerprint_ignores_substrate_reference_value_changes():
+    base = _quant_config(
+        sample_elements=["Mo"],
+        substrate_elements=["C"],
+        reference_values_by_el_line={"Mo_La1": 1.0, "C_Ka1": 2.0},
+    )
+    changed = _quant_config(
+        sample_elements=["Mo"],
+        substrate_elements=["C"],
+        reference_values_by_el_line={"Mo_La1": 1.0, "C_Ka1": 9.9},
+    )
+
+    assert base.fingerprint() == changed.fingerprint()
 
 
 def test_fingerprint_changes_when_sample_element_reference_value_changes():
@@ -128,6 +144,7 @@ def test_get_reference_values_loads_standards_when_standards_dict_is_none():
         _extract_reference_values_from_standards=lambda load_if_missing: (
             live_refs if load_if_missing else {}
         ),
+        _filter_reference_values_for_elements=EMXSp_Composition_Analyzer._filter_reference_values_for_elements,
         _reference_values_changed=EMXSp_Composition_Analyzer._reference_values_changed,
     )
 
@@ -161,6 +178,7 @@ def test_get_reference_values_reuses_cache_when_live_refs_match_within_tolerance
         _extract_reference_values_from_standards=lambda load_if_missing: (
             live_refs if load_if_missing else {}
         ),
+        _filter_reference_values_for_elements=EMXSp_Composition_Analyzer._filter_reference_values_for_elements,
         _reference_values_changed=EMXSp_Composition_Analyzer._reference_values_changed,
     )
 
@@ -171,13 +189,14 @@ def test_get_reference_values_reuses_cache_when_live_refs_match_within_tolerance
     assert result == cached_refs
 
 
-def test_extract_reference_values_filters_to_quant_ref_lines():
+def test_extract_reference_values_filters_to_sample_quant_ref_lines():
     import autoemx.utils.constants as cnst
 
     standards_by_line = {
         "Mo_La1": [{cnst.STD_ID_KEY: cnst.STD_MEAN_ID_KEY, cnst.COR_PB_DF_KEY: 1.2}],
         "Mo_Lb1": [{cnst.STD_ID_KEY: cnst.STD_MEAN_ID_KEY, cnst.COR_PB_DF_KEY: 9.9}],  # not a quant ref line
-        "Zn_Ka1": [{cnst.STD_ID_KEY: cnst.STD_MEAN_ID_KEY, cnst.COR_PB_DF_KEY: 3.3}],  # not a sample element
+        "C_Ka1": [{cnst.STD_ID_KEY: cnst.STD_MEAN_ID_KEY, cnst.COR_PB_DF_KEY: 0.5}],  # substrate
+        "Zn_Ka1": [{cnst.STD_ID_KEY: cnst.STD_MEAN_ID_KEY, cnst.COR_PB_DF_KEY: 3.3}],  # unrelated
     }
 
     analyzer = SimpleNamespace(
@@ -186,7 +205,7 @@ def test_extract_reference_values_filters_to_quant_ref_lines():
         standards=None,
         measurement_cfg=SimpleNamespace(mode="TEM"),
         detectable_els_sample=["Mo"],
-        detectable_els_substrate=[],
+        detectable_els_substrate=["C"],
     )
 
     result = EMXSp_Composition_Analyzer._extract_reference_values_from_standards(

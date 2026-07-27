@@ -2330,31 +2330,36 @@ class EMXSp_Composition_Analyzer:
     ) -> Dict[str, Any]:
         """Return method-dependent reference values for the scientific fingerprint.
 
-        Always loads standards when needed so live ``reference_values_by_el_line`` for
-        sample/substrate elements are compared against any cached active-config values.
-        Cached values are reused only when they match the live standards within tolerance.
+        Only sample-element reference lines are stored and compared. Substrate
+        elements are excluded from ``reference_values_by_el_line``.
+
+        Always loads standards when needed so live values for sample elements are
+        compared against any cached active-config values. Cached values are reused
+        only when they match the live standards within tolerance.
         """
         # load_if_missing=True is required: the default quant path leaves
         # standards_dict=None until XSp_Quantifier loads standards, so a False
         # flag would skip the comparison and always reuse stale cached refs.
+        sample_elements = set(self.all_els_sample)
         current_reference_values = self._extract_reference_values_from_standards(load_if_missing=True)
 
         if active_quant_config is not None and active_quant_config.reference_values_by_el_line:
-            cached_reference_values = dict(sorted(active_quant_config.reference_values_by_el_line.items()))
+            cached_reference_values = self._filter_reference_values_for_elements(
+                active_quant_config.reference_values_by_el_line,
+                relevant_elements=sample_elements,
+            )
             if not current_reference_values:
                 return cached_reference_values
 
-            # Match QuantificationConfig.fingerprint_payload scoping.
-            relevant_elements = set(self.all_els_sample) | set(self.all_els_substrate)
             if self._reference_values_changed(
                 current_reference_values,
                 cached_reference_values,
                 decimals=2,
-                relevant_elements=relevant_elements,
+                relevant_elements=sample_elements,
             ):
                 logger.info(
                     "🆕 Reference values in standards differ from active quantification config "
-                    "(beyond 2-decimal tolerance) for sample/substrate elements; "
+                    "(beyond 2-decimal tolerance) for sample elements; "
                     "a new quantification config will be created."
                 )
                 return current_reference_values
@@ -2448,7 +2453,8 @@ class EMXSp_Composition_Analyzer:
         if standards_by_line is None:
             return {}
 
-        relevant_elements = set(self.detectable_els_sample) | set(self.detectable_els_substrate)
+        # Persist/compare only sample-element reference lines (never substrate).
+        relevant_elements = set(self.detectable_els_sample)
         reference_line_suffixes = tuple(XSp_Quantifier.xray_quant_ref_lines)
         reference_values_by_el_line: Dict[str, Any] = {}
         if self.quant_cfg.method == "PB":
@@ -2664,8 +2670,13 @@ class EMXSp_Composition_Analyzer:
         label = f"Quant {quantification_id} {self.output_filename_suffix}"
         if isinstance(self.output_filename_suffix, str) and self.output_filename_suffix:
             label += self.output_filename_suffix
+        # Never persist substrate reference lines in the quantification config.
+        sample_reference_values = self._filter_reference_values_for_elements(
+            reference_values_by_el_line,
+            relevant_elements=set(sample_elements),
+        )
         reference_lines_by_element = QuantificationConfig.derive_reference_lines_by_element(
-            reference_values_by_el_line=reference_values_by_el_line,
+            reference_values_by_el_line=sample_reference_values,
             preferred_lines=XSp_Quantifier.xray_quant_ref_lines,
         )
         return QuantificationConfig(
@@ -2675,7 +2686,7 @@ class EMXSp_Composition_Analyzer:
             substrate_elements=substrate_elements,
             els_w_fr=self._get_forced_mass_fractions(),
             options=options,
-            reference_values_by_el_line=reference_values_by_el_line,
+            reference_values_by_el_line=sample_reference_values,
             reference_lines_by_element=reference_lines_by_element,
             clustering_analyses=[],
             active_clustering_analysis_index=None,
