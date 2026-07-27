@@ -17,6 +17,13 @@ This guide introduces how to use ``AutoEMX`` for typical workflows:
 
    Ensure the EDS detector is periodically recalibrated for optimal EDS quantification. See :ref:`EDS Detector Calibration <advanced_sdd_calib>`.
 
+Expected runtime on a normal desktop computer:
+
+- Quantification typically takes a 0.5-3 minutes per spectrum.
+- For multiple spectra, quantification is parallelized, so runtime does not
+   scale linearly with the number of spectra. 100 spectra can be quantified in 10 minutes with 10 CPU units.
+- Composition analysis (clustering/statistical analysis) typically takes a few seconds.
+
 
 Workflows
 ----------------------------------------------------

@@ -70,6 +70,17 @@ Demo
 Watch ``AutoEMX`` in action on a desktop SEM–EDS system:
 https://youtu.be/Bym58gNxlj0
 
+For a step-by-step guide to run this workflow, see:
+:ref:`Tutorial: EDS compositional analysis for phase identification <comp_analysis_tutorial>`.
+
+Expected runtime on a normal desktop computer:
+
+- Quantification typically takes a few minutes per spectrum.
+- For multiple spectra, quantification is parallelized and therefore does not
+  scale linearly with the number of spectra.
+- Composition analysis (clustering/statistical analysis) typically takes a few
+  seconds.
+
 
 Performance
 -----------
@@ -90,6 +101,25 @@ Requirements
 ------------
 
 - Python 3.11 or above
+
+- Software dependencies:
+
+  - cvxpy >=1.5.3, <=1.7.3
+  - ecos >=2.0.12
+  - lmfit >=1.3.2, <=1.3.4
+  - matplotlib >=3.5.2, <=3.10.6
+  - numpy >=1.26.4, <=2.2.6
+  - pandas >=2.2.2, <=2.3.3
+  - pydantic >=2.7.0, <=2.11.3
+  - pymatgen >=2024.11.13, <=2025.10.7
+  - scikit-learn >=1.5.1, <=1.7.2
+  - scikit-image >=0.24.0, <=0.25.2
+  - scipy >=1.14.1, <=1.16.2
+  - seaborn ==0.13.2
+  - sympy >=1.13.2, <=1.14.0
+  - yellowbrick ==1.5
+  - opencv-python >=4.10.0, <=4.12.0.88
+  - pillow >=10.0.1
 
 - Electron Microscope provided with an API.
   ``AutoEMX`` comes with a driver for Thermofisher PyPhenom. For different microscopes, 

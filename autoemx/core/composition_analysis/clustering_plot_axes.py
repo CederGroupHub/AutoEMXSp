@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, List, Optional, Sequence
 
 import numpy as np
@@ -49,13 +50,74 @@ def composition_axis_ticks(lo: float, hi: float, *, nbins: int = 6) -> np.ndarra
     if data_hi <= data_lo:
         return np.array([0.0])
 
+    # Keep ticks at integer-percent granularity at minimum (>= 1% step).
+    min_step = 0.01
+    span = data_hi - data_lo
+    target_step = span / max(1, nbins)
     ticks = MaxNLocator(nbins=nbins).tick_values(data_lo, data_hi)
     ticks = ticks[(ticks >= 0.0) & (ticks <= 1.0)]
+
+    if ticks.size >= 2:
+        diffs = np.diff(np.sort(ticks))
+        if diffs.size > 0 and float(np.nanmin(diffs)) < min_step:
+            ticks = np.array([], dtype=float)
+
+    if ticks.size == 0:
+        # Build "nice" ticks, never denser than 1% spacing.
+        nice_step = max(min_step, _nice_step(target_step))
+        start = math.ceil(data_lo / nice_step) * nice_step
+        ticks = np.arange(start, data_hi + (nice_step * 0.5), nice_step)
+        ticks = ticks[(ticks >= 0.0) & (ticks <= 1.0)]
 
     if data_lo <= 0.0 and not np.any(np.isclose(ticks, 0.0)):
         ticks = np.sort(np.unique(np.concatenate(([0.0], ticks))))
 
     return ticks
+
+
+def _nice_step(step: float) -> float:
+    """Return a 1-2-5 scaled step size close to ``step``."""
+    if not np.isfinite(step) or step <= 0.0:
+        return 0.01
+
+    exponent = math.floor(math.log10(step))
+    fraction = step / (10.0 ** exponent)
+
+    if fraction <= 1.0:
+        nice_fraction = 1.0
+    elif fraction <= 2.0:
+        nice_fraction = 2.0
+    elif fraction <= 5.0:
+        nice_fraction = 5.0
+    else:
+        nice_fraction = 10.0
+
+    return nice_fraction * (10.0 ** exponent)
+
+
+def _enforce_min_axis_span(
+    low: float,
+    high: float,
+    *,
+    min_span: float,
+) -> tuple[float, float]:
+    """Guarantee an axis span while keeping limits clamped to [0, 1]."""
+    low, high = _clamp_fraction_limits(low, high)
+    if high - low >= min_span:
+        return low, high
+
+    center = 0.5 * (low + high)
+    half = min_span * 0.5
+    low = max(0.0, center - half)
+    high = min(1.0, center + half)
+
+    if high - low < min_span:
+        if np.isclose(low, 0.0):
+            high = min(1.0, low + min_span)
+        elif np.isclose(high, 1.0):
+            low = max(0.0, high - min_span)
+
+    return _clamp_fraction_limits(low, high)
 
 
 class _CompositionTickLocator(Locator):
@@ -210,6 +272,7 @@ def compute_data_driven_axis_limits(
     *,
     is_3d: bool = False,
     margin_ratio: float = 0.20,
+    min_span_fraction: float = 0.01,
 ) -> tuple[tuple[float, float], tuple[float, float], Optional[tuple[float, float]]]:
     """Return data-driven composition axis limits for clustering zoom plots."""
     default = (0.0, 1.0)
@@ -222,12 +285,15 @@ def compute_data_driven_axis_limits(
     y_low, y_high = expand_limits(y_low, y_high, margin_ratio=margin_ratio)
     x_low, x_high = _clamp_fraction_limits(x_low, x_high)
     y_low, y_high = _clamp_fraction_limits(y_low, y_high)
+    x_low, x_high = _enforce_min_axis_span(x_low, x_high, min_span=min_span_fraction)
+    y_low, y_high = _enforce_min_axis_span(y_low, y_high, min_span=min_span_fraction)
 
     zlim = None
     if is_3d:
         z_low, z_high = compute_zoom_limits(all_points[:, 2])
         z_low, z_high = expand_limits(z_low, z_high, margin_ratio=margin_ratio)
-        zlim = _clamp_fraction_limits(z_low, z_high)
+        z_low, z_high = _clamp_fraction_limits(z_low, z_high)
+        zlim = _enforce_min_axis_span(z_low, z_high, min_span=min_span_fraction)
 
     return (x_low, x_high), (y_low, y_high), zlim
 
