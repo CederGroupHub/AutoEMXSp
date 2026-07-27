@@ -44,6 +44,16 @@ from test_dbscan_clustering import (  # noqa: F401
     test_run_dbscan_clustering_single_cluster_has_nan_silhouette,
     test_run_dbscan_clustering_two_clusters_with_noise,
 )
+from test_quantification_fingerprint import (  # noqa: F401
+    test_extract_reference_values_filters_to_quant_ref_lines,
+    test_fingerprint_changes_when_sample_element_reference_value_changes,
+    test_fingerprint_ignores_unrelated_element_reference_value_changes,
+    test_fingerprint_includes_sample_element_reference_values,
+    test_fingerprint_scopes_reference_values_to_sample_and_substrate_elements,
+    test_get_reference_values_loads_standards_when_standards_dict_is_none,
+    test_get_reference_values_reuses_cache_when_live_refs_match_within_tolerance,
+    test_reference_values_changed_respects_relevant_elements,
+)
 from test_msa_writer_regressions import (  # noqa: F401
     test_write_spectrum_pointer_file_preserves_template_tail,
 )

@@ -337,14 +337,30 @@ class QuantificationConfig(BaseModel):
         return dict(sorted(selected.items()))
 
     def fingerprint_payload(self) -> Dict[str, Any]:
-        """Return canonical scientific inputs used to decide quantification reuse."""
+        """Return canonical scientific inputs used to decide quantification reuse.
+
+        ``reference_values_by_el_line`` / ``reference_lines_by_element`` are scoped to
+        ``sample_elements`` and ``substrate_elements`` so reuse decisions react when
+        per-line reference values for those elements change.
+        """
+        relevant_elements = set(self.sample_elements) | set(self.substrate_elements)
+        reference_values_for_signature = {
+            str(el_line): value
+            for el_line, value in self.reference_values_by_el_line.items()
+            if str(el_line).split("_", maxsplit=1)[0] in relevant_elements
+        }
+        reference_lines_for_signature = {
+            str(element): str(el_line)
+            for element, el_line in self.reference_lines_by_element.items()
+            if str(element) in relevant_elements
+        }
         return {
             "sample_elements": sorted(self.sample_elements),
             "substrate_elements": sorted(self.substrate_elements),
             "els_w_fr": _canonicalize_json_value(self.els_w_fr),
             "options": _canonicalize_json_value(self.options),
-            "reference_values_by_el_line": _canonicalize_json_value(self.reference_values_by_el_line),
-            "reference_lines_by_element": _canonicalize_json_value(self.reference_lines_by_element),
+            "reference_values_by_el_line": _canonicalize_json_value(reference_values_for_signature),
+            "reference_lines_by_element": _canonicalize_json_value(reference_lines_for_signature),
         }
 
     def fingerprint(self) -> str:

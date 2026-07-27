@@ -2328,35 +2328,72 @@ class EMXSp_Composition_Analyzer:
         self,
         active_quant_config: Optional[QuantificationConfig] = None,
     ) -> Dict[str, Any]:
-        """Return method-dependent reference values, reusing persisted config values when possible."""
+        """Return method-dependent reference values for the scientific fingerprint.
+
+        Always loads standards when needed so live ``reference_values_by_el_line`` for
+        sample/substrate elements are compared against any cached active-config values.
+        Cached values are reused only when they match the live standards within tolerance.
+        """
+        # load_if_missing=True is required: the default quant path leaves
+        # standards_dict=None until XSp_Quantifier loads standards, so a False
+        # flag would skip the comparison and always reuse stale cached refs.
+        current_reference_values = self._extract_reference_values_from_standards(load_if_missing=True)
+
         if active_quant_config is not None and active_quant_config.reference_values_by_el_line:
             cached_reference_values = dict(sorted(active_quant_config.reference_values_by_el_line.items()))
-            current_reference_values = self._extract_reference_values_from_standards(load_if_missing=False)
-            if current_reference_values and self._reference_values_changed(
+            if not current_reference_values:
+                return cached_reference_values
+
+            # Match QuantificationConfig.fingerprint_payload scoping.
+            relevant_elements = set(self.all_els_sample) | set(self.all_els_substrate)
+            if self._reference_values_changed(
                 current_reference_values,
                 cached_reference_values,
                 decimals=2,
+                relevant_elements=relevant_elements,
             ):
                 warnings.warn(
                     "Reference values in standards differ from active quantification config "
-                    "(beyond 2-decimal tolerance); "
+                    "(beyond 2-decimal tolerance) for sample/substrate elements; "
                     "a new quantification config will be created.",
                     UserWarning,
                 )
                 return current_reference_values
             return cached_reference_values
 
-        return self._extract_reference_values_from_standards(load_if_missing=True)
+        return current_reference_values
+
+
+    @staticmethod
+    def _filter_reference_values_for_elements(
+        reference_values_by_el_line: Dict[str, Any],
+        relevant_elements: Optional[set[str]] = None,
+    ) -> Dict[str, Any]:
+        """Keep only reference-line entries whose element is in ``relevant_elements``."""
+        if relevant_elements is None:
+            return dict(sorted((str(k), v) for k, v in reference_values_by_el_line.items()))
+
+        filtered: Dict[str, Any] = {}
+        for el_line, value in reference_values_by_el_line.items():
+            element = str(el_line).split("_", maxsplit=1)[0]
+            if element in relevant_elements:
+                filtered[str(el_line)] = value
+        return dict(sorted(filtered.items()))
 
 
     @staticmethod
     def _rounded_reference_values(
         reference_values_by_el_line: Dict[str, Any],
         decimals: int,
+        relevant_elements: Optional[set[str]] = None,
     ) -> Dict[str, float]:
         """Return deterministic rounded reference values keyed by element-line."""
+        filtered = EMXSp_Composition_Analyzer._filter_reference_values_for_elements(
+            reference_values_by_el_line,
+            relevant_elements=relevant_elements,
+        )
         rounded: Dict[str, float] = {}
-        for el_line, value in reference_values_by_el_line.items():
+        for el_line, value in filtered.items():
             rounded[str(el_line)] = round(float(value), decimals)
         return dict(sorted(rounded.items()))
 
@@ -2367,10 +2404,19 @@ class EMXSp_Composition_Analyzer:
         current_reference_values: Dict[str, Any],
         cached_reference_values: Dict[str, Any],
         decimals: int,
+        relevant_elements: Optional[set[str]] = None,
     ) -> bool:
         """Return True when reference values differ beyond configured decimal tolerance."""
-        rounded_current = cls._rounded_reference_values(current_reference_values, decimals)
-        rounded_cached = cls._rounded_reference_values(cached_reference_values, decimals)
+        rounded_current = cls._rounded_reference_values(
+            current_reference_values,
+            decimals,
+            relevant_elements=relevant_elements,
+        )
+        rounded_cached = cls._rounded_reference_values(
+            cached_reference_values,
+            decimals,
+            relevant_elements=relevant_elements,
+        )
         return rounded_current != rounded_cached
 
 
@@ -2404,24 +2450,25 @@ class EMXSp_Composition_Analyzer:
             return {}
 
         relevant_elements = set(self.detectable_els_sample) | set(self.detectable_els_substrate)
+        reference_line_suffixes = tuple(XSp_Quantifier.xray_quant_ref_lines)
         reference_values_by_el_line: Dict[str, Any] = {}
         if self.quant_cfg.method == "PB":
             for el_line, std_values in standards_by_line.items():
-                element = el_line.split("_", maxsplit=1)[0]
-                if element not in relevant_elements:
+                element, _, line_suffix = str(el_line).partition("_")
+                if element not in relevant_elements or line_suffix not in reference_line_suffixes:
                     continue
 
                 if hasattr(std_values, "reference_mean"):
                     reference_mean = getattr(std_values, "reference_mean", None)
                     if reference_mean is None:
                         continue
-                    reference_values_by_el_line[el_line] = float(reference_mean.corrected_pb)
+                    reference_values_by_el_line[str(el_line)] = float(reference_mean.corrected_pb)
                     continue
 
                 if isinstance(std_values, dict):
                     reference_mean = std_values.get("reference_mean")
                     if isinstance(reference_mean, dict) and cnst.COR_PB_DF_KEY in reference_mean:
-                        reference_values_by_el_line[el_line] = float(reference_mean[cnst.COR_PB_DF_KEY])
+                        reference_values_by_el_line[str(el_line)] = float(reference_mean[cnst.COR_PB_DF_KEY])
                         continue
                     std_values = std_values.get("entries", [])
 
@@ -2431,7 +2478,7 @@ class EMXSp_Composition_Analyzer:
                 )
                 if mean_std is None or cnst.COR_PB_DF_KEY not in mean_std:
                     continue
-                reference_values_by_el_line[el_line] = float(mean_std[cnst.COR_PB_DF_KEY])
+                reference_values_by_el_line[str(el_line)] = float(mean_std[cnst.COR_PB_DF_KEY])
 
         return dict(sorted(reference_values_by_el_line.items()))
 
