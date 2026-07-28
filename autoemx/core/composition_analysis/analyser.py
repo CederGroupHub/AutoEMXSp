@@ -106,6 +106,7 @@ from autoemx.config.ledger_schemas import (
     ClusteringConfig as LedgerClusteringConfig,
     Coordinate2D,
     LedgerConfigs,
+    ParticleInfo,
     QuantificationConfig,
     QuantificationDiagnostics,
     QuantificationResult,
@@ -2165,18 +2166,159 @@ class EMXSp_Composition_Analyzer:
         )
 
 
-    def _extract_spectrum_info(self, spectrum: 'SpectrumEntry', index: int) -> dict:
+    def _extract_spectrum_info(
+        self,
+        spectrum: 'SpectrumEntry',
+        index: int,
+        particles_by_id: Optional[Dict[int, ParticleInfo]] = None,
+    ) -> dict:
         """Extract spectrum metadata from a ledger SpectrumEntry for use in CSV export."""
         par_id = frame_id = ""
+        particle_id_int: Optional[int] = None
         acq = spectrum.acquisition_details
         if acq is not None:
-            par_id = str(acq.particle_id or "")
+            particle_id_int = acq.particle_id
+            par_id = str(acq.particle_id) if acq.particle_id is not None else ""
             frame_id = str(acq.frame_id or "")
-        return {
+
+        row = {
             cnst.SP_ID_DF_KEY: str(spectrum.spectrum_id) if spectrum.spectrum_id is not None else str(index),
             cnst.PAR_ID_DF_KEY: par_id,
-            cnst.FRAME_ID_DF_KEY: frame_id,
         }
+        if particles_by_id:
+            particle = particles_by_id.get(particle_id_int) if particle_id_int is not None else None
+            row[cnst.PAR_AREA_UM_KEY] = particle.area_um if particle is not None else ""
+            row[cnst.PAR_EQ_D_KEY] = particle.eq_diameter_um if particle is not None else ""
+        row[cnst.FRAME_ID_DF_KEY] = frame_id
+        return row
+
+    @staticmethod
+    def _eq_diameter_um_from_area(area_um: float) -> float:
+        """Equivalent circular diameter in µm for a given area in µm²."""
+        return float(2.0 * np.sqrt(area_um / np.pi))
+
+    def _upsert_particle_info(
+        self,
+        ledger: SampleLedger,
+        particle_id: int,
+        area_um: Optional[float],
+    ) -> None:
+        """Create or update the ParticleInfo entry for a particle in the ledger."""
+        eq_diameter_um = (
+            self._eq_diameter_um_from_area(area_um) if area_um is not None else None
+        )
+        for particle in ledger.particles:
+            if particle.id == particle_id:
+                if area_um is not None:
+                    particle.area_um = area_um
+                    particle.eq_diameter_um = eq_diameter_um
+                return
+        ledger.particles.append(
+            ParticleInfo(
+                id=particle_id,
+                area_um=area_um,
+                eq_diameter_um=eq_diameter_um,
+            )
+        )
+
+    @staticmethod
+    def _format_particle_composition_string(
+        cluster_ids: List[int],
+        clustering_result: ClusteringResult,
+    ) -> Optional[str]:
+        """Build the Candidate phases / mixtures string for a particle's clusters."""
+        phase_parts: List[str] = []
+        mixture_parts: List[str] = []
+        refs_rows = clustering_result.refs_assigned_rows or []
+        mixtures_by_cluster = clustering_result.clusters_assigned_mixtures or []
+
+        for cluster_id in cluster_ids:
+            if cluster_id < 0:
+                continue
+            if cluster_id < len(refs_rows):
+                row = refs_rows[cluster_id] or {}
+                phase_name = row.get(f"{cnst.CND_DF_KEY}1")
+                phase_conf = row.get(f"{cnst.CS_CND_DF_KEY}1")
+                if phase_name:
+                    if phase_conf is None:
+                        phase_parts.append(str(phase_name))
+                    else:
+                        phase_parts.append(f"{phase_name} (CScnd: {float(phase_conf):.2f})")
+
+            if cluster_id < len(mixtures_by_cluster):
+                mixtures = mixtures_by_cluster[cluster_id] or []
+                if mixtures:
+                    top_mix = sorted(
+                        mixtures,
+                        key=lambda m: -float(m.get(cnst.CONF_SCORE_KEY, 0.0)),
+                    )[0]
+                    refs = top_mix.get(cnst.REF_NAME_KEY) or []
+                    conf = top_mix.get(cnst.CONF_SCORE_KEY)
+                    if refs:
+                        mix_name = "+".join(str(r) for r in refs)
+                        if conf is None:
+                            mixture_parts.append(mix_name)
+                        else:
+                            mixture_parts.append(f"{mix_name} (CSmix: {float(conf):.2f})")
+
+        sections: List[str] = []
+        if phase_parts:
+            sections.append("Candidate phases: " + ", ".join(phase_parts))
+        if mixture_parts:
+            sections.append("candidate mixtures: " + ", ".join(mixture_parts))
+        if not sections:
+            return None
+        return "; ".join(sections)
+
+    def _update_particles_from_clustering(
+        self,
+        ledger: SampleLedger,
+        labels: Optional[List],
+        df_indices: Optional[List],
+        clustering_result: ClusteringResult,
+    ) -> bool:
+        """
+        Fill ParticleInfo.clusters and .composition from the active clustering run.
+
+        Returns True if the ledger was modified.
+        """
+        if not ledger.particles or labels is None or df_indices is None:
+            return False
+
+        clusters_by_particle: Dict[int, List[int]] = {
+            particle.id: [] for particle in ledger.particles
+        }
+        for label_pos, spectrum_index in enumerate(df_indices):
+            if label_pos >= len(labels):
+                continue
+            cluster_id = labels[label_pos]
+            if cluster_id is None or pd.isna(cluster_id):
+                continue
+            cluster_id_int = int(cluster_id)
+            if cluster_id_int < 0:
+                continue
+            if spectrum_index < 0 or spectrum_index >= len(ledger.spectra):
+                continue
+            acq = ledger.spectra[spectrum_index].acquisition_details
+            if acq is None or acq.particle_id is None:
+                continue
+            particle_id = int(acq.particle_id)
+            if particle_id not in clusters_by_particle:
+                continue
+            if cluster_id_int not in clusters_by_particle[particle_id]:
+                clusters_by_particle[particle_id].append(cluster_id_int)
+
+        changed = False
+        for particle in ledger.particles:
+            ordered_clusters = sorted(clusters_by_particle.get(particle.id, []))
+            composition = self._format_particle_composition_string(
+                ordered_clusters, clustering_result
+            )
+            if particle.clusters != ordered_clusters or particle.composition != composition:
+                particle.clusters = ordered_clusters
+                particle.composition = composition
+                changed = True
+        return changed
 
 
     def _build_ledger_configs(self) -> LedgerConfigs:
@@ -3130,6 +3272,16 @@ class EMXSp_Composition_Analyzer:
             else:
                 self.particle_cntr = None
             frame_ID = self.EM_controller.current_frame_label
+
+            particle_area_um: Optional[float] = None
+            if (
+                self.sample_cfg.is_particle_acquisition
+                and self.particle_cntr is not None
+                and getattr(self, "EM_controller", None) is not None
+            ):
+                particle_finder = getattr(self.EM_controller, "particle_finder", None)
+                if particle_finder is not None:
+                    particle_area_um = getattr(particle_finder, "current_par_area_um2", None)
             
             latest_spot_id = None # For image annotations
             for i, (x, y) in enumerate(spots_xy_list):
@@ -3187,10 +3339,20 @@ class EMXSp_Composition_Analyzer:
                         sample_path=os.path.abspath(self.sample_result_dir),
                         configs=self._build_ledger_configs(),
                         spectra=[],
+                        particles=[],
                         quantifications=[],
                         active_quant=None,
                     )
                 ledger.spectra.append(spectrum_entry)
+                if (
+                    self.sample_cfg.is_particle_acquisition
+                    and self.particle_cntr is not None
+                ):
+                    self._upsert_particle_info(
+                        ledger,
+                        particle_id=int(self.particle_cntr),
+                        area_um=particle_area_um,
+                    )
                 ledger.to_json_file(ledger_path)
                 ingested_spectrum_ids.add(str(spectrum_entry.spectrum_id))
                 n_spectra_collected += 1
@@ -3797,6 +3959,13 @@ class EMXSp_Composition_Analyzer:
         )
         self._save_result_and_stats(clustering_artifacts)
         self._persist_clustering_result_on_active_analysis(clustering_artifacts)
+
+        # 8b. Back-fill particle cluster/composition summaries when particles exist
+        ledger_for_particles = self._load_or_create_ledger()
+        if self._update_particles_from_clustering(
+            ledger_for_particles, labels, df_indices, clustering_artifacts
+        ):
+            ledger_for_particles.to_json_file(self._get_ledger_path())
     
         # 9. Save plots
         if self.plot_cfg.save_plots:
@@ -4392,12 +4561,18 @@ class EMXSp_Composition_Analyzer:
     
         if n_spectra == 0:
             return None
+
+        particles_by_id: Optional[Dict[int, ParticleInfo]] = None
+        if ledger.particles:
+            particles_by_id = {particle.id: particle for particle in ledger.particles}
         
         data_list = []
         for i in range(n_spectra):
             # Retrieve the typed QuantificationResult for this spectrum (None when not quantified)
             record = self.spectra_quant_records[i] if i < len(self.spectra_quant_records) else None
-            coords = self._extract_spectrum_info(ledger_spectra[i], i)
+            coords = self._extract_spectrum_info(
+                ledger_spectra[i], i, particles_by_id=particles_by_id
+            )
             has_composition_result = record is not None and record.composition_atomic_fractions is not None
             has_result = has_composition_result
 

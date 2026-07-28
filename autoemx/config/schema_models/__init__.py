@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from .acquisition import AcquisitionDetails, Coordinate2D, SpectrumEntry, SpotCoordinates
+from .acquisition import AcquisitionDetails, Coordinate2D, ParticleInfo, SpectrumEntry, SpotCoordinates
 from .clustering import ClusteringAnalysis, ClusteringConfig, ClusteringResult, DBSCANParams
 from .fitting import FitResult, FittedPeakResult
 from .ledger import LedgerConfigs, SampleLedger
@@ -31,6 +31,7 @@ __all__ = [
     "FitResult",
     "FittedPeakResult",
     "LedgerConfigs",
+    "ParticleInfo",
     "QuantificationConfig",
     "QuantificationDiagnostics",
     "QuantificationResult",

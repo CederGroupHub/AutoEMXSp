@@ -76,6 +76,34 @@ class AcquisitionDetails(BaseModel):
         return v
 
 
+class ParticleInfo(BaseModel):
+    """Geometry and analysis summary for one segmented particle."""
+
+    id: int
+    area_um: Optional[float] = None
+    eq_diameter_um: Optional[float] = None
+    clusters: List[int] = Field(default_factory=list)
+    composition: Optional[str] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError("id must be non-negative")
+        return v
+
+    @field_validator("area_um", "eq_diameter_um")
+    @classmethod
+    def validate_positive_finite(cls, v: Optional[float]) -> Optional[float]:
+        if v is None:
+            return None
+        if not np.isfinite(v) or v <= 0:
+            raise ValueError("area_um and eq_diameter_um must be finite and positive when set")
+        return v
+
+
 class SpectrumEntry(BaseModel):
     """Minimal per-spectrum record inside a sample ledger."""
 

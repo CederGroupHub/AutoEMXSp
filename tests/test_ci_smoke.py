@@ -63,6 +63,17 @@ from test_xsp_spot_selector import (  # noqa: F401
     test_validate_xsp_spot_pixels_deduplicates,
     test_validate_xsp_spot_pixels_rejects_out_of_bounds,
 )
+from test_particle_info_ledger import (  # noqa: F401
+    test_composition_string_template,
+    test_duplicate_particle_ids_rejected,
+    test_eq_diameter_from_area,
+    test_extract_spectrum_info_inserts_size_columns,
+    test_extract_spectrum_info_omits_size_columns_without_particles,
+    test_legacy_ledger_loads_with_empty_particles,
+    test_particle_info_round_trip,
+    test_update_particles_from_clustering,
+    test_update_particles_noop_when_empty,
+)
 
 
 def test_ci_fixtures_present():

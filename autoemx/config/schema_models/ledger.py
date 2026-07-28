@@ -19,7 +19,7 @@ from autoemx.config.runtime_configs import (
     SampleConfig,
     SampleSubstrateConfig,
 )
-from .acquisition import SpectrumEntry
+from .acquisition import ParticleInfo, SpectrumEntry
 from .quantification import QuantificationConfig, QuantificationResult
 
 
@@ -63,6 +63,7 @@ class SampleLedger(BaseModel):
     sample_path: str
     configs: LedgerConfigs
     spectra: List[SpectrumEntry]
+    particles: List[ParticleInfo] = Field(default_factory=list)
     active_quant: Optional[int] = None
     quantifications: List[QuantificationConfig] = Field(default_factory=list)
 
@@ -96,6 +97,10 @@ class SampleLedger(BaseModel):
 
     @model_validator(mode="after")
     def validate_ledger_integrity(self) -> "SampleLedger":
+        particle_ids = [particle.id for particle in self.particles]
+        if len(particle_ids) != len(set(particle_ids)):
+            raise ValueError("ParticleInfo.id values must be unique within a ledger")
+
         config_ids = [cfg.quantification_id for cfg in self.quantifications]
         if len(config_ids) != len(set(config_ids)):
             raise ValueError("quantification_id values must be unique within a ledger")

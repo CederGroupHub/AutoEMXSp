@@ -70,7 +70,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from autoemx.core.em_runtime.xsp_spot_selection import (
     XSpSpotSelectionContext,
@@ -240,6 +240,7 @@ class EM_Particle_Finder:
         # --- Variable initializations
         self.tot_par_cntr = 0  # Keeps track of total number of particles analysed
         self.ref_image = None
+        self.current_par_area_um2: Optional[float] = None
         self._fr_par_cntr = 0
         self._num_par_in_frame = 0
         self.analyzed_pars: List[tuple(float, str)] = []
@@ -293,6 +294,7 @@ class EM_Particle_Finder:
             True if it could successfully move to a particle.
             False if no more particles are present in the sample or if execution is stopped by the user.
         '''
+        self.current_par_area_um2 = None
         if not self.is_manual_particle_selection:
             self._check_EM_controller_initialization()
             
@@ -479,22 +481,25 @@ class EM_Particle_Finder:
         return True
 
 
-    def _get_particles_on_substrate_mask(self, frame_image, save_image=False):
+    def _get_particles_on_substrate_mask(self, frame_image, save_image=False, persist_mask=True):
         '''
         Generates a binary mask of detected particles on the substrate from the input frame image.
-    
+
         This function applies a brightness threshold to the input image to segment particles, 
         finds contours, and fills inner contours to ensure particles are fully masked. 
         Optionally, the mask image can be saved to disk. The function returns the mask and 
         the path where the mask image would be saved.
-    
+
         Parameters
         ----------
         frame_image : ndarray
             The grayscale input image of the current frame.
         save_image : bool, optional
             If True, saves the binary mask image to disk (default: False).
-    
+        persist_mask : bool, optional
+            If False, skip writing the mask image even in development mode. Used when a
+            caller (e.g. per-particle masking) will save its own mask under a different name.
+
         Returns
         -------
         par_mask : ndarray
@@ -539,7 +544,7 @@ class EM_Particle_Finder:
         mask_img_path = os.path.join(self.results_dir, self._sample_id + f'_fr{self.EM.current_frame_label}' + '_mask.png')
         # Mask is always saved when collecting particles. Avoids double saving
         save_image = save_image and not self.EM.measurement_cfg.type == self.EM.measurement_cfg.PARTICLE_STATS_MEAS_TYPE_KEY
-        if self.development_mode or save_image:
+        if persist_mask and (self.development_mode or save_image):
             draw_scalebar(par_mask, self.EM.pixel_size_um)
             cv2.imwrite(mask_img_path, par_mask)
         
@@ -719,6 +724,68 @@ class EM_Particle_Finder:
         raise ValueError('This function must be run at the microscope, or it needs to be passed both image and its pixel size')
 
 
+    def _segment_center_particle(
+        self,
+        par_image: np.ndarray,
+        *,
+        centering: bool = False,
+    ) -> Optional[Tuple[np.ndarray, int, np.ndarray, np.ndarray]]:
+        """
+        Segment the particle at the image center with the configured segmentation model.
+
+        Returns
+        -------
+        tuple or None
+            ``(binary_mask, par_label, stats, centroids)`` for the selected particle.
+            Area is computed from this full (non-eroded) mask before any spot-selection
+            erosion. Returns None if no suitable particle is found.
+        """
+        par_mask, _ = self._get_particles_on_substrate_mask(par_image, persist_mask=False)
+        num_labels, labels, stats, centroids = self._get_connected_components_with_stats(par_mask)
+
+        if num_labels == 1:
+            return None
+
+        center_x = int(self._im_width / 2)
+        center_y = int(self._im_height / 2)
+        par_label = int(labels[center_y, center_x])
+
+        center_on_particle = par_label > 0
+        center_area_ok = center_on_particle and self._is_particle_area_ok(
+            stats[par_label, cv2.CC_STAT_AREA]
+        )
+
+        # Prefer the particle under the image center. Offline, keep it even when it
+        # is outside configured area limits so size/spot selection still target the
+        # particle being analysed. At the microscope, oversized/undersized center
+        # particles trigger a re-center onto the nearest area-ok neighbour.
+        if center_area_ok or (center_on_particle and not EM_driver.is_microscope_connected()):
+            binary_mask = np.where(labels == par_label, 255, 0).astype(np.uint8)
+            return binary_mask, par_label, stats, centroids
+
+        if centering:
+            return None
+
+        distances = np.linalg.norm(centroids[1:] - np.array([center_x, center_y]), axis=1)
+        sorted_indices = np.argsort(distances) + 1  # Skip background (index 0)
+        for label in sorted_indices:
+            label = int(label)
+            if not EM_driver.is_microscope_connected():
+                binary_mask = np.where(labels == label, 255, 0).astype(np.uint8)
+                return binary_mask, label, stats, centroids
+            if self._is_particle_area_ok(stats[label, cv2.CC_STAT_AREA]):
+                new_center = self.EM.convert_pixel_pos_to_mm(centroids[label])
+                self.EM.move_to_pos(new_center)
+                recentered_image = self._capture_ref_frame()
+                return self._segment_center_particle(recentered_image, centering=True)
+        return None
+
+    def _store_current_particle_area(self, area_pixels: float) -> float:
+        """Store particle area in µm² from a non-eroded pixel area."""
+        area_um = float(area_pixels) * float(self.EM.pixel_size_um) ** 2
+        self.current_par_area_um2 = area_um
+        return area_um
+
     def _get_particle_mask(self, par_image=None, pixel_size_um=None, results_dir=None, centering=False):
         '''
         Returns a binary mask of the particle at the center of the image, if the particle is large enough.
@@ -745,73 +812,33 @@ class EM_Particle_Finder:
         
         Notes
         -----
+        - Uses ``powder_meas_cfg.par_segmentation_model`` (default ``threshold_bright``).
+        - Stores ``current_par_area_um2`` from the full mask before any edge erosion.
         - The function is robust to small misalignments: if the center particle is not valid, it finds the next closest.
         - In development mode, it saves the resulting mask with a scalebar overlay.
         - The commented `cv2.imshow` lines can be enabled for debugging visualization.
         '''
-        # Get particle mask
         if not EM_driver.is_microscope_connected() and results_dir:
             self.results_dir = results_dir
         par_image = self._capture_ref_frame(par_image, pixel_size_um)
-            
-        # Apply the threshold to get a binary image
-        _, par_mask = cv2.threshold(par_image, self.powder_meas_cfg.par_brightness_thresh, 255, cv2.THRESH_BINARY)
-        # cv2.imshow('Initial mask of particles', par_mask)
-        
-        # Find connected components
-        num_labels, labels, stats, centroids = self._get_connected_components_with_stats(par_mask)
-        
-        # Make sure particles are present
-        if num_labels == 1:
+
+        segmented = self._segment_center_particle(par_image, centering=centering)
+        if segmented is None:
+            if not centering:
+                self.current_par_area_um2 = None
             return None
-        
-        # Identify component that contains the center of the image (our particle of interest)
-        center_x = int(self._im_width / 2)
-        center_y = int(self._im_height / 2)
-        par_label = labels[center_y, center_x]
-    
-        # Check if the center particle is valid
-        if par_label > 0 and self._is_particle_area_ok(stats[par_label, cv2.CC_STAT_AREA]):
-            # Set all pixels outside the particle to 0
-            par_mask[labels != par_label] = 0
-        elif not centering:
-            # Select the next closest valid particle
-            distances = np.linalg.norm(centroids[1:] - np.array([center_x, center_y]), axis=1)
-            sorted_indices = np.argsort(distances) + 1  # Skip background (index 0)
-            for label in sorted_indices:
-                if not EM_driver.is_microscope_connected():
-                    par_label = label
-                    break
-                elif self._is_particle_area_ok(stats[label, cv2.CC_STAT_AREA]):
-                    new_center = self.EM.convert_pixel_pos_to_mm(centroids[label])
-                    self.EM.move_to_pos(new_center)
-                    par_mask_return = self._get_particle_mask(centering=True)
-                    if par_mask_return is not None:
-                        par_mask, par_image = par_mask_return
-                    else:
-                        return None
-                    par_label = label
-                    break
-                else:
-                    par_label = None
-        else:
-            # Already attempted once at centering the particle. Did not work
-            return None
-    
-        # Check if there is at least one particle of sufficient size
-        if par_label is None:
-            return None
-                    
-        # cv2.imshow('Center Particle', par_mask)
-        
+
+        par_mask, par_label, stats, _centroids = segmented
+        # Area from the full (non-eroded) mask — spot selection may erode later.
+        self._store_current_particle_area(stats[par_label, cv2.CC_STAT_AREA])
+
         if self.development_mode and self.results_dir:
-            par_mask = draw_scalebar(par_mask, self.EM.pixel_size_um)
-            # Save mask, only for development
+            mask_to_save = draw_scalebar(par_mask.copy(), self.EM.pixel_size_um)
             cv2.imwrite(os.path.join(
                 self.results_dir,
                 self._sample_id + f'_par{self.tot_par_cntr}_fr{self.EM.current_frame_label}_mask.png'
-            ), par_mask)
-        
+            ), mask_to_save)
+
         return (par_mask, par_image)
 
 
@@ -1095,6 +1122,14 @@ class EM_Particle_Finder:
         """
         if self.ref_image is None:
             self.ref_image = self._capture_ref_frame(par_image, pixel_size_um)
+            # Measure particle size independently of the callback. Uses the configured
+            # segmentation model on the raw (non-eroded) reference frame.
+            segmented = self._segment_center_particle(self.ref_image)
+            if segmented is not None:
+                _mask, par_label, stats, _centroids = segmented
+                self._store_current_particle_area(stats[par_label, cv2.CC_STAT_AREA])
+            else:
+                self.current_par_area_um2 = None
 
         frame_label = getattr(self.EM, 'current_frame_label', '')
         if frame_label is None:
