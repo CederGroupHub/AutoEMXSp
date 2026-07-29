@@ -131,7 +131,7 @@ def test_composition_string_template():
 def test_extract_spectrum_info_inserts_size_columns():
     analyser = object.__new__(EMXSp_Composition_Analyzer)
     spectrum = _spectrum(7, spectrum_id="3")
-    particle = ParticleInfo(id=7, area_um=4.0, eq_diameter_um=2.256758334)
+    particle = ParticleInfo(id=7, area_um=4.0129, eq_diameter_um=2.256758334)
     row = analyser._extract_spectrum_info(
         spectrum, 3, particles_by_id={7: particle}
     )
@@ -143,8 +143,8 @@ def test_extract_spectrum_info_inserts_size_columns():
         cnst.PAR_EQ_D_KEY,
     ]
     assert keys[4] == cnst.FRAME_ID_DF_KEY
-    assert row[cnst.PAR_AREA_UM_KEY] == pytest.approx(4.0)
-    assert row[cnst.PAR_EQ_D_KEY] == pytest.approx(2.256758334)
+    assert row[cnst.PAR_AREA_UM_KEY] == 4.013
+    assert row[cnst.PAR_EQ_D_KEY] == 2.257
 
 
 def test_extract_spectrum_info_omits_size_columns_without_particles():

@@ -2187,8 +2187,14 @@ class EMXSp_Composition_Analyzer:
         }
         if particles_by_id:
             particle = particles_by_id.get(particle_id_int) if particle_id_int is not None else None
-            row[cnst.PAR_AREA_UM_KEY] = particle.area_um if particle is not None else ""
-            row[cnst.PAR_EQ_D_KEY] = particle.eq_diameter_um if particle is not None else ""
+            if particle is not None and particle.area_um is not None:
+                row[cnst.PAR_AREA_UM_KEY] = round(float(particle.area_um), 3)
+            else:
+                row[cnst.PAR_AREA_UM_KEY] = ""
+            if particle is not None and particle.eq_diameter_um is not None:
+                row[cnst.PAR_EQ_D_KEY] = round(float(particle.eq_diameter_um), 3)
+            else:
+                row[cnst.PAR_EQ_D_KEY] = ""
         row[cnst.FRAME_ID_DF_KEY] = frame_id
         return row
 
