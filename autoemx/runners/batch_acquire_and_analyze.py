@@ -33,7 +33,7 @@ Created on Fri Jul 26 09:34:34 2024
 """
 
 import logging
-from typing import List, Dict, Tuple, Any, Optional
+from typing import List, Dict, Tuple, Any, Optional, Sequence
 
 from autoemx.core.composition_analysis import EMXSp_Composition_Analyzer
 from autoemx.core.em_runtime.xsp_spot_selection import XSpSpotSelectorCallback
@@ -107,6 +107,8 @@ def batch_acquire_and_analyze(
     verbose: bool = True,
     results_dir: Optional[str] = None,
     xsp_spot_selector: Optional[XSpSpotSelectorCallback] = None,
+    particle_ids: Optional[Sequence[int]] = None,
+    particle_coords_mm: Optional[Sequence[Sequence[float]]] = None,
 ) -> EMXSp_Composition_Analyzer:
     """
     Batch acquisition (and optional quantification) of X-ray spectra for a list of powder samples.
@@ -119,6 +121,10 @@ def batch_acquire_and_analyze(
             - 'els' (list of str): List of expected element symbols (SampleConfig.elements).
             - 'pos' (tuple of float): (x, y) stage coordinates in mm (SampleConfig.center_pos).
             - 'cnd' (list of str, optional): Reference chemical formulae for known phases (ClusteringConfig.ref_formulae).
+            - 'particle_ids' (list of int, optional): Per-sample override for list-mode
+              ledger particle ids (requires ``par_selection_mode='list'``).
+            - 'particle_coords_mm' (list of (x, y), optional): Per-sample override for
+              list-mode absolute stage coordinates in mm.
     microscope_ID : str, optional
         Identifier for the microscope hardware.
         Must correspond to a calibration folder in `./XSp_calibs/Microscopes/<ID>` (MicroscopeConfig.ID).
@@ -258,6 +264,15 @@ def batch_acquire_and_analyze(
         validated against image bounds only. Stage navigation to the next
         particle remains automatic; spots are measured via beam positioning
         with drift correction like automated mode.
+    particle_ids : sequence of int, optional
+        Global list of ledger particle ids to visit when
+        ``powder_meas_cfg.par_selection_mode='list'``. Mutually exclusive with
+        ``particle_coords_mm``. Can be overridden per sample via
+        ``sample['particle_ids']``. Missing ids raise before acquisition starts.
+    particle_coords_mm : sequence of (x, y), optional
+        Global list of absolute stage coordinates in mm to visit when
+        ``par_selection_mode='list'``. Mutually exclusive with ``particle_ids``.
+        Can be overridden per sample via ``sample['particle_coords_mm']``.
     
             
     Returns
@@ -279,6 +294,11 @@ def batch_acquire_and_analyze(
                 "xsp_spot_selector is required when powder_meas_cfg_kwargs sets "
                 "par_spot_selection_mode='callback'."
             )
+    if particle_ids is not None and particle_coords_mm is not None:
+        raise ValueError(
+            "Provide exactly one of particle_ids or particle_coords_mm "
+            "(or pass them per-sample)."
+        )
     
     # --- Configuration objects
     microscope_cfg = MicroscopeConfig(
@@ -345,6 +365,25 @@ def batch_acquire_and_analyze(
             raise ValueError(
                 f"Sample '{sample_ID}': xsp_spot_selector is required when "
                 "par_spot_selection_mode='callback'."
+            )
+
+        sample_particle_ids = sample.get('particle_ids', particle_ids)
+        sample_particle_coords_mm = sample.get('particle_coords_mm', particle_coords_mm)
+        if sample_particle_ids is not None and sample_particle_coords_mm is not None:
+            raise ValueError(
+                f"Sample '{sample_ID}': provide exactly one of particle_ids or "
+                "particle_coords_mm."
+            )
+        if powder_meas_cfg.par_selection_mode == 'list':
+            if sample_particle_ids is None and sample_particle_coords_mm is None:
+                raise ValueError(
+                    f"Sample '{sample_ID}': par_selection_mode='list' requires "
+                    "particle_ids or particle_coords_mm."
+                )
+        elif sample_particle_ids is not None or sample_particle_coords_mm is not None:
+            raise ValueError(
+                f"Sample '{sample_ID}': particle_ids / particle_coords_mm require "
+                "powder_meas_cfg.par_selection_mode='list'."
             )
         
         print_double_separator()
@@ -425,6 +464,8 @@ def batch_acquire_and_analyze(
             verbose=verbose,
             results_dir=results_dir,
             xsp_spot_selector=sample_spot_selector,
+            particle_ids=sample_particle_ids,
+            particle_coords_mm=sample_particle_coords_mm,
         )
         
         try:

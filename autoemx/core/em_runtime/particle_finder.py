@@ -70,7 +70,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from typing import List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from autoemx.core.em_runtime.xsp_spot_selection import (
     XSpSpotSelectionContext,
@@ -289,8 +289,13 @@ class EM_Particle_Finder:
         self._fr_par_cntr = 0
         self._num_par_in_frame = 0
         self.analyzed_pars: List[ParticleInfo] = []
-        self._ledger = None  # Optional SampleLedger for particle-stats collection
+        self._ledger = None  # Optional SampleLedger for particle-stats / list selection
         self._ledger_path: Optional[str] = None
+        self._list_particle_ids: Optional[List[int]] = None
+        self._list_particle_coords_mm: Optional[List[Tuple[float, float]]] = None
+        self._list_target_index: int = 0
+        self._list_mode_absolute_ids: bool = False
+        self._particles_by_id: Dict[int, ParticleInfo] = {}
 
     @property
     def is_manual_particle_selection(self) -> bool:
@@ -298,8 +303,181 @@ class EM_Particle_Finder:
         return self.powder_meas_cfg.par_selection_mode == 'manual'
 
     @property
+    def is_list_particle_selection(self) -> bool:
+        """Whether particle navigation follows a caller-supplied id/coordinate list."""
+        return self.powder_meas_cfg.par_selection_mode == 'list'
+
+    @property
+    def uses_absolute_particle_ids(self) -> bool:
+        """True when ``tot_par_cntr`` is a ledger particle id (list-id mode)."""
+        return bool(self._list_mode_absolute_ids)
+
+    @property
     def par_selection_mode(self) -> str:
         return self.powder_meas_cfg.par_selection_mode
+
+    @staticmethod
+    def _normalize_stage_coordinates_mm(
+        coordinates: Sequence[float],
+    ) -> Tuple[float, float]:
+        if coordinates is None or len(coordinates) != 2:
+            raise ValueError("Stage coordinates must be a sequence of two finite floats (x, y) in mm")
+        x, y = float(coordinates[0]), float(coordinates[1])
+        if not (np.isfinite(x) and np.isfinite(y)):
+            raise ValueError("Stage coordinates must be finite")
+        return (x, y)
+
+    def set_particle_targets(
+        self,
+        particle_ids: Optional[Iterable[int]] = None,
+        particle_coords_mm: Optional[Iterable[Sequence[float]]] = None,
+        ledger=None,
+    ) -> None:
+        """Configure list-mode targets (ledger particle ids XOR stage coordinates).
+
+        Parameters
+        ----------
+        particle_ids :
+            Existing ``ParticleInfo.id`` values. Requires ``ledger``; each id must
+            exist and have absolute stage ``coordinates``.
+        particle_coords_mm :
+            Absolute stage positions ``(x, y)`` in mm for new particles.
+        ledger :
+            Sample ledger used to resolve and validate ``particle_ids``.
+        """
+        has_ids = particle_ids is not None
+        has_coords = particle_coords_mm is not None
+        if has_ids == has_coords:
+            raise ValueError(
+                "set_particle_targets requires exactly one of particle_ids or "
+                "particle_coords_mm"
+            )
+
+        self._list_target_index = 0
+        self._list_particle_ids = None
+        self._list_particle_coords_mm = None
+        self._list_mode_absolute_ids = False
+        self._particles_by_id = {}
+
+        if has_ids:
+            if ledger is None:
+                raise ValueError("particle_ids list mode requires a SampleLedger")
+            ids = [int(pid) for pid in particle_ids]
+            if not ids:
+                raise ValueError("particle_ids must be a non-empty list")
+            by_id = {int(p.id): p for p in ledger.particles}
+            missing = [pid for pid in ids if pid not in by_id]
+            if missing:
+                raise ValueError(
+                    f"Particle id(s) not found in ledger: {missing}"
+                )
+            missing_coords = [
+                pid for pid in ids if by_id[pid].coordinates is None
+            ]
+            if missing_coords:
+                raise ValueError(
+                    "Particle id(s) in ledger are missing absolute stage "
+                    f"coordinates: {missing_coords}"
+                )
+            self._list_particle_ids = ids
+            self._list_mode_absolute_ids = True
+            self._particles_by_id = by_id
+            self._ledger = ledger
+        else:
+            coords = [
+                self._normalize_stage_coordinates_mm(c) for c in particle_coords_mm
+            ]
+            if not coords:
+                raise ValueError("particle_coords_mm must be a non-empty list")
+            self._list_particle_coords_mm = coords
+            self._list_mode_absolute_ids = False
+            if ledger is not None:
+                self._ledger = ledger
+
+    def _default_particle_frame_width_mm(self) -> float:
+        """Zoom FOV (mm) when particle size is unknown (coordinate list mode)."""
+        max_radius_um = float(np.sqrt(self.powder_meas_cfg.max_area_par / np.pi))
+        fw_um = max_radius_um * 2.0 * 1.8 + 10.0
+        return float(fw_um / 1000.0)
+
+    def _frame_width_mm_for_particle(self, particle: ParticleInfo) -> float:
+        """Zoom FOV (mm) from an existing ParticleInfo size when available."""
+        if particle.eq_diameter_um is not None and particle.eq_diameter_um > 0:
+            eq_d_um = float(particle.eq_diameter_um)
+        elif particle.area_um is not None and particle.area_um > 0:
+            eq_d_um = float(2.0 * np.sqrt(float(particle.area_um) / np.pi))
+        else:
+            return self._default_particle_frame_width_mm()
+        fw_um = eq_d_um * 1.8 + 10.0
+        return float(fw_um / 1000.0)
+
+    def _go_to_listed_particle(
+        self,
+        particle_id: Optional[int] = None,
+        coordinates: Optional[Sequence[float]] = None,
+    ) -> bool:
+        """Move to a listed particle id or absolute stage coordinate."""
+        self._check_EM_controller_initialization()
+
+        if particle_id is not None and coordinates is not None:
+            raise ValueError("Pass particle_id or coordinates, not both")
+
+        if particle_id is None and coordinates is None:
+            if self._list_particle_ids is not None:
+                if self._list_target_index >= len(self._list_particle_ids):
+                    return False
+                particle_id = self._list_particle_ids[self._list_target_index]
+                self._list_target_index += 1
+            elif self._list_particle_coords_mm is not None:
+                if self._list_target_index >= len(self._list_particle_coords_mm):
+                    return False
+                coordinates = self._list_particle_coords_mm[self._list_target_index]
+                self._list_target_index += 1
+            else:
+                raise RuntimeError(
+                    "list particle selection requires set_particle_targets(...) "
+                    "before go_to_next_particle()"
+                )
+
+        if particle_id is not None:
+            pid = int(particle_id)
+            particle = self._particles_by_id.get(pid)
+            if particle is None and self._ledger is not None:
+                particle = next(
+                    (p for p in self._ledger.particles if int(p.id) == pid),
+                    None,
+                )
+            if particle is None:
+                raise ValueError(f"Particle id {pid} not found in ledger")
+            if particle.coordinates is None:
+                raise ValueError(
+                    f"Particle id {pid} has no absolute stage coordinates in the ledger"
+                )
+            coords = (
+                float(particle.coordinates.x),
+                float(particle.coordinates.y),
+            )
+            frame_width_mm = self._frame_width_mm_for_particle(particle)
+            self.tot_par_cntr = pid
+            self._list_mode_absolute_ids = True
+            self.current_par_area_um2 = (
+                float(particle.area_um) if particle.area_um is not None else None
+            )
+            self.current_par_coordinates_mm = coords
+            # Keep ledger ParticleInfo in sync with the navigation target.
+            particle.coordinates = Coordinate2D(x=coords[0], y=coords[1])
+        else:
+            coords = self._normalize_stage_coordinates_mm(coordinates)
+            frame_width_mm = self._default_particle_frame_width_mm()
+            self.tot_par_cntr += 1
+            self._list_mode_absolute_ids = False
+            self.current_par_coordinates_mm = coords
+
+        self.EM.move_to_pos(coords)
+        self.EM.set_frame_width(frame_width_mm)
+        self.EM.pixel_size_um = frame_width_mm / self._im_width * 10**3
+        self.EM.adjust_BCF()
+        return True
 
     
     def _check_EM_controller_initialization(self) -> None:
@@ -325,22 +503,52 @@ class EM_Particle_Finder:
             
     #%% Particle Navigation
     # =============================================================================
-    def go_to_next_particle(self):
+    def go_to_next_particle(
+        self,
+        particle_id: Optional[int] = None,
+        coordinates: Optional[Sequence[float]] = None,
+    ):
         '''
         Moves the microscope to the next particle, centering and zooming on it.
         It also re-adjusts brightness, contrast and focus.
-    
-        In automated mode, this function finds the next particle in the current frame. 
-        If all particles in the frame have been analyzed, it advances to the next frame 
-        and searches for particles there. It then moves the stage to center the next 
-        particle and zooms in. In manual mode, it prompts the user for input.
-    
+
+        Modes
+        -----
+        - ``auto``: find the next particle in the search-frame grid.
+        - ``manual``: prompt the user to center a particle.
+        - ``list``: consume the next target from ``set_particle_targets`` (ledger
+          particle id or absolute stage coordinates in mm). Explicit ``particle_id``
+          / ``coordinates`` arguments also select a specific target directly.
+
+        Parameters
+        ----------
+        particle_id : int, optional
+            Existing ledger particle id to revisit. Updates that ParticleInfo.
+        coordinates : sequence of float, optional
+            Absolute stage ``(x, y)`` in mm. Creates a new particle on acquisition.
+
         Returns
         -------
         bool
             True if it could successfully move to a particle.
             False if no more particles are present in the sample or if execution is stopped by the user.
         '''
+        if particle_id is not None and coordinates is not None:
+            raise ValueError("Pass particle_id or coordinates, not both")
+
+        # Explicit target or configured list mode.
+        if (
+            self.is_list_particle_selection
+            or particle_id is not None
+            or coordinates is not None
+        ):
+            self.current_par_area_um2 = None
+            self.current_par_coordinates_mm = None
+            return self._go_to_listed_particle(
+                particle_id=particle_id,
+                coordinates=coordinates,
+            )
+
         self.current_par_area_um2 = None
         self.current_par_coordinates_mm = None
         if not self.is_manual_particle_selection:

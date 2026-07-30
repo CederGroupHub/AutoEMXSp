@@ -558,11 +558,17 @@ class EMXSp_Composition_Analyzer:
         results_dir: Optional[str] = None,
         sample_id: Optional[str] = None,
         xsp_spot_selector: Optional[XSpSpotSelectorCallback] = None,
+        particle_ids: Optional[List[int]] = None,
+        particle_coords_mm: Optional[List[Tuple[float, float]]] = None,
     ):
         """
         Initialize the EMXSp_Composition_Analyzer with all configuration objects.
 
         See class docstring for parameter documentation.
+
+        particle_ids / particle_coords_mm
+            Used when ``powder_meas_cfg.par_selection_mode='list'``. Provide exactly
+            one: existing ledger particle ids, or absolute stage coordinates in mm.
         """
         self.sample_id = self._resolve_sample_id(
             sample_id=sample_id,
@@ -581,6 +587,10 @@ class EMXSp_Composition_Analyzer:
         self.is_acquisition = is_acquisition
         self.development_mode = development_mode
         self.xsp_spot_selector = xsp_spot_selector
+        self._particle_ids = list(particle_ids) if particle_ids is not None else None
+        self._particle_coords_mm = (
+            list(particle_coords_mm) if particle_coords_mm is not None else None
+        )
 
         measurement_cfg = measurement_cfg.model_copy(
             update={
@@ -792,6 +802,13 @@ class EMXSp_Composition_Analyzer:
 
             if is_particle_stats:
                 self._attach_particle_stats_ledger()
+
+            if (
+                is_XSp_measurement
+                and spectrum_acquisition_needed
+                and self.powder_meas_cfg.par_selection_mode == "list"
+            ):
+                self._configure_list_particle_selection()
         
 
     #%% Instrument initializations
@@ -2384,6 +2401,33 @@ class EMXSp_Composition_Analyzer:
         if particle_finder is not None:
             particle_finder.attach_stats_ledger(ledger, ledger_path=ledger_path)
 
+    def _configure_list_particle_selection(self) -> None:
+        """Validate and attach list-mode particle targets to the particle finder."""
+        if self._particle_ids is not None and self._particle_coords_mm is not None:
+            raise ValueError(
+                "Provide exactly one of particle_ids or particle_coords_mm for "
+                "par_selection_mode='list'"
+            )
+        if self._particle_ids is None and self._particle_coords_mm is None:
+            raise ValueError(
+                "par_selection_mode='list' requires particle_ids or particle_coords_mm"
+            )
+
+        particle_finder = None
+        if getattr(self, "EM_controller", None) is not None:
+            particle_finder = getattr(self.EM_controller, "particle_finder", None)
+        if particle_finder is None:
+            raise RuntimeError(
+                "Particle finder is not available for list particle selection"
+            )
+
+        ledger = self._load_or_create_ledger()
+        particle_finder.set_particle_targets(
+            particle_ids=self._particle_ids,
+            particle_coords_mm=self._particle_coords_mm,
+            ledger=ledger,
+        )
+
 
     def _ensure_quant_tracking_length(self, total_spectra: int) -> None:
         """Ensure in-memory quantification tracking lists are indexable for all spectra."""
@@ -3313,8 +3357,18 @@ class EMXSp_Composition_Analyzer:
             if not success:
                 break
             
-            if particle_cntr:
-                self.particle_cntr = particle_cntr + particle_id_offset
+            particle_finder = None
+            if getattr(self, "EM_controller", None) is not None:
+                particle_finder = getattr(self.EM_controller, "particle_finder", None)
+
+            if particle_cntr is not None:
+                if particle_finder is not None and getattr(
+                    particle_finder, "uses_absolute_particle_ids", False
+                ):
+                    # List-mode particle ids are already absolute ledger ids.
+                    self.particle_cntr = int(particle_cntr)
+                else:
+                    self.particle_cntr = int(particle_cntr) + particle_id_offset
             else:
                 self.particle_cntr = None
             frame_ID = self.EM_controller.current_frame_label
@@ -3324,17 +3378,15 @@ class EMXSp_Composition_Analyzer:
             if (
                 self.sample_cfg.is_particle_acquisition
                 and self.particle_cntr is not None
-                and getattr(self, "EM_controller", None) is not None
+                and particle_finder is not None
             ):
-                particle_finder = getattr(self.EM_controller, "particle_finder", None)
-                if particle_finder is not None:
-                    particle_area_um = getattr(particle_finder, "current_par_area_um2", None)
-                    par_coords = getattr(particle_finder, "current_par_coordinates_mm", None)
-                    if par_coords is not None:
-                        particle_coordinates = Coordinate2D(
-                            x=float(par_coords[0]),
-                            y=float(par_coords[1]),
-                        )
+                particle_area_um = getattr(particle_finder, "current_par_area_um2", None)
+                par_coords = getattr(particle_finder, "current_par_coordinates_mm", None)
+                if par_coords is not None:
+                    particle_coordinates = Coordinate2D(
+                        x=float(par_coords[0]),
+                        y=float(par_coords[1]),
+                    )
             
             latest_spot_id = None # For image annotations
             for i, (x, y) in enumerate(spots_xy_list):

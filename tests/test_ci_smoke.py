@@ -82,6 +82,12 @@ from test_particle_stats_multiscale import (  # noqa: F401
     test_save_particle_statistics_from_particle_info,
     test_split_diameter_range_largest_first,
 )
+from test_particle_selection_list_mode import (  # noqa: F401
+    test_go_to_next_particle_by_coordinates_increments_id,
+    test_go_to_next_particle_by_id_uses_existing_particle,
+    test_powder_config_accepts_list_mode,
+    test_set_particle_targets_missing_id_raises,
+)
 
 
 def test_ci_fixtures_present():

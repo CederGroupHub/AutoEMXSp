@@ -345,7 +345,11 @@ class PowderMeasurementConfig(BaseModel):
     Configuration for powder measurement.
 
     Attributes:
-        par_selection_mode (str): 'auto' for automatic particle navigation, 'manual' to prompt user to center each particle (default: 'auto').
+        par_selection_mode (str): Particle navigation mode (default: 'auto'):
+            - ``'auto'``: automatic frame scan and particle detection
+            - ``'manual'``: prompt the user to center each particle
+            - ``'list'``: visit a caller-supplied list of ledger particle ids or
+              absolute stage coordinates in mm (see ``batch_acquire_and_analyze``)
         is_known_powder_mixture_meas (bool): Whether sample is a known binary mixture of powders. Used to characterize precursor extent of intermixing (Default = False).
         img_shift_tracking (bool): Whether to use image shift tracking during acquisition (Default = True).
         par_search_frame_width_um (float, optional): Frame width used when searching for particles, in um.
@@ -369,9 +373,9 @@ class PowderMeasurementConfig(BaseModel):
     """
     DEFAULT_PAR_SEGMENTATION_MODEL: ClassVar[str] = "threshold_bright"
     AVAILABLE_SPOT_SELECTION_MODES: ClassVar[Tuple[str, ...]] = ('auto', 'callback')
-    AVAILABLE_PAR_SELECTION: ClassVar[Tuple[str, ...]] = ('auto', 'manual')
+    AVAILABLE_PAR_SELECTION: ClassVar[Tuple[str, ...]] = ('auto', 'manual', 'list')
 
-    par_selection_mode: Literal['auto', 'manual'] = 'auto'
+    par_selection_mode: Literal['auto', 'manual', 'list'] = 'auto'
     is_known_powder_mixture_meas: bool = False
     img_shift_tracking: bool = True
     par_search_frame_width_um: Optional[float] = None
