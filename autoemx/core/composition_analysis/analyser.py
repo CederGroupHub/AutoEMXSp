@@ -777,6 +777,9 @@ class EMXSp_Composition_Analyzer:
         # runs with sufficient data skip instrument initialization entirely.
         if is_acquisition:
             spectrum_acquisition_needed = True
+            is_particle_stats = (
+                measurement_cfg.type == measurement_cfg.PARTICLE_STATS_MEAS_TYPE_KEY
+            )
             if is_XSp_measurement:
                 self._initialise_acquisition_ledger()
                 spectrum_acquisition_needed = self._spectrum_acquisition_needed
@@ -786,6 +789,9 @@ class EMXSp_Composition_Analyzer:
             
             if is_XSp_measurement and spectrum_acquisition_needed:
                 self._initialise_Xsp_analyzer()
+
+            if is_particle_stats:
+                self._attach_particle_stats_ledger()
         
 
     #%% Instrument initializations
@@ -2208,6 +2214,8 @@ class EMXSp_Composition_Analyzer:
         ledger: SampleLedger,
         particle_id: int,
         area_um: Optional[float],
+        frame_id: Optional[str] = None,
+        coordinates: Optional[Coordinate2D] = None,
     ) -> None:
         """Create or update the ParticleInfo entry for a particle in the ledger."""
         eq_diameter_um = (
@@ -2218,12 +2226,18 @@ class EMXSp_Composition_Analyzer:
                 if area_um is not None:
                     particle.area_um = area_um
                     particle.eq_diameter_um = eq_diameter_um
+                if frame_id is not None:
+                    particle.frame_id = frame_id
+                if coordinates is not None:
+                    particle.coordinates = coordinates
                 return
         ledger.particles.append(
             ParticleInfo(
                 id=particle_id,
                 area_um=area_um,
                 eq_diameter_um=eq_diameter_um,
+                frame_id=frame_id,
+                coordinates=coordinates,
             )
         )
 
@@ -2343,6 +2357,32 @@ class EMXSp_Composition_Analyzer:
             sample_substrate_cfg=self.sample_substrate_cfg,
             plot_cfg=self.plot_cfg,
         )
+
+    def _attach_particle_stats_ledger(self) -> None:
+        """Create or load a SampleLedger and attach it to the particle finder for PSD."""
+        ledger = self._load_existing_ledger()
+        if ledger is None:
+            ledger = SampleLedger(
+                sample_id=self.sample_id,
+                sample_path=os.path.abspath(self.sample_result_dir),
+                configs=self._build_ledger_configs(),
+                spectra=[],
+                particles=[],
+                quantifications=[],
+                active_quant=None,
+            )
+        else:
+            # Fresh PSD run replaces prior particle geometry records.
+            ledger.particles = []
+            ledger.configs = self._build_ledger_configs()
+        ledger_path = self._get_ledger_path()
+        ledger.to_json_file(ledger_path)
+
+        particle_finder = None
+        if getattr(self, "EM_controller", None) is not None:
+            particle_finder = getattr(self.EM_controller, "particle_finder", None)
+        if particle_finder is not None:
+            particle_finder.attach_stats_ledger(ledger, ledger_path=ledger_path)
 
 
     def _ensure_quant_tracking_length(self, total_spectra: int) -> None:
@@ -3280,6 +3320,7 @@ class EMXSp_Composition_Analyzer:
             frame_ID = self.EM_controller.current_frame_label
 
             particle_area_um: Optional[float] = None
+            particle_coordinates: Optional[Coordinate2D] = None
             if (
                 self.sample_cfg.is_particle_acquisition
                 and self.particle_cntr is not None
@@ -3288,6 +3329,12 @@ class EMXSp_Composition_Analyzer:
                 particle_finder = getattr(self.EM_controller, "particle_finder", None)
                 if particle_finder is not None:
                     particle_area_um = getattr(particle_finder, "current_par_area_um2", None)
+                    par_coords = getattr(particle_finder, "current_par_coordinates_mm", None)
+                    if par_coords is not None:
+                        particle_coordinates = Coordinate2D(
+                            x=float(par_coords[0]),
+                            y=float(par_coords[1]),
+                        )
             
             latest_spot_id = None # For image annotations
             for i, (x, y) in enumerate(spots_xy_list):
@@ -3321,8 +3368,13 @@ class EMXSp_Composition_Analyzer:
                 except ImportError:
                     pass  # Already imported at top
                 # Build SpectrumEntry directly from the pointer file and current acquisition metadata
+                frame_id_str = (
+                    str(frame_ID).strip()
+                    if frame_ID is not None and str(frame_ID).strip()
+                    else None
+                )
                 acq_details = AcquisitionDetails(
-                    frame_id=str(frame_ID).strip() if frame_ID is not None and str(frame_ID).strip() else None,
+                    frame_id=frame_id_str,
                     particle_id=self.particle_cntr if self.particle_cntr is not None else None,
                     spot_coordinates=self._build_spot_coordinates(
                         pixel_x=xy_center[0],
@@ -3358,6 +3410,8 @@ class EMXSp_Composition_Analyzer:
                         ledger,
                         particle_id=int(self.particle_cntr),
                         area_um=particle_area_um,
+                        frame_id=frame_id_str,
+                        coordinates=particle_coordinates,
                     )
                 ledger.to_json_file(ledger_path)
                 ingested_spectrum_ids.add(str(spectrum_entry.spectrum_id))

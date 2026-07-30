@@ -77,11 +77,17 @@ class AcquisitionDetails(BaseModel):
 
 
 class ParticleInfo(BaseModel):
-    """Geometry and analysis summary for one segmented particle."""
+    """Geometry and analysis summary for one segmented particle.
+
+    ``coordinates`` are absolute stage positions in mm of the particle center.
+    They are not the frame-relative ``SpotCoordinates.machine_coordinates``.
+    """
 
     id: int
     area_um: Optional[float] = None
     eq_diameter_um: Optional[float] = None
+    coordinates: Optional[Coordinate2D] = None
+    frame_id: Optional[str] = None
     clusters: List[int] = Field(default_factory=list)
     composition: Optional[str] = None
 
@@ -102,6 +108,14 @@ class ParticleInfo(BaseModel):
         if not np.isfinite(v) or v <= 0:
             raise ValueError("area_um and eq_diameter_um must be finite and positive when set")
         return v
+
+    @field_validator("frame_id")
+    @classmethod
+    def normalize_frame_id(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        normalized = v.strip()
+        return normalized if normalized else None
 
 
 class SpectrumEntry(BaseModel):

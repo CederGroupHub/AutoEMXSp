@@ -87,12 +87,56 @@ from autoemx.utils.helper import (
 from autoemx.config import (
     PowderMeasurementConfig,
 )
+from autoemx.config.ledger_schemas import Coordinate2D, ParticleInfo
 import autoemx.utils.constants as cnst
 from autoemx import microscope_drivers as EM_driver
 import autoemx.core.em_runtime.particle_segmentation_models as par_seg_models
 
 from autoemx._logging import get_logger
 logger = get_logger(__name__)
+
+
+def split_diameter_range_um(
+    d_min_um: float,
+    d_max_um: float,
+    max_decade: float = 10.0,
+) -> List[Tuple[float, float]]:
+    """Split a diameter range into bands of at most one order of magnitude.
+
+    Bands are returned largest-first. Example: ``0.5..50`` → ``[(5, 50), (0.5, 5)]``.
+    """
+    if not np.isfinite(d_min_um) or not np.isfinite(d_max_um):
+        raise ValueError("Diameter limits must be finite")
+    if d_min_um <= 0 or d_max_um <= 0:
+        raise ValueError("Diameter limits must be positive")
+    if d_max_um < d_min_um:
+        raise ValueError("d_max_um must be greater than or equal to d_min_um")
+    if max_decade <= 1.0:
+        raise ValueError("max_decade must be greater than 1")
+
+    if np.isclose(d_min_um, d_max_um):
+        return [(float(d_min_um), float(d_max_um))]
+
+    bands: List[Tuple[float, float]] = []
+    hi = float(d_max_um)
+    while hi > d_min_um * (1.0 + 1e-12):
+        lo = max(float(d_min_um), hi / max_decade)
+        bands.append((lo, hi))
+        if lo <= d_min_um + 1e-12:
+            break
+        hi = lo
+    return bands
+
+
+def diameter_um_to_area_um2(diameter_um: float) -> float:
+    """Convert equivalent circular diameter (µm) to area (µm²)."""
+    return float(np.pi * (diameter_um / 2.0) ** 2)
+
+
+def frame_width_um_from_max_area(max_area_par: float) -> float:
+    """Search-frame width (µm) from maximum accepted particle area (µm²)."""
+    max_par_radius = np.sqrt(max_area_par / np.pi)
+    return float(min(20.0 * max_par_radius, 500.0))
 
 #%% Electron Microscope Particle Finder class    
 class EM_Particle_Finder:
@@ -159,9 +203,9 @@ class EM_Particle_Finder:
         Image height in pixels. Inherited from EM_Controller.
     tot_par_cntr : int
         Counter for the total number of particles analyzed.
-    analyzed_pars : list(tuple(int, str, float))
-        List storing tuple containing Particle ID, Frame ID and particles areas (in μm²) of each detected particle.
-        Used only when collecting particles size distribution statistics
+    analyzed_pars : list of ParticleInfo
+        Particle geometry records collected during particle size statistics.
+        When a ledger is attached, this list is the same object as ``ledger.particles``.
 
     Notes
     -----
@@ -241,9 +285,12 @@ class EM_Particle_Finder:
         self.tot_par_cntr = 0  # Keeps track of total number of particles analysed
         self.ref_image = None
         self.current_par_area_um2: Optional[float] = None
+        self.current_par_coordinates_mm: Optional[tuple] = None
         self._fr_par_cntr = 0
         self._num_par_in_frame = 0
-        self.analyzed_pars: List[tuple(float, str)] = []
+        self.analyzed_pars: List[ParticleInfo] = []
+        self._ledger = None  # Optional SampleLedger for particle-stats collection
+        self._ledger_path: Optional[str] = None
 
     @property
     def is_manual_particle_selection(self) -> bool:
@@ -295,6 +342,7 @@ class EM_Particle_Finder:
             False if no more particles are present in the sample or if execution is stopped by the user.
         '''
         self.current_par_area_um2 = None
+        self.current_par_coordinates_mm = None
         if not self.is_manual_particle_selection:
             self._check_EM_controller_initialization()
             
@@ -311,7 +359,9 @@ class EM_Particle_Finder:
                         return False
     
             # Move center of image to the centroid of the particle
-            self.EM.move_to_pos(self.par_pos_abs_mm[self._fr_par_cntr])
+            par_pos = self.par_pos_abs_mm[self._fr_par_cntr]
+            self.EM.move_to_pos(par_pos)
+            self.current_par_coordinates_mm = (float(par_pos[0]), float(par_pos[1]))
     
             # Set frame width to zoom around particle
             frame_width_mm = self.par_fw_mm[self._fr_par_cntr]
@@ -338,6 +388,9 @@ class EM_Particle_Finder:
                 frame_width_mm = EM_driver.get_frame_width()
                 self.EM.pixel_size_um = frame_width_mm / self._im_width * 10**3  # um
                 self.tot_par_cntr += 1
+                current_pos = getattr(getattr(self.EM, "frame_navigator", None), "_current_pos", None)
+                if current_pos is not None:
+                    self.current_par_coordinates_mm = (float(current_pos[0]), float(current_pos[1]))
     
         return True
     
@@ -1312,87 +1365,53 @@ class EM_Particle_Finder:
     
     #%% Particle Statistics
     # =============================================================================
-    def get_particle_stats(self, n_par_target):
-        """
-        Analyze frames to collect and save statistics on particle sizes until a desired number of particles is reached.
-    
-        This function is to be used on its own after microscope initialization.
-        It iteratively analyzes frames, detects particles, filters and records their areas, and 
-        continues until `n_par_target` particles have been analyzed or no more frames are available.
-        It saves both individual particle data and summary statistics, and generates a histogram of the size distribution.
-    
-        Parameters
-        ----------
-        n_par_target : int
-            The desired number of particles to analyze.
-    
-        Returns
-        -------
-        par_size_distr_df : pandas.DataFrame
-            A single-row DataFrame containing summary statistics of the analyzed particle size distribution.
-            The columns include:
-                - 'measurement' : str
-                    Description of the measurement (e.g., 'equivalent particle diameter in μm').
-                - 'n_par_analysed' : int
-                    Number of particles analyzed.
-                - 'mean' : float
-                    Mean equivalent particle diameter (μm).
-                - 'stdev' : float
-                    Standard deviation of the equivalent particle diameter (μm).
-                - 'median' : float
-                    Median equivalent particle diameter (μm).
-                - 'max' : float
-                    Maximum equivalent particle diameter (μm).
-                - 'min' : float
-                    Minimum equivalent particle diameter (μm).
-                - 'D10' : float
-                    10th percentile of the equivalent particle diameter (μm).
-                - 'D25' : float
-                    25th percentile of the equivalent particle diameter (μm).
-                - 'D75' : float
-                    75th percentile of the equivalent particle diameter (μm).
-                - 'D90' : float
-                    90th percentile of the equivalent particle diameter (μm).
-    
-            This DataFrame is also saved as a CSV file in the results directory.
-    
-        Side Effects
-        ------------
-        - Updates `self.analyzed_pars` with new particle areas (in μm²), and corresponding frame_label.
-        - Saves a CSV file with all particle areas and equivalent diameters.
-        - Saves a CSV file with summary statistics (mean, stdev, median, percentiles).
-        - Saves a histogram plot of the equivalent diameters as a PNG file.
-        - Prints information and warnings to the console if `self.verbose` is True.
-    
-        Notes
-        -----
-        - The function relies on `_move_and_get_particles_stats_in_frame()` to process each frame and find new particles.
-        - If no particles are found or frames are exhausted, the function will print a warning and exit early.
-        - Equivalent diameters are computed assuming each particle is a circle of the same area.
-        - The function sorts particle areas to facilitate percentile calculations.
-        - The function handles cases where particles are very small or indistinguishable in area.
-    
-        Potential Improvements / TODO
-        ----------------------------
-        - Ideally the software should autonomously measure different particle sizes at different frame widths.
-            At the moment, it requires a specific range to be selected, and filters out particles outside this range.
-        - Particles at frame edges are currently ignored. Ideally, they should be included by centering the stage around them, and
-            recording their area
-        - Add robust error handling for file I/O and plotting.
-        - Optionally return summary statistics as a dictionary or DataFrame for further programmatic use.
-        """
-        # Analyse frames and store particle areas until n = n_par_target particles have been analysed
-        par_not_found_cntr = 0 # To check if particles were not found too many times
-        while len(self.analyzed_pars) < n_par_target:
+    def attach_stats_ledger(self, ledger, ledger_path: Optional[str] = None) -> None:
+        """Attach a SampleLedger whose ``particles`` list stores PSD ParticleInfo records."""
+        self._ledger = ledger
+        self._ledger_path = ledger_path
+        if ledger is not None:
+            self.analyzed_pars = ledger.particles
+
+    def _persist_stats_ledger(self) -> None:
+        """Write the attached particle-stats ledger to disk when available."""
+        if self._ledger is None:
+            return
+        ledger_path = self._ledger_path
+        if ledger_path is None and self.results_dir is not None:
+            output_dir = (
+                os.path.dirname(self.results_dir)
+                if os.path.basename(self.results_dir) == cnst.IMAGES_DIR
+                else self.results_dir
+            )
+            ledger_path = os.path.join(output_dir, cnst.LEDGER_FILENAME + cnst.LEDGER_FILEEXT)
+        if ledger_path is not None:
+            self._ledger.to_json_file(ledger_path)
+
+    def _apply_size_band(self, d_min_um: float, d_max_um: float) -> float:
+        """Update area filters and search FOV for one diameter band; return FOV in mm."""
+        min_area = diameter_um_to_area_um2(d_min_um)
+        max_area = diameter_um_to_area_um2(d_max_um)
+        fw_um = frame_width_um_from_max_area(max_area)
+        self.powder_meas_cfg.min_area_par = min_area
+        self.powder_meas_cfg.max_area_par = max_area
+        self.powder_meas_cfg.par_search_frame_width_um = fw_um
+        return fw_um / 1000.0
+
+    def _collect_particle_stats_until(self, n_par_target_total: int) -> None:
+        """Scan frames until ``analyzed_pars`` reaches ``n_par_target_total`` or frames end."""
+        while len(self.analyzed_pars) < n_par_target_total:
             previous_n_par = len(self.analyzed_pars)
             par_were_found = self._move_and_get_particles_stats_in_frame()
             if par_were_found is None:
-                logger.warning(f"⚠️ Could not find {n_par_target} particles. Completed statistics using {len(self.analyzed_pars)} particles.")
+                logger.warning(
+                    f"⚠️ Could not find {n_par_target_total} particles. "
+                    f"Completed statistics using {len(self.analyzed_pars)} particles."
+                )
                 break
-            elif par_were_found is False:
-                if self.verbose: logger.warning("⚠️ No particle was found in this frame")
-                par_not_found_cntr +=1
-            elif par_were_found:
+            if par_were_found is False:
+                if self.verbose:
+                    logger.warning("⚠️ No particle was found in this frame")
+            else:
                 if self.verbose:
                     tot_n_par_found = len(self.analyzed_pars)
                     n_par_found_frame = tot_n_par_found - previous_n_par
@@ -1404,41 +1423,97 @@ class EM_Particle_Finder:
                     )
                     logger.info(
                         f"A total of {tot_n_par_found} particle{'s' if plural_total else ''} "
-                        f"{'have' if plural_total else 'has'} now been analyzed."
-                        f"{n_par_target - tot_n_par_found} more to go."
+                        f"{'have' if plural_total else 'has'} now been analyzed. "
+                        f"{n_par_target_total - tot_n_par_found} more to go."
                     )
-                par_not_found_cntr = 0
-        
-        # Number of analysed particles
-        n_par_analysed = len(self.analyzed_pars)
-        
-        if n_par_analysed == 0:
-            logger.error('❌ Could not find any particle. Please check your sample, or change the constrast/brightness values.')
-            return None
-            
-        par_size_distr_df = self.save_particle_statistics()
-        
-        return par_size_distr_df
-    
-    
-    def save_particle_statistics(self, output_file_suffix = ''):
+
+    def get_particle_stats(self, n_par_target):
         """
-        Process particle area data, compute summary statistics, 
+        Analyze frames to collect and save particle size statistics.
+
+        Large diameter ranges are automatically split into decade bands (largest
+        first). Each band uses an FOV matched to its maximum particle size.
+        Top-level frames use normal labels (``A0``); finer bands use hierarchical
+        ids (``A0_a0``) for sub-frames inside visited parent FOVs.
+
+        Parameters
+        ----------
+        n_par_target : int
+            Target number of particles to analyze **per size band**.
+
+        Returns
+        -------
+        pandas.DataFrame or None
+            Summary statistics DataFrame, or None if no particles were found.
+        """
+        d_min_um = 2.0 * np.sqrt(self.powder_meas_cfg.min_area_par / np.pi)
+        d_max_um = 2.0 * np.sqrt(self.powder_meas_cfg.max_area_par / np.pi)
+        bands = split_diameter_range_um(d_min_um, d_max_um)
+
+        is_manual = bool(
+            getattr(getattr(self.EM, "measurement_cfg", None), "is_manual_navigation", False)
+        )
+        navigator = getattr(self.EM, "frame_navigator", None)
+
+        if is_manual or navigator is None or len(bands) == 1:
+            if len(bands) == 1 and navigator is not None and not is_manual:
+                fw_mm = self._apply_size_band(bands[0][0], bands[0][1])
+                if (
+                    navigator.grid_search_fw_mm is None
+                    or not np.isclose(float(navigator.grid_search_fw_mm), fw_mm, rtol=1e-6, atol=1e-9)
+                ):
+                    navigator.configure_top_level_particle_frames(fw_mm)
+                else:
+                    navigator.reset_frame_cursor()
+            self._collect_particle_stats_until(int(n_par_target))
+        else:
+            parent_frames = None
+            for band_idx, (d_lo, d_hi) in enumerate(bands):
+                fw_mm = self._apply_size_band(d_lo, d_hi)
+                if self.verbose:
+                    print_double_separator()
+                    logger.info(
+                        f"Size band {band_idx + 1}/{len(bands)}: "
+                        f"{d_lo:.4g}–{d_hi:.4g} µm "
+                        f"(FOV {fw_mm * 1000:.3g} µm)"
+                    )
+                if band_idx == 0:
+                    navigator.configure_top_level_particle_frames(fw_mm)
+                else:
+                    if not parent_frames:
+                        logger.warning(
+                            "⚠️ No parent frames from the previous size band; "
+                            "skipping remaining finer bands."
+                        )
+                        break
+                    navigator.configure_particle_subframes(parent_frames, fw_mm)
+
+                band_target = len(self.analyzed_pars) + int(n_par_target)
+                self._collect_particle_stats_until(band_target)
+                parent_frames = navigator.get_visited_band_frames()
+                self._persist_stats_ledger()
+
+        n_par_analysed = len(self.analyzed_pars)
+        if n_par_analysed == 0:
+            logger.error(
+                '❌ Could not find any particle. Please check your sample, '
+                'or change the contrast/brightness values.'
+            )
+            return None
+
+        self._persist_stats_ledger()
+        return self.save_particle_statistics()
+
+    def save_particle_statistics(self, output_file_suffix=''):
+        """
+        Process ParticleInfo records, compute summary statistics,
         export results, and produce a particle size histogram.
-    
-        This method:
-        1. Extracts particle areas (μm²) and associated frame labels.
-        2. Optionally warns if two smallest particles have identical area (potential imaging resolution issue).
-        3. Calculates equivalent diameters assuming circular particles.
-        4. Saves raw particle data to CSV.
-        5. Computes descriptive statistics and saves them to CSV.
-        6. Generates and saves a histogram plot of particle sizes.
-        
+
         Parameters
         ----------
         output_file_suffix : str, optional
             String added to output file name
-        
+
         Returns
         -------
         pandas.DataFrame
@@ -1448,16 +1523,34 @@ class EM_Particle_Finder:
             output_dir = os.path.dirname(self.results_dir)
         else:
             output_dir = self.results_dir
-        
-        # ---- Extract numeric areas and labels from stored tuples ----
-        par_IDs, frame_labels, areas_um = zip(*self.analyzed_pars)
-        par_IDs = np.array(par_IDs, dtype = int)
-        frame_labels = np.array(frame_labels, dtype=str)
-        areas_um = np.array(areas_um, dtype=float)
-    
+
+        if not self.analyzed_pars:
+            raise ValueError("No particles available to save statistics from")
+
+        par_IDs = np.array([p.id for p in self.analyzed_pars], dtype=int)
+        frame_labels = np.array(
+            [p.frame_id if p.frame_id is not None else "" for p in self.analyzed_pars],
+            dtype=str,
+        )
+        areas_um = np.array(
+            [float(p.area_um) for p in self.analyzed_pars if p.area_um is not None],
+            dtype=float,
+        )
+        if len(areas_um) != len(self.analyzed_pars):
+            raise ValueError("All ParticleInfo records must have area_um set for PSD export")
+
+        eq_diam_um = np.array(
+            [
+                float(p.eq_diameter_um)
+                if p.eq_diameter_um is not None
+                else float(2.0 * np.sqrt(float(p.area_um) / np.pi))
+                for p in self.analyzed_pars
+            ],
+            dtype=float,
+        )
+
         n_par_analysed = len(areas_um)
-    
-        # ---- Warn if smallest particles have same size (pixel limit indication) ----
+
         if n_par_analysed > 1 and np.isclose(areas_um.min(), np.partition(areas_um, 1)[1]):
             logger.warning(
                 '⚠ The 2 smallest particles have identical area.\n'
@@ -1466,24 +1559,19 @@ class EM_Particle_Finder:
                 '   Consider reducing the maximum particle size so that the minimum\n'
                 '   acceptable size is within ~1 order of magnitude.'
             )
-    
-        # ---- Calculate equivalent diameters (circle assumption) ----
-        eq_diam_um = np.sqrt(areas_um / np.pi) * 2
-    
-        # ---- Save raw particle sizes to CSV ----
+
         particle_data = pd.DataFrame({
-            cnst.PAR_ID_DF_KEY : par_IDs,
-            cnst.FRAME_ID_DF_KEY : frame_labels,
+            cnst.PAR_ID_DF_KEY: par_IDs,
+            cnst.FRAME_ID_DF_KEY: frame_labels,
             cnst.PAR_AREA_UM_KEY: areas_um,
-            cnst.PAR_EQ_D_KEY: eq_diam_um
+            cnst.PAR_EQ_D_KEY: eq_diam_um,
         })
         particle_data.to_csv(
             os.path.join(output_dir, f"{self._sample_id}_{cnst.PARTICLE_SIZES_FILENAME}{output_file_suffix}.csv"),
             header=True,
-            index=False
+            index=False,
         )
-    
-        # ---- Compute descriptive statistics ----
+
         par_size_distr = {
             'Measure': 'Equivalent particle diameter in μm',
             'n_par_analysed': n_par_analysed,
@@ -1495,34 +1583,31 @@ class EM_Particle_Finder:
             'D10': np.percentile(eq_diam_um, 10),
             'D25': np.percentile(eq_diam_um, 25),
             'D75': np.percentile(eq_diam_um, 75),
-            'D90': np.percentile(eq_diam_um, 90)
+            'D90': np.percentile(eq_diam_um, 90),
         }
-    
-        # ---- Save statistics to CSV ----
+
         stats_df = pd.DataFrame(par_size_distr, index=[0])
         stats_df.to_csv(
             os.path.join(output_dir, f"{self._sample_id}_{cnst.PARTICLE_STATS_FILENAME}{output_file_suffix}.csv"),
             header=True,
-            index=False
+            index=False,
         )
 
-        # ---- Optional verbose output ----
         if self.verbose:
             print_double_separator()
             logger.info("📊 Computed statistics:")
             logger.info(stats_df.T.to_string(header=False))
-    
-        # ---- Generate and save particle size histogram ----
+
         self._save_particle_size_histogram(
-            areas_um,
+            eq_diam_um,
             results_dir=output_dir,
             _sample_id=self._sample_id,
             verbose=self.verbose,
-            output_file_suffix = output_file_suffix
+            output_file_suffix=output_file_suffix,
         )
-    
+
         return stats_df
-        
+
 
     def _save_particle_size_histogram(self, diameters_um, results_dir=None, _sample_id=None, verbose=False, output_file_suffix = '', bins=20):
         """
@@ -1646,17 +1731,28 @@ class EM_Particle_Finder:
         # Find connected components
         num_labels, labels, stats, centroids = self._get_connected_components_with_stats(par_mask)
         
-        # Store particle area
+        # Store particle area / geometry as ParticleInfo
         par_centroids = []  # Only used for saving image
         par_areas = []
         par_cntr = 0
+        frame_label = str(self.EM.current_frame_label) if self.EM.current_frame_label is not None else None
         for i in range(1, num_labels):  # Skip the background component (index 0)
             par_area_pixels = stats[i, cv2.CC_STAT_AREA]
             if self._is_particle_area_ok(par_area_pixels) and not self.is_particle_at_frame_edge(stats, i):
                 # If particle is within size limits and is not at the edge, consider it in the statistics
-                par_area_um = par_area_pixels * self.EM.pixel_size_um**2
+                par_area_um = float(par_area_pixels * self.EM.pixel_size_um**2)
+                eq_diameter_um = float(2.0 * np.sqrt(par_area_um / np.pi))
+                abs_mm = self.EM.convert_pixel_pos_to_mm(centroids[i])
                 global_par_id = len(self.analyzed_pars)
-                self.analyzed_pars.append((global_par_id, self.EM.current_frame_label, par_area_um))
+                self.analyzed_pars.append(
+                    ParticleInfo(
+                        id=global_par_id,
+                        area_um=par_area_um,
+                        eq_diameter_um=eq_diameter_um,
+                        coordinates=Coordinate2D(x=float(abs_mm[0]), y=float(abs_mm[1])),
+                        frame_id=frame_label,
+                    )
+                )
                 # Store stats locally to draw circles
                 par_areas.append(par_area_pixels)
                 par_centroids.append(centroids[i])

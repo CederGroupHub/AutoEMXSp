@@ -52,11 +52,14 @@ Fill in the following fields:
 
 - ``Min & Max Particle Diameter (um)``
 	Accepted particle-diameter range (used to compute area filters).
-	It is recommended to split measurements into multiple runs, each covering at most
-	one order of magnitude (for example, 1 um to 10 um).
-	This is because frame dimensions are chosen based on the largest accepted particle
-	diameter; if the range is too large, the pixel size can become comparable to the
-	smallest particles, which can invalidate their area measurements.
+	Ranges spanning more than one order of magnitude are split automatically into
+	decade bands (largest first). Each band uses a search FOV matched to its maximum
+	particle size. Coarse frames use normal labels (for example ``A0``); finer bands
+	scan sub-frames inside visited parent FOVs with hierarchical ids such as
+	``A0_a0``. Particle geometry is stored in ``ledger.json`` as ``ParticleInfo``
+	records (area, equivalent diameter, absolute stage coordinates in mm, and
+	``frame_id``), and the usual Par_sizes / Par_size_stats CSV outputs are still
+	written from that ledger.
 
 - ``Carbon Tape Diameter (mm)``
 	Used to estimate the effective sample area to scan over the carbon tape.
@@ -107,6 +110,11 @@ Output
 ------
 
 In the sample output directory, the workflow writes:
+
+- ``ledger.json``
+	Sample ledger whose ``particles`` list holds ``ParticleInfo`` records used for
+	the size-distribution analysis (including absolute stage coordinates in mm and
+	hierarchical ``frame_id`` values when multiple size bands are scanned).
 
 - ``<SampleID>_Par_sizes.csv``
 	Per-particle table with particle ID, frame ID, area, and equivalent diameter.

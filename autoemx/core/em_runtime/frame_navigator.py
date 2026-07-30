@@ -14,7 +14,7 @@ FrameNavigator
 Created on 2026
 @author: Andrea
 """
-from typing import Optional
+from typing import List, Optional, Sequence, Tuple
 
 import time
 import numpy as np
@@ -27,6 +27,9 @@ from autoemx.core.em_runtime.particle_finder import EM_Particle_Finder
 
 from autoemx._logging import get_logger
 logger = get_logger(__name__)
+
+# (frame_label, center_xy_mm, frame_width_mm)
+FrameDescriptor = Tuple[str, Tuple[float, float], float]
 
 
 class FrameNavigator:
@@ -101,6 +104,9 @@ class FrameNavigator:
         # Current frame center position in stage coordinates (mm).
         # Used by EM_Controller.convert_pixel_pos_to_mm.
         self._current_pos = center_pos
+        self.grid_search_fw_mm = None
+        self._band_frame_descriptors: List[FrameDescriptor] = []
+        self._visited_band_frames: List[FrameDescriptor] = []
     
     
     def initialise_sample_navigator(self, grid_search_fw_mm, exclude_sample_margin=True):
@@ -311,6 +317,122 @@ class FrameNavigator:
         self.frame_pos_mm = list(frame_centers)
         self.frame_labels = list(frame_labels)
         self.num_frames = len(frame_centers)
+        self._sync_band_frame_descriptors()
+
+    def reset_frame_cursor(self) -> None:
+        """Reset the frame index so the next ``go_to_next_frame`` starts at frame 0."""
+        self._frame_cntr = 0
+        self.current_frame_label = ''
+        self._visited_band_frames = []
+
+    def _apply_search_frame_width(self, frame_width_mm: float) -> float:
+        """Clip and apply the particle-search FOV; return the effective width in mm."""
+        self.grid_search_fw_mm = float(frame_width_mm)
+        if self.EM_driver.is_microscope_connected():
+            min_fw, max_fw = self.EM_driver.get_range_frame_width()
+            self.grid_search_fw_mm = float(np.clip(self.grid_search_fw_mm, min_fw, max_fw))
+            self.EM_controller.set_frame_width(self.grid_search_fw_mm)
+        return float(self.grid_search_fw_mm)
+
+    def _sync_band_frame_descriptors(self) -> None:
+        """Refresh planned-frame metadata for the active size band."""
+        fw = float(self.grid_search_fw_mm) if self.grid_search_fw_mm is not None else 0.0
+        self._band_frame_descriptors = [
+            (str(label), (float(pos[0]), float(pos[1])), fw)
+            for pos, label in zip(self.frame_pos_mm, self.frame_labels)
+        ]
+
+    def get_visited_band_frames(self) -> List[FrameDescriptor]:
+        """Return frames visited during the current size band (in visit order)."""
+        return list(self._visited_band_frames)
+
+    def configure_top_level_particle_frames(
+        self,
+        frame_width_mm: float,
+        randomize_frames: bool = True,
+        exclude_sample_margin: bool = True,
+    ) -> None:
+        """Rebuild the sample-wide particle-search grid for the coarsest size band."""
+        effective_fw = self._apply_search_frame_width(frame_width_mm)
+        im_h_to_w_ratio = self.im_height / self.im_width
+        self._calc_frame_centers(
+            horizontal_spacing_mm=effective_fw,
+            im_h_to_w_ratio=im_h_to_w_ratio,
+            center_pos=self._center_pos,
+            randomize_frames=randomize_frames,
+            exclude_sample_margin=exclude_sample_margin,
+        )
+        self.reset_frame_cursor()
+
+    def configure_particle_subframes(
+        self,
+        parent_frames: Sequence[FrameDescriptor],
+        child_fw_mm: float,
+        randomize_frames: bool = True,
+    ) -> None:
+        """Build hierarchical child frames inside each parent FOV.
+
+        Child labels use a compact lowercase AlphabetMapper scheme (``a0``, ``b1``, …)
+        and are joined to the parent id as ``{parent}_{local}``.
+        """
+        if not parent_frames:
+            self.frame_pos_mm = []
+            self.frame_labels = []
+            self.num_frames = 0
+            self._band_frame_descriptors = []
+            self.reset_frame_cursor()
+            return
+
+        effective_fw = self._apply_search_frame_width(child_fw_mm)
+        im_h_to_w_ratio = self.im_height / self.im_width
+        alphabet_mapper = AlphabetMapper(alphabet='abcdefghijklmnopqrstuvwxyz')
+        frames = []
+        sample_cx, sample_cy = self._center_pos
+
+        for parent_label, (cx, cy), parent_fw_mm in parent_frames:
+            parent_fw_mm = float(parent_fw_mm)
+            n_x = max(1, int(round(parent_fw_mm / effective_fw)))
+            n_y = max(1, int(round((parent_fw_mm * im_h_to_w_ratio) / (effective_fw * im_h_to_w_ratio))))
+            half_x = (n_x - 1) / 2.0
+            half_y = (n_y - 1) / 2.0
+            for i in range(n_x):
+                letter = alphabet_mapper.get_letter(i)
+                for j in range(n_y):
+                    local_label = f"{letter}{j}"
+                    x = float(cx) + (i - half_x) * effective_fw
+                    y = float(cy) + (j - half_y) * effective_fw * im_h_to_w_ratio
+                    label = f"{parent_label}_{local_label}"
+                    dist = np.hypot(x - sample_cx, y - sample_cy)
+                    angle = np.arctan2(y - sample_cy, x - sample_cx)
+                    frames.append(((x, y), label, dist, angle))
+
+        if frames:
+            frames.sort(key=lambda tup: (tup[2], tup[3]))
+            frame_centers, frame_labels = zip(*[(f[0], f[1]) for f in frames])
+            if randomize_frames:
+                import random
+                zipped = list(zip(frame_centers, frame_labels))
+                random.shuffle(zipped)
+                frame_centers, frame_labels = zip(*zipped)
+            self.frame_pos_mm = list(frame_centers)
+            self.frame_labels = list(frame_labels)
+        else:
+            self.frame_pos_mm = []
+            self.frame_labels = []
+        self.num_frames = len(self.frame_pos_mm)
+        self._sync_band_frame_descriptors()
+        self.reset_frame_cursor()
+
+    def _record_visited_frame(self) -> None:
+        """Append the current frame to the visited list for hierarchical sub-banding."""
+        if self._current_pos is None or self.grid_search_fw_mm is None:
+            return
+        descriptor = (
+            str(self.current_frame_label),
+            (float(self._current_pos[0]), float(self._current_pos[1])),
+            float(self.grid_search_fw_mm),
+        )
+        self._visited_band_frames.append(descriptor)
     
     
     def go_to_next_frame(self, microscope_ctrl) -> bool:
@@ -378,6 +500,8 @@ class FrameNavigator:
         if self.verbose:
             print_single_separator()
             logger.info(f"▶️ Moved to frame {self.current_frame_label} (#{self._frame_cntr + 1}/{self.num_frames}).")
+
+        self._record_visited_frame()
         
         # Update frame counter
         self._frame_cntr += 1

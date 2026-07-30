@@ -351,9 +351,12 @@ class AlphabetMapper:
     0 -> 'A', 1 -> 'B', ..., 25 -> 'Z', 26 -> 'AA', etc.
     
     Used for labeling frames analyzed during particle search.
+    Pass a lowercase alphabet for compact child-frame labels in multi-scale scans.
     """
-    def __init__(self):
-        self.alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    def __init__(self, alphabet: str = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
+        if not alphabet:
+            raise ValueError("alphabet must be non-empty")
+        self.alphabet = alphabet
         self.n_letters = len(self.alphabet)
 
     def get_letter(self, index: int) -> str:

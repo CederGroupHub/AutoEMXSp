@@ -11,6 +11,7 @@ import pytest
 
 from autoemx.config.ledger_schemas import (
     AcquisitionDetails,
+    Coordinate2D,
     LedgerConfigs,
     ParticleInfo,
     SampleLedger,
@@ -61,6 +62,8 @@ def test_particle_info_round_trip(outputs_dir: Path):
                 id=1,
                 area_um=3.14,
                 eq_diameter_um=2.0,
+                coordinates=Coordinate2D(x=12.5, y=-3.25),
+                frame_id="A0_a1",
                 clusters=[0, 2],
                 composition="Candidate phases: PbMoO4 (CScnd: 0.90)",
             )
@@ -75,6 +78,10 @@ def test_particle_info_round_trip(outputs_dir: Path):
     assert particle.id == 1
     assert particle.area_um == pytest.approx(3.14)
     assert particle.eq_diameter_um == pytest.approx(2.0)
+    assert particle.coordinates is not None
+    assert particle.coordinates.x == pytest.approx(12.5)
+    assert particle.coordinates.y == pytest.approx(-3.25)
+    assert particle.frame_id == "A0_a1"
     assert particle.clusters == [0, 2]
     assert "PbMoO4" in (particle.composition or "")
 
@@ -213,3 +220,43 @@ def test_update_particles_noop_when_empty(outputs_dir: Path):
     assert not analyser._update_particles_from_clustering(
         ledger, labels=[0], df_indices=[0], clustering_result=result
     )
+
+
+def test_upsert_particle_info_sets_frame_id_and_coordinates(outputs_dir: Path):
+    analyser = object.__new__(EMXSp_Composition_Analyzer)
+    sample_dir = outputs_dir / "particle_info_upsert_coords"
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    ledger = SampleLedger(
+        sample_id="demo",
+        sample_path=str(sample_dir.resolve()),
+        configs=_minimal_ledger_configs(),
+        spectra=[],
+        particles=[],
+    )
+    coords = Coordinate2D(x=3.5, y=-1.25)
+    analyser._upsert_particle_info(
+        ledger,
+        particle_id=4,
+        area_um=math.pi,
+        frame_id="B2",
+        coordinates=coords,
+    )
+    assert len(ledger.particles) == 1
+    particle = ledger.particles[0]
+    assert particle.id == 4
+    assert particle.frame_id == "B2"
+    assert particle.coordinates is not None
+    assert particle.coordinates.x == pytest.approx(3.5)
+    assert particle.coordinates.y == pytest.approx(-1.25)
+    assert particle.eq_diameter_um == pytest.approx(2.0)
+
+    analyser._upsert_particle_info(
+        ledger,
+        particle_id=4,
+        area_um=None,
+        frame_id="B2_a0",
+        coordinates=Coordinate2D(x=3.6, y=-1.2),
+    )
+    assert ledger.particles[0].frame_id == "B2_a0"
+    assert ledger.particles[0].coordinates.x == pytest.approx(3.6)
+    assert ledger.particles[0].area_um == pytest.approx(math.pi)

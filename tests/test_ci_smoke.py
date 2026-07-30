@@ -73,6 +73,14 @@ from test_particle_info_ledger import (  # noqa: F401
     test_particle_info_round_trip,
     test_update_particles_from_clustering,
     test_update_particles_noop_when_empty,
+    test_upsert_particle_info_sets_frame_id_and_coordinates,
+)
+from test_particle_stats_multiscale import (  # noqa: F401
+    test_configure_particle_subframes_hierarchical_ids,
+    test_diameter_area_and_frame_width_helpers,
+    test_lowercase_alphabet_mapper,
+    test_save_particle_statistics_from_particle_info,
+    test_split_diameter_range_largest_first,
 )
 
 
