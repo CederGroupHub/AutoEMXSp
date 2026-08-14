@@ -990,14 +990,16 @@ class EM_Particle_Finder:
         par_image: np.ndarray,
         *,
         centering: bool = False,
-    ) -> Optional[Tuple[np.ndarray, int, np.ndarray, np.ndarray]]:
+    ) -> Optional[Tuple[np.ndarray, int, np.ndarray, np.ndarray, np.ndarray]]:
         """
         Segment the particle at the image center with the configured segmentation model.
 
         Returns
         -------
         tuple or None
-            ``(binary_mask, par_label, stats, centroids)`` for the selected particle.
+            ``(binary_mask, par_label, stats, centroids, source_image)`` for the
+            selected particle. ``source_image`` is the frame the mask was computed
+            on and may differ from ``par_image`` if the stage was recentered.
             Area is computed from this full (non-eroded) mask before any spot-selection
             erosion. Returns None if no suitable particle is found.
         """
@@ -1022,7 +1024,7 @@ class EM_Particle_Finder:
         # particles trigger a re-center onto the nearest area-ok neighbour.
         if center_area_ok or (center_on_particle and not EM_driver.is_microscope_connected()):
             binary_mask = np.where(labels == par_label, 255, 0).astype(np.uint8)
-            return binary_mask, par_label, stats, centroids
+            return binary_mask, par_label, stats, centroids, par_image
 
         if centering:
             return None
@@ -1033,10 +1035,12 @@ class EM_Particle_Finder:
             label = int(label)
             if not EM_driver.is_microscope_connected():
                 binary_mask = np.where(labels == label, 255, 0).astype(np.uint8)
-                return binary_mask, label, stats, centroids
+                return binary_mask, label, stats, centroids, par_image
             if self._is_particle_area_ok(stats[label, cv2.CC_STAT_AREA]):
                 new_center = self.EM.convert_pixel_pos_to_mm(centroids[label])
                 self.EM.move_to_pos(new_center)
+                center_xy = np.asarray(new_center, dtype=float).reshape(-1)
+                self.current_par_coordinates_mm = (float(center_xy[0]), float(center_xy[1]))
                 recentered_image = self._capture_ref_frame()
                 return self._segment_center_particle(recentered_image, centering=True)
         return None
@@ -1076,6 +1080,7 @@ class EM_Particle_Finder:
         - Uses ``powder_meas_cfg.par_segmentation_model`` (default ``threshold_bright``).
         - Stores ``current_par_area_um2`` from the full mask before any edge erosion.
         - The function is robust to small misalignments: if the center particle is not valid, it finds the next closest.
+        - The returned ``par_image`` is always the frame the mask was computed on, including after a microscope recenter.
         - In development mode, it saves the resulting mask with a scalebar overlay.
         - The commented `cv2.imshow` lines can be enabled for debugging visualization.
         '''
@@ -1089,7 +1094,7 @@ class EM_Particle_Finder:
                 self.current_par_area_um2 = None
             return None
 
-        par_mask, par_label, stats, _centroids = segmented
+        par_mask, par_label, stats, _centroids, par_image = segmented
         # Area from the full (non-eroded) mask — spot selection may erode later.
         self._store_current_particle_area(stats[par_label, cv2.CC_STAT_AREA])
 
@@ -1384,10 +1389,11 @@ class EM_Particle_Finder:
         if self.ref_image is None:
             self.ref_image = self._capture_ref_frame(par_image, pixel_size_um)
             # Measure particle size independently of the callback. Uses the configured
-            # segmentation model on the raw (non-eroded) reference frame.
+            # segmentation model on the raw (non-eroded) reference frame. If the
+            # stage was recentered, keep the recaptured frame as the reference.
             segmented = self._segment_center_particle(self.ref_image)
             if segmented is not None:
-                _mask, par_label, stats, _centroids = segmented
+                _mask, par_label, stats, _centroids, self.ref_image = segmented
                 self._store_current_particle_area(stats[par_label, cv2.CC_STAT_AREA])
             else:
                 self.current_par_area_um2 = None
