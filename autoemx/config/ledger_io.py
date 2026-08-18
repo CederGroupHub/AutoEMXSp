@@ -28,8 +28,8 @@ def _list_spectrum_pointer_files(spectra_dir: Path) -> List[Path]:
     if not spectra_dir.exists():
         return []
 
-    allowed_ext = {".msa", ".msg", ".json"}
-    ext_priority = {".msa": 0, ".msg": 1, ".json": 2}
+    allowed_ext = set(cnst.SPECTRUM_POINTER_EXTENSIONS)
+    ext_priority = dict(cnst.SPECTRUM_POINTER_EXT_PRIORITY)
     selected_by_id = {}
 
     for path in spectra_dir.iterdir():
@@ -58,7 +58,7 @@ def _list_spectrum_pointer_files(spectra_dir: Path) -> List[Path]:
 
 def _load_realtime_from_pointer_file(pointer_path: Path) -> Optional[float]:
     """Read REALTIME from EMSA-like headers when available."""
-    if pointer_path.suffix.lower() not in {".msa", ".msg"}:
+    if pointer_path.suffix.lower() not in cnst.EMSA_SPECTRUM_EXTENSIONS:
         return None
 
     try:

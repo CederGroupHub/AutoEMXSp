@@ -3,7 +3,7 @@
 """
 Quantify External Spectra with AutoEMX
 
-Use this script when you have .msa or .msg spectra already collected outside
+Use this script when you have .msa, .msg, or .emsa spectra already collected outside
 AutoEMX (e.g. exported from a third-party EDS software) and you want to
 quantify them with the standard AutoEMX batch workflow.
 

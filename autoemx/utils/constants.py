@@ -147,6 +147,10 @@ DATA_FILENAME = 'Data'
 MSA_SP_FILENAME = "EM_metadata.msa"
 SPECTRUM_FILENAME_PREFIX = "spectrum_"
 SPECTRUM_MAN_BACKGROUND_SUFFIX = "_man_bckgrnd"
+# EMSA/MAS spectrum files accepted for ingest (same text format; .emsa is a common alias).
+EMSA_SPECTRUM_EXTENSIONS = {".msa", ".msg", ".emsa"}
+SPECTRUM_POINTER_EXTENSIONS = {".msa", ".msg", ".emsa", ".json"}
+SPECTRUM_POINTER_EXT_PRIORITY = {".msa": 0, ".emsa": 0, ".msg": 1, ".json": 2}
 VECTOR_FILEEXT = ".npy"
 PARTICLE_STATS_FILENAME = 'Par_size_stats'
 PARTICLE_SIZES_FILENAME = 'Par_sizes'

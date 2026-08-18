@@ -88,6 +88,15 @@ from test_particle_selection_list_mode import (  # noqa: F401
     test_powder_config_accepts_list_mode,
     test_set_particle_targets_missing_id_raises,
 )
+from test_web_pipeline import (  # noqa: F401
+    test_quantification_requires_15_kv,
+    test_composition_txt_and_png_export,
+    test_emsa_is_accepted_extension,
+    test_load_msa_accepts_emsa_alias,
+    test_parse_elements_validates_and_deduplicates,
+    test_parse_emsa_geometry_from_phenom_header,
+    test_reader_failure_builds_report,
+)
 
 
 def test_ci_fixtures_present():

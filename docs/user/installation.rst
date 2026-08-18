@@ -11,6 +11,14 @@ You can install the package using pip:
 
    pip install autoemx
 
+To fit and quantify uploaded EMSA spectra in a local browser:
+
+.. code-block:: bash
+
+   python -m autoemx.web
+
+See :ref:`web_gui_tutorial`.
+
 
 Alternatively, to ensure you are constantly up to date with the package during minor developments, you can clone the GitHub repository and use editable installation. This allows you to access the latest features or bug fixes that are not yet included in the latest release version.
 To do this, follow these steps:

@@ -1107,6 +1107,7 @@ class XSp_Quantifier:
         self.bad_quant_flag = bad_quant_flag
         self.iterations_run = iter_counter
         self.quant_converged = converged and is_fit_valid
+        self.quant_result = quant_result
         
         return quant_result, min_bckgrnd_ref_lines, bad_quant_flag
 
@@ -1844,8 +1845,10 @@ class XSp_Quantifier:
         plot_bckgrnd_cnts_ref_peaks: bool = True,
         plot_initial_guess: bool = False,
         plot_title: Optional[str] = None,
-        peaks_to_zoom: Optional[Union[str, List[str]]] = None
-    ) -> None:
+        peaks_to_zoom: Optional[Union[str, List[str]]] = None,
+        show: bool = True,
+        save_path: Optional[str] = None,
+    ) -> Optional[Any]:
         """
         Plot the quantified spectrum.
         The background counts under reference peaks are highlighted for spectra used for quantification.
@@ -1863,10 +1866,16 @@ class XSp_Quantifier:
             Title printed at the top of the plot. Default is None.
         peaks_to_zoom : str or list of str, optional
             Peak label (e.g. 'Si_Ka1') or list of labels to zoom in on. If provided, creates a new figure for each.
+        show : bool, optional
+            If True (default), display the figure with ``plt.show()``. Set False for
+            headless export or embedding in a GUI.
+        save_path : str, optional
+            If given, save the main figure to this path (PNG recommended).
     
         Returns
         -------
-        None.
+        matplotlib.figure.Figure or None
+            The main figure. Callers that pass ``show=False`` should close it.
         """
         # Accept a single string or a list for peaks_to_zoom
         if isinstance(peaks_to_zoom, str):
@@ -1968,7 +1977,11 @@ class XSp_Quantifier:
         if plot_title:
             plt.title(plot_title)
         plt.legend()
-        plt.show()
+        fig = plt.gcf()
+        if save_path:
+            fig.savefig(save_path, dpi=200, bbox_inches='tight')
+        if show:
+            plt.show()
     
         # ---- ZOOMED-IN PLOTS: create a new figure for each requested peak ----
         for peak in peaks_to_zoom:
@@ -1978,6 +1991,8 @@ class XSp_Quantifier:
                 logger.info(f'ℹ️ The available peak lines are {self.fitted_xray_lines}')
             else:
                 self.plot_zoomed_peak(peak, plot_title=plot_title)
+
+        return fig
     
     def plot_zoomed_peak(
         self,

@@ -3,7 +3,7 @@
 """
 Import and quantify externally-acquired X-ray spectra.
 
-This module copies ``.msa`` / ``.msg`` spectrum files from an arbitrary directory
+This module copies ``.msa`` / ``.msg`` / ``.emsa`` spectrum files from an arbitrary directory
 into the canonical ``sample_id/spectra/`` subfolder under ``results_path``, builds
 a complete ``ledger.json`` (identical to what the acquisition runner writes), and
 then hands off to :func:`batch_quantify_and_analyze` for quantification and
@@ -54,11 +54,11 @@ logging.basicConfig(
 
 __all__ = ["quantify_external_spectra"]
 
-_SUPPORTED_EXTENSIONS = {".msa", ".msg"}
+_SUPPORTED_EXTENSIONS = set(cnst.EMSA_SPECTRUM_EXTENSIONS)
 
 
 def _discover_spectra_files(spectra_dir: str) -> List[Path]:
-    """Return sorted list of .msa/.msg files found directly inside *spectra_dir*."""
+    """Return sorted list of EMSA spectrum files found directly inside *spectra_dir*."""
     source = Path(spectra_dir)
     if not source.is_dir():
         raise FileNotFoundError(
@@ -133,9 +133,10 @@ def quantify_external_spectra(
         - ``'ID'`` (str, required): Sample identifier; the output folder is named after this.
         - ``'els'`` (list of str, required): Element symbols expected in the sample.
         - ``'spectra_dir'`` (str, optional): Path to a folder containing ``.msa`` / ``.msg``
-          spectrum files.  Files are copied and renamed ``spectrum_0.msa``, ``spectrum_1.msa``,
-          … in sort order.  When omitted (or set to ``None``), the spectra are expected to
-          already be present at ``<results_path>/<ID>/spectra/`` in the canonical naming.
+          / ``.emsa`` spectrum files.  Files are copied and renamed ``spectrum_0<ext>``,
+          ``spectrum_1<ext>``, … in sort order.  When omitted (or set to ``None``), the
+          spectra are expected to already be present at ``<results_path>/<ID>/spectra/``
+          in the canonical naming.
         - ``'cnd'`` (list of str, optional): Candidate phase formulae for clustering
           (e.g. ``['PbMoO4']``).
         - ``'type'`` (str, optional): Override ``sample_type`` for this entry.
@@ -299,7 +300,7 @@ def quantify_external_spectra(
 
                 if not source_files:
                     logging.warning(
-                        "No .msa/.msg files found in '%s'. Skipping sample '%s'.",
+                        "No .msa/.msg/.emsa files found in '%s'. Skipping sample '%s'.",
                         spectra_dir, sample_id,
                     )
                     continue

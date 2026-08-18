@@ -120,7 +120,7 @@ For each successfully processed sample, AutoEMX writes:
 Notes and troubleshooting
 -------------------------
 
-- Supported input extensions are ``.msa`` and ``.msg``.
+- Supported input extensions are ``.msa``, ``.msg``, and ``.emsa``.
 - If ``spectra_dir`` contains no valid files, the sample is skipped.
 - If a ``ledger.json`` already exists, ingestion is skipped by default.
   Set ``overwrite_existing=True`` to rebuild from current script settings.

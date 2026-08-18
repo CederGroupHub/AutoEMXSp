@@ -49,12 +49,16 @@ dependencies = [
     "sympy>=1.13.2,<=1.14.0",
     "yellowbrick==1.5",
     "opencv-python>=4.10.0,<=4.12.0.88",
-    "pillow>=10.0.1"
+    "pillow>=10.0.1",
+    "streamlit>=1.32,<=1.48.1"
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+]
+web = [
+    "streamlit>=1.32,<=1.48.1",
 ]
 
 [tool.pytest.ini_options]

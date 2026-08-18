@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+import autoemx.utils.constants as cnst
 from autoemx.config.runtime_configs import (
     BulkMeasurementConfig,
     ExpStandardsConfig,
@@ -158,7 +159,7 @@ class SampleLedger(BaseModel):
         def _read_once() -> List[float]:
             suffix = file_path.suffix.lower()
 
-            if suffix in {".msa", ".msg"}:
+            if suffix in cnst.EMSA_SPECTRUM_EXTENSIONS:
                 counts: List[float] = []
                 in_data_section = False
                 with file_path.open("r", encoding="utf-8") as f:

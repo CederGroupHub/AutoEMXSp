@@ -32,7 +32,8 @@ DOI: [https://doi.org/10.1038/s41467-026-76633-x](https://doi.org/10.1038/s41467
     - **Rule-based filtering** of compositions to discard poorly quantified spectra from the analysis
     - **Unsupervised machine learning–based analysis** to identify the compositions of individual phases in the sample  
 
-- Scripts for **fitting and quantification** of single EDS spectra exported by proprietary commercial software (.msa, .emsa, .txt files)
+- Scripts for **fitting and quantification** of single EDS spectra exported by proprietary commercial software (.msa, .emsa, .msg files)
+- **Local GUI** (`python -m autoemx.web`) to upload one or more EMSA spectra, view the fitted overlay and compositions, and save PNG / TXT
 
 - **Automated experimental standard collection** scripts
 
@@ -82,6 +83,13 @@ Installation instructions, usage examples, and workflow descriptions are availab
 
 👉 https://cedergrouphub.github.io/AutoEMX/
 
+Fit uploaded EMSA spectra in a local browser (production path):
+
+```bash
+pip install autoemx
+python -m autoemx.web
+```
+
 
 ---
 
@@ -121,6 +129,7 @@ AutoEMX/
 │   ├── microscope_drivers/              # Electron Microscope driver (⚠️ adapt to your own instrument)
 │   ├── runners/                # Runner functions calling on core objects
 │   ├── scripts/                # Scripts to run acquisition, quantification, etc. (see full list below)
+│   ├── web/                    # Local Streamlit GUI (`python -m autoemx.web`)
 │   ├── calibrations/             # X-ray spectral calibrations (⚠️ adapt to your own instrument)
 │   ├── utils/                  # Utility functions and strings employed by the program
 │
@@ -147,6 +156,7 @@ This repository includes a collection of scripts that streamline the use of **Au
 - **Fit_Quant_Single_AutoEMX_Spectrum.py** — Fit and optionally quantify a single spectrum measured with AutoEMX. Prints fitting parameters and plots fitted spectrum for detailed inspection of model performance.
 - **Fit_Quant_Single_MSA_Spectrum.py** — Fit and optionally quantify a single spectrum exported by proprietary software.
 - **Quantify_External_Spectra.py** — Quantify spectra acquired outside AutoEMX (e.g., from other SEM-EDS systems).
+- **GUI** — `python -m autoemx.web` opens a local browser UI for the same single/multi-file EMSA workflow (PNG and TXT export). A public hosted page, if present, is a demo only.
 
 ### 📊 Particle Size Distribution Measurements
 - **collect_particle_statistics.py** - Analyse sample, collecting particle size statistics and distribution.

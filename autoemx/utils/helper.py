@@ -578,14 +578,15 @@ def get_sample_dir(
 
 def load_msa(filepath: str) -> Tuple[np.ndarray, np.ndarray, Dict[str, str]]:
     """
-    Load a .msa or .msg file containing Y-only spectral data and compute the energy scale.
+    Load an EMSA/MAS spectrum file (``.msa``, ``.msg``, or ``.emsa``) containing
+    Y-only spectral data and compute the energy scale.
     Designed for raw spectra exported from Thermo Fisher Phenom systems.
     May work with other EMSA/MAS format files, but minor variations can occur.
 
     Parameters
     ----------
     filepath : str
-        Path to the .msa or .msg file.
+        Path to the ``.msa``, ``.msg``, or ``.emsa`` file.
 
     Returns
     -------
@@ -606,7 +607,7 @@ def load_msa(filepath: str) -> Tuple[np.ndarray, np.ndarray, Dict[str, str]]:
             if not line:
                 continue
 
-            if line.startswith('#SPECTRUM'):
+            if line.startswith('#SPECTRUM') or line.startswith('##SPECTRUM'):
                 in_data_section = True
                 continue
 
