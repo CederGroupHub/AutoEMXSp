@@ -116,7 +116,6 @@ repo (main file: `autoemx/web/app.py`). See `docs/user/web_gui.rst`.
 
 ## 🆕 Coming Soon
 Here’s what’s planned for future releases of **AutoEMX**:
-- 🐍 Verify with the latest **Python** version for improved compatibility with current scientific libraries
 - 📏 New scripts for **spectral parameter calibration** to extend the `XSp_calibs` library to your own instrument.
 
 ---
