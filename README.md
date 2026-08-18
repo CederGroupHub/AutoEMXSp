@@ -6,7 +6,7 @@
 [![Python Version](https://img.shields.io/pypi/pyversions/autoemx.svg)](https://pypi.org/project/autoemx/)
 [![CI](https://github.com/CederGroupHub/AutoEMX/actions/workflows/ci.yml/badge.svg)](https://github.com/CederGroupHub/AutoEMX/actions/workflows/ci.yml)
 [![License: Custom Non-Commercial](https://img.shields.io/badge/license-Custom%20Non--Commercial-blue.svg)](https://github.com/CederGroupHub/AutoEMX/blob/main/LICENSE.txt)
-[![Research Square Preprint](https://img.shields.io/badge/Research%20Square-preprint-orange)](https://doi.org/10.21203/rs.3.rs-7837297/v2)
+[![Nature Communications Publication](https://img.shields.io/badge/Nature%20Communications-publication-red)](https://www.nature.com/articles/s41467-026-76633-x)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://cedergrouphub.github.io/AutoEMX/)
 [![PR Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat)](https://pypi.org/project/autoemx/)
 
@@ -22,8 +22,8 @@ AutoEMX is a **fully automated framework** for SEM-EDS workflows — from spectr
 🧪 Test AutoEMX to fit and quantify EDS spectra you have collected on your commercial SEM-EDS system (see [Tutorials](https://cedergrouphub.github.io/AutoEMX/user/tutorials.html)).
 
 📖 This work is described in:  
-A. Giunto *et al.*, *Accurate SEM‑EDS Quantification, Automation, and Machine Learning Enable High‑Throughput Compositional Characterization of Powders*, 2025.  
-DOI: [https://doi.org/10.21203/rs.3.rs-7837297/v2](https://doi.org/10.21203/rs.3.rs-7837297/v2)
+A. Giunto *et al.*, *Accurate SEM‑EDS Quantification, Automation, and Machine Learning Enable High‑Throughput Compositional Characterization of Powders*, Nature Communications (2026), in press.  
+DOI: [https://doi.org/10.1038/s41467-026-76633-x](https://doi.org/10.1038/s41467-026-76633-x)
 
 ### ✨ Key Features
 - **Fully automated SEM-EDS phase-level compositional analysis workflow**, which includes:
@@ -185,17 +185,19 @@ LICENSE — see the LICENSE file for details.
 If you use **AutoEMX** in your research, please cite the following publication:
 
 > A. Giunto, Y. Fei, P. Nevatia, B. Rendy, N. Szymanski and G. Ceder;
-> *Accurate SEM‑EDS Quantification, Automation, and Machine Learning Enable High‑Throughput Compositional Characterization of Powders*, 2025.  
-> DOI: [https://doi.org/10.21203/rs.3.rs-7837297/v1](https://doi.org/10.21203/rs.3.rs-7837297/v2)
+> *Accurate SEM‑EDS Quantification, Automation, and Machine Learning Enable High‑Throughput Compositional Characterization of Powders*, Nature Communications (2026), in press.  
+> DOI: [https://doi.org/10.1038/s41467-026-76633-x](https://doi.org/10.1038/s41467-026-76633-x)
 
 ### BibTeX
 ```bibtex
-@article{Giunto2025AutoEMX,
-  author  = {Giunto, Andrea and Fei, Yuxing and Nevatia, Pragnay and Rendy, Bernardus and Szymanski, Nathan and Ceder, Gerbrand},
+@article{Giunto2026AutoEMX,
+  author  = {Giunto, Andrea and Fei, Yuxing and Nevatia, Pragnay and Rendy, Bernardus and Szymanski, Nathan J. and Ceder, Gerbrand},
   title   = {Accurate SEM‑EDS Quantification, Automation, and Machine Learning Enable High‑Throughput Compositional Characterization of Powders},
-  year    = {2025},
-  doi     = {10.21203/rs.3.rs-7837297/v2},
-  url     = {https://doi.org/10.21203/rs.3.rs-7837297/v2}
+  journal = {Nature Communications},
+  year    = {2026},
+  doi     = {10.1038/s41467-026-76633-x},
+  url     = {https://doi.org/10.1038/s41467-026-76633-x},
+  note    = {in press}
 }
 ```
 

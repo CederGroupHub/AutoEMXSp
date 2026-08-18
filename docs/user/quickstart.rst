@@ -43,10 +43,11 @@ the different phase compositions in your sample.
 
 See full workflow at:
 
-    A. Giunto *et al.*, *Harnessing Automated SEM-EDS and Machine Learning to Unlock
-    High-Throughput Compositional Characterization of Powder Materials*, 2025.  
-    
-    (https://www.researchsquare.com/article/rs-7837297/v1)
+    A. Giunto *et al.*, *Accurate SEM-EDS Quantification, Automation, and Machine
+    Learning Enable High-Throughput Compositional Characterization of Powders*,
+    Nature Communications (2026), in press.
+
+    (https://doi.org/10.1038/s41467-026-76633-x)
 
 
 Fit and quantify a single EDS spectrum
