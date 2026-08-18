@@ -90,6 +90,10 @@ pip install autoemx
 python -m autoemx.web
 ```
 
+A public hosted demo that **runs fits** can be deployed for free on
+[Streamlit Community Cloud](https://share.streamlit.io) from this GitHub
+repo (main file: `autoemx/web/app.py`). See `docs/user/web_gui.rst`.
+
 
 ---
 

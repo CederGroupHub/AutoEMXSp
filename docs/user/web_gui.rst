@@ -54,11 +54,20 @@ If the EMSA/MSA reader fails, the GUI shows **Download reader report** and
 header, and the first data lines — enough to extend ``load_msa``. Attach the
 original spectrum to the email if you can share it.
 
-Hugging Face demo (optional)
-----------------------------
+Public demo that can run fits (free)
+-----------------------------------
 
-The GUI can be published later as a Hugging Face Space pointing at this
-repository (``autoemx/web/app.py``). Set ``AUTOEMX_DEMO=1`` or rely on the
-Space-provided ``SPACE_ID`` environment variable to show the demo banner
-and cap uploads at two files. A Hugging Face account is not required to
-run the GUI locally. Never commit Hugging Face tokens to the repository.
+Use Streamlit Community Cloud.
+
+1. Push this repo to GitHub (including ``autoemx/web/app.py``,
+   ``requirements.txt``, ``packages.txt``, and ``runtime.txt``).
+2. Sign in at https://share.streamlit.io with GitHub.
+3. **Create app** → this repository → branch ``main`` → main file
+   ``autoemx/web/app.py``.
+4. Deploy. The ``*.streamlit.app`` URL is the public demo.
+
+The app treats Community Cloud as a demo (banner, two-file cap, license).
+Fits still take 0.5–3 minutes. The first request may also build detector
+convolution matrices. Community Cloud has limited RAM; if the app is killed,
+reboot it from the Streamlit dashboard. Local ``python -m autoemx.web``
+remains the production GUI.

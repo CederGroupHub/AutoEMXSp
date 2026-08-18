@@ -39,7 +39,10 @@ _ACCEPT = sorted(SUPPORTED_UPLOAD_EXTENSIONS)
 
 
 def _is_hosted_demo() -> bool:
-    return bool(os.environ.get("SPACE_ID") or os.environ.get("AUTOEMX_DEMO"))
+    if os.environ.get("AUTOEMX_DEMO"):
+        return True
+    # Streamlit Community Cloud mounts the repo here.
+    return os.path.isdir("/mount/src")
 
 
 def _write_upload(upload, dest_dir: Path) -> Path:

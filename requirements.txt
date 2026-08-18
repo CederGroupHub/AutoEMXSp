@@ -1,0 +1,3 @@
+# Streamlit Community Cloud (and similar hosts) install from this file.
+# Local users should still use: pip install autoemx
+-e .
