@@ -6,7 +6,7 @@
 [![Python Version](https://img.shields.io/pypi/pyversions/autoemx.svg)](https://pypi.org/project/autoemx/)
 [![CI](https://github.com/CederGroupHub/AutoEMX/actions/workflows/ci.yml/badge.svg)](https://github.com/CederGroupHub/AutoEMX/actions/workflows/ci.yml)
 [![License: Custom Non-Commercial](https://img.shields.io/badge/license-Custom%20Non--Commercial-blue.svg)](https://github.com/CederGroupHub/AutoEMX/blob/main/LICENSE.txt)
-[![Nature Communications Publication](https://img.shields.io/badge/Nature%20Communications-publication-red)](https://www.nature.com/articles/s41467-026-76633-x)
+[![Nature Communications Publication](https://img.shields.io/badge/publication-Nature%20Communications-red)](https://www.nature.com/articles/s41467-026-76633-x)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://cedergrouphub.github.io/AutoEMX/)
 [![PR Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat)](https://pypi.org/project/autoemx/)
 
