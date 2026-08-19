@@ -110,13 +110,14 @@ def main() -> None:
     st.title("AutoEMX spectrum fitting")
     st.caption(
         "Upload one or more EMSA spectra (``.msa``, ``.emsa``, ``.msg``), "
-        "fit and quantify them, then save the overlay as PNG and the composition as TXT."
+        "fit and quantify them, then save the fitted spectrum as PNG and the composition as TXT."
     )
     st.warning(
         f"**Compositions are valid only for spectra collected at {QUANT_BEAM_KV:.0f} kV.** "
-        "The shipped peak-to-background standards are for 15 kV. "
+        "The shipped peak-to-background standards are for 15 kV on a ThermoFisher Phenom XL. "
         "A spectrum acquired at any other accelerating voltage can still be fitted, "
-        "but the reported composition must not be treated as quantitative."
+        "but the reported composition will be less accurate. The larger the voltage difference, the larger the error. "
+        "Spectra from other instruments are still quantifiable, at the expense of accuracy."
     )
 
     if hosted:
@@ -135,27 +136,40 @@ def main() -> None:
             "the engine does not auto-identify unknown peaks."
         )
 
+    st.markdown(
+        "**Citation.** If you use this demo or AutoEMX in your research, please cite: "
+        "A. Giunto *et al.*, *Accurate SEM‑EDS Quantification, Automation, and "
+        "Machine Learning Enable High‑Throughput Compositional Characterization of Powders*, "
+        "Nature Communications (2026), in press. "
+        "DOI: [https://doi.org/10.1038/s41467-026-76633-x]"
+        "(https://doi.org/10.1038/s41467-026-76633-x)."
+    )
+
     with st.sidebar:
         st.header("Sample")
         els_sample_text = st.text_input(
             "Sample elements",
             value="Bi, Fe, O",
-            help="Comma-separated symbols. Required.",
+            help="Elements to be quantified in the sample. Comma-separated symbols. Required.",
         )
         els_substrate_text = st.text_input(
             "Substrate elements",
             value="C, O, Al",
-            help="Typical carbon-tape substrate is C, O, Al.",
+            help=(
+                "Elements to be fitted, but to be ignored from quantification. "
+                "It is recommended not to quantify substrate elements for improved accuracy. "
+                "Typical carbon-tape substrate is C, O, Al."
+            ),
         )
         is_particle = st.checkbox(
-            "Particle / powder geometry",
+            "Particle / rough sample geometry",
             value=True,
-            help="Uncheck for bulk / flat samples.",
+            help="Uncheck if your sample is flat, with roughness lower than 50nm.",
         )
         st.header("Files")
         st.caption(
             f"Collect spectra at **{QUANT_BEAM_KV:.0f} kV**. "
-            "Compositions from other voltages are not valid."
+            "Compositions from other voltages are inaccurate."
         )
         uploads = st.file_uploader(
             "EMSA spectra",
