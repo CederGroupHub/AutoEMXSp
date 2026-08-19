@@ -112,11 +112,6 @@ def main() -> None:
         "Upload one or more EMSA spectra (``.msa``, ``.emsa``, ``.msg``), "
         "fit and quantify them, then save the overlay as PNG and the composition as TXT."
     )
-    st.info(
-        "**Free use for non-commercial use only.** "
-        f"Contact [{_LICENSE_CONTACT}](mailto:{_LICENSE_CONTACT}) "
-        "for commercial purposes."
-    )
     st.warning(
         f"**Compositions are valid only for spectra collected at {QUANT_BEAM_KV:.0f} kV.** "
         "The shipped peak-to-background standards are for 15 kV. "
@@ -125,11 +120,14 @@ def main() -> None:
     )
 
     if hosted:
-        st.caption(
+        st.info(
             "This is a **public demo**. Each fit typically takes 0.5–3 minutes, "
             "and the app may sleep after idle time. For production work, install "
             "AutoEMX on your machine (`pip install autoemx`) and run "
-            "`python -m autoemx.web`."
+            "`python -m autoemx.web`.\n\n"
+            "**Free use for non-commercial use only.** "
+            f"Contact [{_LICENSE_CONTACT}](mailto:{_LICENSE_CONTACT}) "
+            "for commercial purposes."
         )
     else:
         st.markdown(
