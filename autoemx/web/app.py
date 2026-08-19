@@ -185,7 +185,7 @@ def main() -> None:
         st.markdown(
             "Provide elements, upload spectra, then click **Fit and quantify**. "
             f"Spectra **must be collected at {QUANT_BEAM_KV:.0f} kV** for the "
-            "composition to be valid. An example file is "
+            "composition to be accurate. An example file is "
             "`autoemx/scripts/input/Example_spectrum.msa` (Bi–Fe–O on carbon tape, 15 kV)."
         )
         return
