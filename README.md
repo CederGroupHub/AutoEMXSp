@@ -8,6 +8,7 @@
 [![License: Custom Non-Commercial](https://img.shields.io/badge/license-Custom%20Non--Commercial-blue.svg)](https://github.com/CederGroupHub/AutoEMX/blob/main/LICENSE.txt)
 [![Nature Communications Publication](https://img.shields.io/badge/publication-Nature%20Communications-red)](https://www.nature.com/articles/s41467-026-76633-x)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://cedergrouphub.github.io/AutoEMX/)
+[![Test quantification](https://img.shields.io/badge/Test%20quantification-upload%20.msa%20%2F%20.emsa-FF4B4B?logo=streamlit&logoColor=white)](#-try-quantification-on-your-spectrum)
 [![PR Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat)](https://pypi.org/project/autoemx/)
 
 
@@ -19,7 +20,7 @@ AutoEMX is a **fully automated framework** for SEM-EDS workflows — from spectr
 
 🎥 Watch AutoEMX in action on a desktop SEM-EDS system at https://youtu.be/Bym58gNxlj0
 
-🧪 Test AutoEMX to fit and quantify EDS spectra you have collected on your commercial SEM-EDS system (see [Tutorials](https://cedergrouphub.github.io/AutoEMX/user/tutorials.html)).
+🧪 **Try quantification now:** upload a `.msa` or `.emsa` spectrum (see [below](#-try-quantification-on-your-spectrum)).
 
 📖 This work is described in:  
 A. Giunto *et al.*, *Accurate SEM‑EDS Quantification, Automation, and Machine Learning Enable High‑Throughput Compositional Characterization of Powders*, Nature Communications (2026), in press.  
@@ -32,8 +33,8 @@ DOI: [https://doi.org/10.1038/s41467-026-76633-x](https://doi.org/10.1038/s41467
     - **Rule-based filtering** of compositions to discard poorly quantified spectra from the analysis
     - **Unsupervised machine learning–based analysis** to identify the compositions of individual phases in the sample  
 
-- Scripts for **fitting and quantification** of single EDS spectra exported by proprietary commercial software (.msa, .emsa, .msg files)
-- **Local GUI** (`python -m autoemx.web`) to upload one or more EMSA spectra, view the fitted overlay and compositions, and save PNG / TXT
+- **Browser GUI** — upload `.msa` / `.emsa` / `.msg` spectra, fit and quantify, inspect the overlay, and download PNG / TXT (`python -m autoemx.web`)
+- Scripts for **fitting and quantification** of single EDS spectra exported by proprietary commercial software (`.msa`, `.emsa`, `.msg`)
 
 - **Automated experimental standard collection** scripts
 
@@ -64,6 +65,7 @@ DOI: [https://doi.org/10.1038/s41467-026-76633-x](https://doi.org/10.1038/s41467
 ---
 
 ## 📑 Table of Contents
+- [🧪 Try quantification on your spectrum](#-try-quantification-on-your-spectrum)
 - [📘 Documentation](#-documentation)
 - [📦 Requirements](#-requirements)
 - [🆕 Coming Soon](#-coming-soon)
@@ -77,23 +79,38 @@ DOI: [https://doi.org/10.1038/s41467-026-76633-x](https://doi.org/10.1038/s41467
 
 ---
 
-## 📘 Documentation
+## 🧪 Try quantification on your spectrum
 
-Installation instructions, usage examples, and workflow descriptions are available in the AutoEMX documentation:
-
-👉 https://cedergrouphub.github.io/AutoEMX/
-
-Fit uploaded EMSA spectra in a local browser (production path):
+The GUI fits and quantifies EDS spectra you export from a commercial SEM-EDS system. **Drop in a `.msa` or `.emsa` file** (`.msg` also works), enter the elements, and you get the fitted overlay plus At% / Wt%.
 
 ```bash
 pip install autoemx
 python -m autoemx.web
 ```
 
-A public hosted demo that **runs fits** can be deployed for free on
-[Streamlit Community Cloud](https://share.streamlit.io) from this GitHub
-repo (main file: `autoemx/web/app.py`). See `docs/user/web_gui.rst`.
+Then open the URL Streamlit prints (usually http://localhost:8501):
 
+1. **Upload** one or more `.msa` / `.emsa` spectra collected at **15 kV**.
+2. Enter **sample elements** (required), e.g. `Bi, Fe, O`. AutoEMX does not guess unknown elements.
+3. Enter **substrate elements** if needed, e.g. `C, O, Al` for carbon tape.
+4. Click **Fit and quantify**. Each spectrum typically takes 0.5–3 minutes.
+5. Download the **PNG** (fitted plot) and **TXT** (compositions).
+
+A ready-to-try file is in the repo: [`autoemx/scripts/input/Example_spectrum.msa`](autoemx/scripts/input/Example_spectrum.msa) (Bi–Fe–O on carbon tape; use elements `Bi, Fe, O` and substrate `C, O, Al`).
+
+> Compositions are valid **only at 15 kV** (shipped peak-to-background standards). A fit may still run at another voltage, but the reported composition is not valid.
+
+A public hosted demo that runs the same GUI can be deployed for free on [Streamlit Community Cloud](https://share.streamlit.io) from this repo (main file: `autoemx/web/app.py`). That page is a **demo** (file cap, may sleep). Local `python -m autoemx.web` is the production path.
+
+Full walkthrough: [GUI tutorial](https://cedergrouphub.github.io/AutoEMX/user/web_gui.html). Command-line and full-workflow tutorials: https://cedergrouphub.github.io/AutoEMX/
+
+---
+
+## 📘 Documentation
+
+Installation instructions, usage examples, and workflow descriptions are available in the AutoEMX documentation:
+
+👉 https://cedergrouphub.github.io/AutoEMX/
 
 ---
 
@@ -159,7 +176,7 @@ This repository includes a collection of scripts that streamline the use of **Au
 - **Fit_Quant_Single_AutoEMX_Spectrum.py** — Fit and optionally quantify a single spectrum measured with AutoEMX. Prints fitting parameters and plots fitted spectrum for detailed inspection of model performance.
 - **Fit_Quant_Single_MSA_Spectrum.py** — Fit and optionally quantify a single spectrum exported by proprietary software.
 - **Quantify_External_Spectra.py** — Quantify spectra acquired outside AutoEMX (e.g., from other SEM-EDS systems).
-- **GUI** — `python -m autoemx.web` opens a local browser UI for the same single/multi-file EMSA workflow (PNG and TXT export). A public hosted page, if present, is a demo only.
+- **GUI** — `python -m autoemx.web` (see [Try quantification](#-try-quantification-on-your-spectrum)): upload `.msa` / `.emsa`, fit, and download PNG / TXT.
 
 ### 📊 Particle Size Distribution Measurements
 - **collect_particle_statistics.py** - Analyse sample, collecting particle size statistics and distribution.
