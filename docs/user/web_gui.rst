@@ -57,17 +57,4 @@ original spectrum to the email if you can share it.
 Public demo that can run fits (free)
 -----------------------------------
 
-Use Streamlit Community Cloud.
-
-1. Push this repo to GitHub (including ``autoemx/web/app.py``,
-   ``requirements.txt``, ``packages.txt``, and ``runtime.txt``).
-2. Sign in at https://share.streamlit.io with GitHub.
-3. **Create app** → this repository → branch ``main`` → main file
-   ``autoemx/web/app.py``.
-4. Deploy. The ``*.streamlit.app`` URL is the public demo.
-
-The app treats Community Cloud as a demo (banner, two-file cap, license).
-Fits still take 0.5–3 minutes. The first request may also build detector
-convolution matrices. Community Cloud has limited RAM; if the app is killed,
-reboot it from the Streamlit dashboard. Local ``python -m autoemx.web``
-remains the production GUI.
+https://autoemx-singlespectrum.streamlit.app
