@@ -42,6 +42,7 @@ from autoemx.web.reader_report import (
 
 _DEMO_FILE_CAP = 2
 _ACCEPT = sorted(SUPPORTED_UPLOAD_EXTENSIONS)
+_LICENSE_CONTACT = "IPO@lbl.gov"
 
 
 def _is_hosted_demo() -> bool:
@@ -111,6 +112,11 @@ def main() -> None:
         "Upload one or more EMSA spectra (``.msa``, ``.emsa``, ``.msg``), "
         "fit and quantify them, then save the overlay as PNG and the composition as TXT."
     )
+    st.info(
+        "**Free use for non-commercial use only.** "
+        f"Contact [{_LICENSE_CONTACT}](mailto:{_LICENSE_CONTACT}) "
+        "for commercial purposes."
+    )
     st.warning(
         f"**Compositions are valid only for spectra collected at {QUANT_BEAM_KV:.0f} kV.** "
         "The shipped peak-to-background standards are for 15 kV. "
@@ -119,11 +125,11 @@ def main() -> None:
     )
 
     if hosted:
-        st.info(
+        st.caption(
             "This is a **public demo**. Each fit typically takes 0.5–3 minutes, "
-            "and the Space may sleep after idle time. For production work, install "
+            "and the app may sleep after idle time. For production work, install "
             "AutoEMX on your machine (`pip install autoemx`) and run "
-            "`python -m autoemx.web`. Non-commercial use only (LBNL license)."
+            "`python -m autoemx.web`."
         )
     else:
         st.markdown(

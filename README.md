@@ -186,8 +186,9 @@ Please contact me at agiunto@lbl.gov
 
 ## 📄 License
 
-This project is licensed under a NON-COMMERCIAL USE ONLY,
-LICENSE — see the LICENSE file for details.
+**Free use for non-commercial use only.** Contact [IPO@lbl.gov](mailto:IPO@lbl.gov) for commercial purposes.
+
+This project is licensed under a NON-COMMERCIAL USE ONLY license — see the [LICENSE](LICENSE.txt) file for details.
 
 ---
 
