@@ -104,10 +104,10 @@ def _results_table(result: SpectrumFitResult):
 
 
 def main() -> None:
-    st.set_page_config(page_title="AutoEMX spectrum fit", layout="wide")
+    st.set_page_config(page_title="AutoEMX spectrum quantification", layout="wide")
     hosted = _is_hosted_demo()
 
-    st.title("AutoEMX spectrum fitting")
+    st.title("AutoEMX spectrum quantification")
     st.caption(
         "Upload one or more EMSA spectra (``.msa``, ``.emsa``, ``.msg``), "
         "quantify them, then save the fitted spectrum as PNG and the composition as TXT."
