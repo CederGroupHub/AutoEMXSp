@@ -110,7 +110,7 @@ def main() -> None:
     st.title("AutoEMX spectrum fitting")
     st.caption(
         "Upload one or more EMSA spectra (``.msa``, ``.emsa``, ``.msg``), "
-        "fit and quantify them, then save the fitted spectrum as PNG and the composition as TXT."
+        "quantify them, then save the fitted spectrum as PNG and the composition as TXT."
     )
     st.warning(
         f"**Compositions are valid only for spectra collected at {QUANT_BEAM_KV:.0f} kV.** "
@@ -176,14 +176,14 @@ def main() -> None:
             type=[ext.lstrip(".") for ext in _ACCEPT],
             accept_multiple_files=True,
         )
-        run = st.button("Fit and quantify", type="primary", use_container_width=True)
+        run = st.button("Quantify", type="primary", use_container_width=True)
 
     if "results" not in st.session_state:
         st.session_state.results = None
 
     if not run and st.session_state.results is None:
         st.markdown(
-            "Provide elements, upload spectra, then click **Fit and quantify**. "
+            "Provide elements, upload spectra, then click **Quantify**. "
             f"Spectra **must be collected at {QUANT_BEAM_KV:.0f} kV** for the "
             "composition to be accurate. An example file is "
             "`autoemx/scripts/input/Example_spectrum.msa` (Bi–Fe–O on carbon tape, 15 kV)."
