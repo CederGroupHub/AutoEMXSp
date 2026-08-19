@@ -1,3 +1,2 @@
 libgl1
-libglib2.0-0
-build-essential
+libglib2.0-0t64
