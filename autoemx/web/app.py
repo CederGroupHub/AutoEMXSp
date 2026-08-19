@@ -5,8 +5,14 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from pathlib import Path
+
+# Repo root on sys.path so the app runs on Streamlit Cloud without `pip install -e .`
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 
