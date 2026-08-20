@@ -81,7 +81,7 @@ DOI: [https://doi.org/10.1038/s41467-026-76633-x](https://doi.org/10.1038/s41467
 
 ## 🧪 Try quantification on your spectrum
 
-Upload a `.msa` or `.emsa` spectrum and test quantification in the browser:
+Upload a `.msa` or `.emsa` spectrum acquired at 15 kV and test quantification in the browser:
 
 👉 https://autoemx-singlespectrum.streamlit.app
 
@@ -107,7 +107,7 @@ Installation instructions, usage examples, and workflow descriptions are availab
 ### Electron Microscope Support
 - ✅ Developed and tested for **Thermo Fisher Phenom Desktop SEMs**.  
 - ✅ Compatible with any Phenom microscope equipped with **PPI (Phenom Programming Interface)**.  
-- ⚠️ For other microscope models, the driver must be adapted to the appropriate API commands.  
+- ⚠️ For other microscope models, the driver must be adapted to the appropriate API commands (easy to do with modern LLMs).  
 
 
 ---
@@ -131,7 +131,7 @@ AutoEMX/
 │   ├── runners/                # Runner functions calling on core objects
 │   ├── scripts/                # Scripts to run acquisition, quantification, etc. (see full list below)
 │   ├── web/                    # Local Streamlit GUI (`python -m autoemx.web`)
-│   ├── calibrations/             # X-ray spectral calibrations (⚠️ adapt to your own instrument)
+│   ├── calibrations/             # X-ray spectral calibrations (⚠️ adapt to your own instrument for optimal accuracy)
 │   ├── utils/                  # Utility functions and strings employed by the program
 │
 ├── examples/                  # Example scripts for fitting, quantification and compositional analysis of example data
