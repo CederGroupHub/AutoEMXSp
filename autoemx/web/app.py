@@ -104,12 +104,16 @@ def _results_table(result: SpectrumFitResult):
 
 
 def main() -> None:
-    st.set_page_config(page_title="AutoEMX spectrum quantification", layout="wide")
+    st.set_page_config(
+        page_title="AutoEMX SEM-EDS spectrum quantification",
+        layout="wide",
+    )
     hosted = _is_hosted_demo()
 
-    st.title("AutoEMX spectrum quantification")
+    st.title("AutoEMX SEM-EDS spectrum quantification")
     st.caption(
-        "Upload one or more EMSA spectra (``.msa``, ``.emsa``, ``.msg``), "
+        "Scanning Electron Microscopy – Energy-Dispersive X-ray Spectroscopy "
+        "(SEM-EDS). Upload one or more SEM-EDS spectra (``.msa``, ``.emsa``, ``.msg``), "
         "quantify them, then save the fitted spectrum as PNG and the composition as TXT."
     )
     st.warning(
@@ -172,7 +176,7 @@ def main() -> None:
             "Compositions from other voltages are inaccurate."
         )
         uploads = st.file_uploader(
-            "EMSA spectra",
+            "SEM-EDS spectra",
             type=[ext.lstrip(".") for ext in _ACCEPT],
             accept_multiple_files=True,
         )
