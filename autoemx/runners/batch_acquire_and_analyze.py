@@ -186,6 +186,7 @@ def batch_acquire_and_analyze(
     quant_flags_accepted : list of int, optional
         List of acceptable quantification flags; others are filtered out before clustering.
         Default is `[0, -1]` (ClusteringConfig.quant_flags_accepted).
+        See the user documentation page "Quantification flags (quant_flag)".
     max_n_clusters : int, optional
         Maximum number of clusters allowed in compositional clustering.
         Default is `6` (ClusteringConfig.max_k).

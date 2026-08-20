@@ -146,7 +146,8 @@ def analyze_sample(
     max_analytical_error_percent : float, optional
         Maximum analytical error allowed for clustering.
     quant_flags_accepted : list of int, optional
-        Accepted quantification flags.
+        Accepted quantification flags. See the user documentation page
+        "Quantification flags (quant_flag)".
     plot_custom_plots : bool, optional
         Whether to use custom plots.
     show_unused_compositions_cluster_plot : bool, optional

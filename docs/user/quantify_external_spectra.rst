@@ -78,6 +78,7 @@ Common parameters to adjust:
 - ``min_bckgrnd_cnts``: minimum background counts under reference peaks
 - ``max_analytical_error``: filtering threshold used for clustering
 - ``quant_flags_accepted``: accepted quantification flags in clustering
+  (see :ref:`quant_flags`)
 - ``max_n_clusters``: upper bound for cluster search
 - ``use_project_specific_std_dict``: load standards from project folder
 

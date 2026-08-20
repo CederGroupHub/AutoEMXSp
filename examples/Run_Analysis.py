@@ -65,7 +65,7 @@ k_finding_method: str | None = None
 # Spectral Filtering options
 # =============================================================================
 max_analytical_error_percent = 5 # w%
-quant_flags_accepted = [0, -1] #8 #, 4, 5, 6, 7, 8]
+quant_flags_accepted = [0, -1] #8 #, 4, 5, 6, 7, 8]  # See docs: Quantification flags (quant_flag).
 
 # =============================================================================
 # Plotting options

@@ -111,7 +111,13 @@ class ClusteringConfig(BaseModel):
     do_matrix_decomposition: bool = True
     max_analytical_error_percent: Optional[float] = 5.0
     min_bckgrnd_cnts: Optional[float] = 5.0
-    quant_flags_accepted: List[int] = Field(default_factory=lambda: [0, -1])
+    quant_flags_accepted: List[int] = Field(
+        default_factory=lambda: [0, -1],
+        description=(
+            "Quantification flags kept for clustering. "
+            "See the user documentation page 'Quantification flags (quant_flag)'."
+        ),
+    )
     dbscan: DBSCANParams = Field(default_factory=DBSCANParams)
 
     model_config = ConfigDict(extra="forbid")

@@ -1785,9 +1785,9 @@ class XSp_Quantifier:
                 - 'Statham2016': Mean atomic number (Z̅) calculated according to Statham (2016).
                 - 'mass-averaged': Mean atomic number (Z̅) weighted by composition.
         quant_flag : int | None, optional
-            Flag signaling reliability of quantifification. Anything different than 0 signals
-            potential unreliability of the quantified composition. See description of quant_flags]
-            in config/classes.py
+            Flag signaling reliability of quantification. Anything different than 0 signals
+            potential unreliability of the quantified composition. See the user documentation
+            page "Quantification flags (quant_flag)".
     
         Returns
         -------

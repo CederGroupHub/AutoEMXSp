@@ -528,20 +528,8 @@ class ExpStandardsConfig(BaseModel):
 
         quant_flags_accepted (List[int]):
             List of quantification flags considered acceptable. Other spectra are filtered out before clustering.
-            Quantification flags indicate whether the quantification or the fit of each spectrum is likely to be
-            affected by large errors:
-                - 0  : Quantification is ok, although it may be affected by large analytical error.
-                - -1  : As above, but quantification did not converge within 30 steps.
-                - 1  : Error during EDS acquisition. No fit executed.
-            2  : Total counts < 90% of target counts, likely due to wrong segmentation. Fit interrupted if interrupt_fits_bad_spectra=True.
-                - 3  : Too little low-energy signal, causing poor quantification in that region. Fit interrupted if interrupt_fits_bad_spectra=True.
-                - 4  : Poor fit. Fit interrupted if interrupt_fits_bad_spectra=True.
-                - 5  : High analytical error (>50%), possibly due to missing element or other major error. Fit interrupted if interrupt_fits_bad_spectra=True.
-                - 6  : Excessive X-ray absorption. Fit interrupted if interrupt_fits_bad_spectra=True.
-                - 7  : Excessive contamination from substrate.
-                - 8  : Too few background counts below reference peak, likely leading to large quantification errors.
-                - 9  : Unknown fitting error.
-                - 10 : (Only for measurement of experimental standards) Reference peak missing.
+            See the user documentation page "Quantification flags (quant_flag)" for the meaning of each value.
+            Common defaults are ``[0]`` (experimental standards) or ``[0, -1]`` (analysis workflows).
 
         w_frs (Optional[Dict[str, float]]):
             Dictionary of element symbols and their corresponding weight fractions (computed via pymatgen)

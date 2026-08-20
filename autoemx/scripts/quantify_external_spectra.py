@@ -101,6 +101,7 @@ min_bckgrnd_cnts = 5        # Minimum counts under the reference peak for a spec
                              # accepted for quantification and clustering.
 
 quant_flags_accepted = [0, -1]  # Quantification flags accepted during clustering.
+                                   # See docs: Quantification flags (quant_flag).
 
 max_n_clusters = 6          # Maximum number of clusters during compositional clustering.
 

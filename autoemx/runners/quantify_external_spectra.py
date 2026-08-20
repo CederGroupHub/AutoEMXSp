@@ -179,6 +179,7 @@ def quantify_external_spectra(
         accepted for quantification.
     quant_flags_accepted : list of int, optional
         Quantification flags included during clustering.  Default: ``[0, -1]``.
+        See the user documentation page "Quantification flags (quant_flag)".
     max_n_clusters : int
         Maximum number of clusters.
     show_unused_comps_clust : bool

@@ -169,8 +169,7 @@ The following parameters require only re-analysis of compositions:
   for filtering compositions during clustering. Compositions exceeding this
   threshold will be discarded.
 - ``quant_flags_accepted``: Specifies which quantification flags are considered
-  valid during clustering. See :class:`Quantification Flag Descriptions <autoemx.config.ledger_schemas.ClusteringConfig>` 
-  for details on each flag.
+  valid during clustering. See :ref:`quant_flags` for details on each flag.
 - ``max_n_clusters``: Defines the maximum number of clusters that can be
   identified in the sample. This value should be large enough to capture all
   relevant phases but not so large as to cause unnecessary computation.
@@ -335,7 +334,7 @@ The quantification step updates the ``Data.csv`` file with the following columns
 - ``An er w%``: Analytical total error (mass fraction). See the paper for details.
 - ``r_squared``: R² metric indicating the goodness of fit.
 - ``redchi_sq``: Reduced chi-squared value used to assess fit quality.
-- ``Quant_flag``: Flags indicating whether the quantification is reliable and, if not, the reason. See :class:`Quantification Flag Descriptions <autoemx.config.ledger_schemas.ClusteringConfig>`.
+- ``Quant_flag``: Flags indicating whether the quantification is reliable and, if not, the reason. See :ref:`quant_flags`.
 - ``Comments``: For reliable spectra, reports the lowest counts fitted below a reference peak. For unreliable spectra, typically explains the reason for unreliability.
 
 
