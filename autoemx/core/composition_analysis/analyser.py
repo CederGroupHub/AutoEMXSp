@@ -164,7 +164,7 @@ def _detect_prefit_spectrum_issues(
     min_bckgrnd_cnts: Optional[float],
 ) -> tuple[Optional[int], Optional[str]]:
     """Detect pre-fit spectrum quality issues that map to quant flags 1-3."""
-    if spectrum is None:
+    if spectrum is None or len(spectrum) == 0:
         return 1, "No spectral data present"
 
     if np.sum(spectrum) < 0.9 * target_acquisition_counts:
@@ -288,15 +288,24 @@ def _quantify_spectrum_worker(worker_payload: Dict[str, Any]) -> tuple[int, Opti
     """Process-safe worker for one spectrum quantification or fitting-only."""
     spectrum_index = int(worker_payload['spectrum_index'])
     pointer_abs = Path(worker_payload['pointer_abs'])
-    counts = SampleLedger._load_counts_from_pointer_file(pointer_abs)
-    spectrum = np.asarray(counts, dtype=float)
+    start_quant_time = time.time()
+
+    # Empty / unreadable pointer files must not abort the parallel batch: map them to
+    # quant_flag 1 (no spectral data) and continue with the remaining spectra.
+    try:
+        counts = SampleLedger._load_counts_from_pointer_file(pointer_abs)
+        spectrum = np.asarray(counts, dtype=float)
+    except Exception:
+        spectrum = None
 
     background = None
     background_abs = worker_payload.get('background_abs')
     if background_abs:
-        background = EMXSp_Composition_Analyzer._load_background_vector_from_file(Path(background_abs))
+        try:
+            background = EMXSp_Composition_Analyzer._load_background_vector_from_file(Path(background_abs))
+        except Exception:
+            background = None
 
-    start_quant_time = time.time()
     interrupt_fits_bad_spectra = bool(worker_payload['interrupt_fits_bad_spectra'])
     prefit_quant_flag, prefit_comment = _detect_prefit_spectrum_issues(
         spectrum=spectrum,
