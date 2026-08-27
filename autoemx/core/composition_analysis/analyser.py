@@ -78,6 +78,7 @@ import cvxpy as cp
 
 # Project-specific imports
 from autoemx.core.quantifier import XSp_Quantifier
+from autoemx.core.fitter import DetectorResponseFunction
 from autoemx.core.em_runtime.controller import EM_Controller
 from autoemx.core.em_runtime.xsp_spot_selection import XSpSpotSelectorCallback
 from autoemx.core.em_runtime.sample_finder import EM_Sample_Finder
@@ -3816,6 +3817,16 @@ class EMXSp_Composition_Analyzer:
                         idx, result, quant_record, quantification_time = _quantify_spectrum_worker(payload)
                         _finalize_quant_result(idx, result, quant_record, quantification_time)
                 else:
+                    # Compute/load convolution matrices once on the main process so workers
+                    # never race on a cold detector-cache miss.
+                    if quant_worker_payloads:
+                        DetectorResponseFunction.ensure_conv_matrices_cached(
+                            float(self.det_ch_offset),
+                            float(self.det_ch_width),
+                            self.microscope_cfg.ID,
+                            verbose=bool(self.verbose),
+                        )
+
                     # Stream completed tasks back to the main process so progress is visible in real time.
                     try:
                         completed = Parallel(

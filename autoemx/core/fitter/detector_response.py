@@ -22,7 +22,7 @@ from scipy.integrate import quad, trapezoid
 from scipy.optimize import root_scalar
 from pydantic import BaseModel
 
-from autoemx.utils.helper import print_single_separator, load_msa
+from autoemx.utils.helper import load_msa
 import autoemx.utils.constants as cnst
 import autoemx.calibrations as calibs
 from autoemx.data.Xray_absorption_coeffs import xray_mass_absorption_coeff
@@ -164,6 +164,112 @@ class DetectorResponseFunction:
         return det_res_dense, icc_dense
 
     @classmethod
+    def _compute_and_cache_conv_matrices(
+        cls,
+        *,
+        conv_matrices_file_path: str,
+        det_ch_offset: float,
+        det_ch_width: float,
+        detector_ch_n: int,
+        matrix_size: int,
+        verbose: bool = True,
+    ):
+        """Compute detector convolution matrices and persist them to the JSON cache."""
+        compute_start_time = time.time()
+        if verbose:
+            print('-' * 50, flush=True)
+            print("ℹ️ No cached convolution matrices found for this detector setup.", flush=True)
+            print("🔬 Calculating detector convolution matrices...", flush=True)
+
+        full_en_vector = [det_ch_offset + j * det_ch_width for j in range(detector_ch_n)]
+        det_res_conv_matrix = cls._calc_det_res_conv_matrix(full_en_vector, verbose)
+        icc_conv_matrix = cls._calc_icc_conv_matrix(full_en_vector, verbose)
+
+        cache_payload = DetectorConvolutionMatricesCache(
+            det_ch_offset=det_ch_offset,
+            det_ch_width=det_ch_width,
+            detector_ch_n=detector_ch_n,
+            energy_vals_padding=cls.energy_vals_padding,
+            matrix_size=matrix_size,
+            zero_tol=cls.conv_zero_tol,
+            det_res_rows=[cls._sparsify_row(row, cls.conv_zero_tol) for row in det_res_conv_matrix],
+            icc_rows=[cls._sparsify_row(row, cls.conv_zero_tol) for row in icc_conv_matrix],
+        )
+
+        cache_key = cls._conv_matrices_key(det_ch_offset, det_ch_width)
+        cache_file_payload = {}
+        if os.path.exists(conv_matrices_file_path):
+            try:
+                with open(conv_matrices_file_path, 'r') as file:
+                    existing_payload = json.load(file)
+                if isinstance(existing_payload, dict):
+                    cache_file_payload = existing_payload
+            except Exception:
+                cache_file_payload = {}
+
+        cache_file_payload[cache_key] = cache_payload.model_dump()
+        # Atomic replace avoids partial reads if another process opens the cache mid-write.
+        tmp_path = f"{conv_matrices_file_path}.{os.getpid()}.tmp"
+        try:
+            with open(tmp_path, 'w') as file:
+                json.dump(cache_file_payload, file)
+            os.replace(tmp_path, conv_matrices_file_path)
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+
+        if verbose:
+            compute_time = time.time() - compute_start_time
+            print(f"✅ Finished computing convolution matrices in {compute_time:.1f} s", flush=True)
+        return det_res_conv_matrix, icc_conv_matrix
+
+    @classmethod
+    def ensure_conv_matrices_cached(
+        cls,
+        det_ch_offset,
+        det_ch_width,
+        microscope_ID,
+        verbose=True,
+    ) -> bool:
+        """
+        Ensure convolution matrices for this detector channel setup exist on disk.
+
+        Returns
+        -------
+        bool
+            True if matrices were newly computed, False if already cached.
+        """
+        detector_ch_n = getattr(calibs, 'detector_ch_n', None)
+        if detector_ch_n is None:
+            raise AttributeError("calibrations.detector_ch_n is not initialized")
+
+        conv_matrices_file_path = os.path.join(
+            parent_dir, cnst.XRAY_SPECTRA_CALIBS_DIR, microscope_ID, cnst.DETECTOR_CONV_MATRICES_FILENAME
+        )
+        matrix_size = detector_ch_n + cls.energy_vals_padding + cls.energy_vals_padding // 2 - 1
+
+        if cls._load_conv_matrices_cache(
+            conv_matrices_file_path,
+            det_ch_offset,
+            det_ch_width,
+            matrix_size,
+        ) is not None:
+            return False
+
+        cls._compute_and_cache_conv_matrices(
+            conv_matrices_file_path=conv_matrices_file_path,
+            det_ch_offset=det_ch_offset,
+            det_ch_width=det_ch_width,
+            detector_ch_n=detector_ch_n,
+            matrix_size=matrix_size,
+            verbose=verbose,
+        )
+        return True
+
+    @classmethod
     def setup_detector_response_vars(cls, det_ch_offset, det_ch_width, spectrum_lims, microscope_ID, verbose=True):
         """
         Initialize detector response variables for the EDS system.
@@ -198,6 +304,8 @@ class DetectorResponseFunction:
         Notes
         -----
         - Convolution matrices are detector-dependent and cached in JSON for efficiency.
+        - Prefer calling ``ensure_conv_matrices_cached`` once on the main process before
+          parallel quantification so workers only hit the cached fast path.
         - If multiple EDS detectors are used, this code should be adapted.
         """
     
@@ -219,177 +327,24 @@ class DetectorResponseFunction:
         conv_matrices_file_path = os.path.join(
             parent_dir, cnst.XRAY_SPECTRA_CALIBS_DIR, microscope_ID, cnst.DETECTOR_CONV_MATRICES_FILENAME
         )
-        lock_file_path = conv_matrices_file_path + ".lock"
         matrix_size = detector_ch_n + cls.energy_vals_padding + cls.energy_vals_padding // 2 - 1
-        
-        conv_matrices = None
 
-        # 1. FAST PATH: Load cache without lock if settings match.
         conv_matrices = cls._load_conv_matrices_cache(
             conv_matrices_file_path,
             det_ch_offset,
             det_ch_width,
             matrix_size,
         )
-
-        # 2. SLOW PATH: We need to compute it (or wait for another core to compute it)
         if conv_matrices is None:
-            start_wait_time = time.time()
-            max_wait_time = 600  # 10 minute timeout for stale locks
-            stale_lock_max_age_s = 120.0
+            conv_matrices = cls._compute_and_cache_conv_matrices(
+                conv_matrices_file_path=conv_matrices_file_path,
+                det_ch_offset=det_ch_offset,
+                det_ch_width=det_ch_width,
+                detector_ch_n=detector_ch_n,
+                matrix_size=matrix_size,
+                verbose=verbose,
+            )
 
-            def _read_lock_pid(path):
-                try:
-                    with open(path, 'r') as f:
-                        txt = f.read().strip()
-                    if txt.startswith('PID '):
-                        return int(txt.split(' ', 1)[1])
-                except Exception:
-                    return None
-                return None
-
-            def _is_process_alive(pid):
-                if pid is None or pid <= 0:
-                    return False
-                try:
-                    os.kill(pid, 0)
-                except OSError:
-                    return False
-                return True
-
-            def _compute_conv_matrices_without_lock():
-                compute_start_time = time.time()
-                if verbose:
-                    print('-' * 50, flush=True)
-                    print("ℹ️ No cached convolution matrices found for this detector setup.", flush=True)
-                    print("🔬 Calculating detector convolution matrices...", flush=True)
-
-                full_en_vector = [det_ch_offset + j * det_ch_width for j in range(detector_ch_n)]
-                det_res_conv_matrix = cls._calc_det_res_conv_matrix(full_en_vector, verbose)
-                icc_conv_matrix = cls._calc_icc_conv_matrix(full_en_vector, verbose)
-
-                cache_payload = DetectorConvolutionMatricesCache(
-                    det_ch_offset=det_ch_offset,
-                    det_ch_width=det_ch_width,
-                    detector_ch_n=detector_ch_n,
-                    energy_vals_padding=cls.energy_vals_padding,
-                    matrix_size=matrix_size,
-                    zero_tol=cls.conv_zero_tol,
-                    det_res_rows=[cls._sparsify_row(row, cls.conv_zero_tol) for row in det_res_conv_matrix],
-                    icc_rows=[cls._sparsify_row(row, cls.conv_zero_tol) for row in icc_conv_matrix],
-                )
-
-                cache_key = cls._conv_matrices_key(det_ch_offset, det_ch_width)
-                cache_file_payload = {}
-                if os.path.exists(conv_matrices_file_path):
-                    try:
-                        with open(conv_matrices_file_path, 'r') as file:
-                            existing_payload = json.load(file)
-                        if isinstance(existing_payload, dict):
-                            cache_file_payload = existing_payload
-                    except Exception:
-                        cache_file_payload = {}
-
-                cache_file_payload[cache_key] = cache_payload.model_dump()
-                with open(conv_matrices_file_path, 'w') as file:
-                    json.dump(cache_file_payload, file)
-
-                if verbose:
-                    compute_time = time.time() - compute_start_time
-                    print(f"✅ Finished computing convolution matrices in {compute_time:.1f} s", flush=True)
-                return det_res_conv_matrix, icc_conv_matrix
-
-            # Loop until conv_matrices is successfully populated
-            while conv_matrices is None:
-                try:
-                    try:
-                        # Attempt to exclusively create the lock file.
-                        with open(lock_file_path, 'x') as f:
-                            f.write(f"PID {os.getpid()}")
-
-                        # === WE HAVE THE LOCK ===
-                        try:
-                            # Reload cache: another process might have finished while we waited.
-                            conv_matrices = cls._load_conv_matrices_cache(
-                                conv_matrices_file_path,
-                                det_ch_offset,
-                                det_ch_width,
-                                matrix_size,
-                            )
-
-                            # If it's STILL missing, we actually do the heavy lifting.
-                            if conv_matrices is None:
-                                conv_matrices = _compute_conv_matrices_without_lock()
-
-                        finally:
-                            # === RELEASE THE LOCK ===
-                            if os.path.exists(lock_file_path):
-                                os.remove(lock_file_path)
-
-                    except FileExistsError:
-                        # === ANOTHER CORE HAS THE LOCK ===
-                        lock_age = None
-                        if os.path.exists(lock_file_path):
-                            try:
-                                lock_age = time.time() - os.path.getmtime(lock_file_path)
-                            except OSError:
-                                lock_age = None
-                        lock_pid = _read_lock_pid(lock_file_path) if os.path.exists(lock_file_path) else None
-                        lock_owner_dead = lock_pid is not None and not _is_process_alive(lock_pid)
-                        lock_too_old = lock_age is not None and lock_age > stale_lock_max_age_s
-
-                        if lock_owner_dead or lock_too_old:
-                            try:
-                                os.remove(lock_file_path)
-                                start_wait_time = time.time()
-                                if verbose:
-                                    reason = []
-                                    if lock_owner_dead:
-                                        reason.append(f"owner PID {lock_pid} is not alive")
-                                    if lock_too_old:
-                                        reason.append(f"lock age {lock_age:.1f} s > {stale_lock_max_age_s:.0f} s")
-                                    print_single_separator()
-                                    print(f"⚠️ Removed stale convolution lock ({'; '.join(reason)}).", flush=True)
-                                continue
-                            except OSError:
-                                pass
-
-                        if time.time() - start_wait_time > max_wait_time:
-                            # Lock is stale (the other core crashed). Force delete it and compute locally.
-                            try:
-                                os.remove(lock_file_path)
-                                start_wait_time = time.time()
-                                if verbose:
-                                    print_single_separator()
-                                    print("⚠️ Removed stale convolution lock file; falling back to local computation.", flush=True)
-                            except OSError:
-                                pass
-                            conv_matrices = _compute_conv_matrices_without_lock()
-                        else:
-                            # Wait patiently.
-                            time.sleep(3)
-
-                            # Peek at the file to see if the other core finished our key.
-                            conv_matrices = cls._load_conv_matrices_cache(
-                                conv_matrices_file_path,
-                                det_ch_offset,
-                                det_ch_width,
-                                matrix_size,
-                            )
-
-                except KeyboardInterrupt:
-                    # Some environments surface interrupted child work as KeyboardInterrupt.
-                    # Fall back to a local, non-locking computation so the run can continue.
-                    if verbose:
-                        print_single_separator()
-                        print("⚠️ Convolution cache setup was interrupted; falling back to local computation.", flush=True)
-                    try:
-                        if os.path.exists(lock_file_path):
-                            os.remove(lock_file_path)
-                    except OSError:
-                        pass
-                    conv_matrices = _compute_conv_matrices_without_lock()
-                
         det_res_conv_matrix, icc_conv_matrix = conv_matrices
     
         # --- Crop matrices to match spectrum limits ---
