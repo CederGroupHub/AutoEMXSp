@@ -608,6 +608,9 @@ class PlotConfig(BaseModel):
     Attributes:
         show_unused_comps_clust (bool): Whether to plot unused data points in clustering plot.
         els_excluded_clust_plot (List[str]): Elements to exclude in cluster plot when more than 3 elements are present.
+        els_to_plot (List[str]): Elements forced onto the clustering plot axes (opposite of
+            ``els_excluded_clust_plot``). When non-empty, these elements are kept and the final
+            axes must contain exactly 2 or 3 elements.
         show_legend_clustering bool : Whether to show the legend in the clustering plot. Default: True
         save_plots (bool): Whether to save plots to disk.
         show_plots (bool): Whether to display plots interactively.
@@ -617,6 +620,7 @@ class PlotConfig(BaseModel):
 
     show_unused_comps_clust: bool = True
     els_excluded_clust_plot: List[str] = Field(default_factory=list)
+    els_to_plot: List[str] = Field(default_factory=list)
     show_legend_clustering: bool = True
     save_plots: bool = True
     show_plots: bool = False

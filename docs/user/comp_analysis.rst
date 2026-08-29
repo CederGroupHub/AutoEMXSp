@@ -398,6 +398,12 @@ Plotting options
 - ``els_excluded_clust_plot`` : List of elements to exclude from the 3D
   clustering plot. By default, elements are used in the order defined in
   ``els``.
+- ``els_to_plot`` : List of elements forced onto the clustering plot axes
+  (opposite of ``els_excluded_clust_plot``). With 2 or 3 entries, those become
+  the axes in the given order. With 1 entry, remaining axes are filled from
+  detectable elements (honoring exclusions). The final number of axes must be
+  2 or 3; unknown elements raise an error. Conflicts with
+  ``els_excluded_clust_plot`` are resolved in favor of ``els_to_plot``.
 - ``plot_custom_plots`` : If ``True``, use the custom plot function defined
   in a sample-local ``custom_plot.py`` file. If missing, AutoEMXSp automatically
   copies a template into the sample folder on first run and stores its path in

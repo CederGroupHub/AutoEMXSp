@@ -96,6 +96,7 @@ def analyze_sample(
     output_filename_suffix: str = "",
     ref_formulae: Optional[List[str]] = None,
     els_excluded_clust_plot: Optional[List[str]] = None,
+    els_to_plot: Optional[List[str]] = None,
     clustering_features: Optional[str] = None,
     clustering_method: Optional[str] = None,
     dbscan_params: Optional[dict] = None,
@@ -122,6 +123,11 @@ def analyze_sample(
         list loaded from Comp_analysis_configs.json; otherwise, the provided list replaces it.
     els_excluded_clust_plot : list of str, optional
         Elements to exclude from cluster plot.
+    els_to_plot : list of str, optional
+        Elements forced onto the clustering plot axes (opposite of ``els_excluded_clust_plot``).
+        When provided with 2 or 3 elements, those become the plot axes. A single element is
+        kept and filled from remaining detectable elements until 2 or 3 axes are available.
+        Must yield exactly 2 or 3 axes; unknown elements raise ``ValueError``.
     clustering_features : list of str, optional
         Features to use for clustering.
     clustering_method : str, optional
@@ -291,6 +297,8 @@ def analyze_sample(
     plot_cfg.use_custom_plots = plot_custom_plots
     if els_excluded_clust_plot is not None:
         plot_cfg.els_excluded_clust_plot = els_excluded_clust_plot
+    if els_to_plot is not None:
+        plot_cfg.els_to_plot = els_to_plot
     _ensure_custom_plot_file(sample_dir, plot_cfg)
 
     # Spectral source resolution is delegated to analyser._load_or_create_ledger():

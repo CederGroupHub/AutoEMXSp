@@ -69,6 +69,9 @@ ref_formulae = None # List of candidate compositions. If the first entry is "" o
                     # list loaded from Comp_analysis_configs.json; otherwise, the provided list replaces it.
                     # Uses values loaded from Comp_analysis_configs.json if ref_formulae = None.
 els_excluded_clust_plot = None # List of elements to exclude from the 3D clustering plot. Uses default values if variable is set to None
+els_to_plot = None # List of elements forced onto the clustering plot axes (opposite of els_excluded_clust_plot).
+                   # With 2 or 3 entries, those become the axes. With 1 entry, remaining axes are filled from
+                   # detectable elements. Must yield 2 or 3 axes. Uses defaults if None.
 plot_custom_plots = False # If True, auto-creates sample_folder/custom_plot.py (first run) and uses it for plotting.
 show_unused_compositions_cluster_plot = True
 output_filename_suffix = ''
@@ -87,6 +90,7 @@ comp_analyzer = analyze_sample(
     dbscan_params = dbscan_params,
     clustering_features = clustering_features,
     els_excluded_clust_plot=els_excluded_clust_plot,
+    els_to_plot=els_to_plot,
     k_finding_method = k_finding_method,
     do_matrix_decomposition = do_matrix_decomposition,
     max_analytical_error_percent=max_analytical_error_percent,

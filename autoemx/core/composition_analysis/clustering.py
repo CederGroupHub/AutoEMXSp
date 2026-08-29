@@ -329,7 +329,7 @@ class ClusteringModule:
         ratio_inertias = inertia_1 / best_inertia_2 if best_inertia_2 else float('inf')
     
         if verbose:
-            logger.info(f"📊 RMS distance for k=1: {rms_distance_1*100:.1f}%%")
+            logger.info(f"📊 RMS distance for k=1: {rms_distance_1*100:.1f}%")
             logger.info(f"📊 Inertia for k=1: {inertia_1:.3f}")
             logger.info(f"📊 Inertia for k=2: {best_inertia_2:.3f}")
             logger.info(f"📊 Ratio of inertia for k=1 over k=2: {ratio_inertias:.2f}")

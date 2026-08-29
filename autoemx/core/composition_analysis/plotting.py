@@ -156,26 +156,73 @@ class PlottingModule:
             )
 
         can_plot_clustering = True
-        els_for_plot = list(set(self.detectable_els_sample) - set(self.plot_cfg.els_excluded_clust_plot))
-        els_excluded_clust_plot = list(set(self.all_els_sample) - set(els_for_plot))
-        n_els = len(els_for_plot)
+        els_to_plot = list(dict.fromkeys(getattr(self.plot_cfg, "els_to_plot", None) or []))
+        excluded = list(dict.fromkeys(self.plot_cfg.els_excluded_clust_plot or []))
 
-        if n_els == 1:
-            can_plot_clustering = False
-            print_single_separator()
-            warnings.warn("Cannot generate clustering plot with a single element.", UserWarning)
-            if len(self.detectable_els_sample) > 1:
-                logger.warning('⚠️ Too many elements were excluded from the clustering plot via the use of "els_excluded_clust_plot".')
-                logger.info(f'ℹ️ Consider removing one or more among the list: {self.plot_cfg.els_excluded_clust_plot}')
-        elif n_els > 3:
-            els_excluded_clust_plot += els_for_plot[3:]
-            els_for_plot = els_for_plot[:3]
+        if els_to_plot:
+            unknown = [el for el in els_to_plot if el not in self.detectable_els_sample]
+            if unknown:
+                raise ValueError(
+                    f'els_to_plot contains elements not among the sample\'s detectable elements '
+                    f'{list(self.detectable_els_sample)}: {unknown}'
+                )
+            if len(els_to_plot) > 3:
+                raise ValueError(
+                    f'els_to_plot must contain at most 3 elements for the clustering plot, '
+                    f'got {len(els_to_plot)}: {els_to_plot}'
+                )
 
-        indices_to_remove = [self.all_els_sample.index(el) for el in els_excluded_clust_plot]
-        els_for_plot = [el for i, el in enumerate(self.all_els_sample) if i not in indices_to_remove]
-        centroids = np.array([[coord for i, coord in enumerate(row) if i not in indices_to_remove] for row in centroids])
-        els_std_dev_per_cluster = [[stddev for i, stddev in enumerate(row) if i not in indices_to_remove] for row in els_std_dev_per_cluster]
-        unused_compositions_list = [[fr for i, fr in enumerate(row) if i not in indices_to_remove] for row in unused_compositions_list]
+            conflict = [el for el in els_to_plot if el in excluded]
+            if conflict:
+                logger.warning(
+                    '⚠️ Removing %s from els_excluded_clust_plot because els_to_plot forces them onto the axes.',
+                    conflict,
+                )
+                excluded = [el for el in excluded if el not in set(els_to_plot)]
+
+            if len(els_to_plot) in (2, 3):
+                # Authoritative selection: plot exactly these elements, in the given order.
+                els_for_plot = list(els_to_plot)
+            else:
+                # A single forced element: keep it and fill from remaining detectable elements.
+                els_for_plot = list(els_to_plot)
+                for el in self.detectable_els_sample:
+                    if el not in els_for_plot and el not in excluded:
+                        els_for_plot.append(el)
+                if len(els_for_plot) > 3:
+                    els_for_plot = els_for_plot[:3]
+
+            if len(els_for_plot) not in (2, 3):
+                can_plot_clustering = False
+                print_single_separator()
+                warnings.warn(
+                    f"Cannot generate clustering plot: els_to_plot={els_to_plot} leaves "
+                    f"{len(els_for_plot)} axis element(s) ({els_for_plot}); need 2 or 3.",
+                    UserWarning,
+                )
+                logger.warning(
+                    '⚠️ els_to_plot must result in 2 or 3 plot axes. '
+                    f'Got {len(els_for_plot)} element(s): {els_for_plot}. '
+                    'Provide 2 or 3 elements in els_to_plot, or remove exclusions that leave too few.'
+                )
+        else:
+            els_for_plot = [el for el in self.all_els_sample if el in self.detectable_els_sample and el not in excluded]
+            n_els = len(els_for_plot)
+
+            if n_els == 1:
+                can_plot_clustering = False
+                print_single_separator()
+                warnings.warn("Cannot generate clustering plot with a single element.", UserWarning)
+                if len(self.detectable_els_sample) > 1:
+                    logger.warning('⚠️ Too many elements were excluded from the clustering plot via the use of "els_excluded_clust_plot".')
+                    logger.info(f'ℹ️ Consider removing one or more among the list: {self.plot_cfg.els_excluded_clust_plot}')
+            elif n_els > 3:
+                els_for_plot = els_for_plot[:3]
+
+        indices_to_keep = [self.all_els_sample.index(el) for el in els_for_plot]
+        centroids = np.array([[row[i] for i in indices_to_keep] for row in centroids])
+        els_std_dev_per_cluster = [[row[i] for i in indices_to_keep] for row in els_std_dev_per_cluster]
+        unused_compositions_list = [[row[i] for i in indices_to_keep] for row in unused_compositions_list]
 
         if can_plot_clustering:
             els_comps_list = compositions_df[els_for_plot].to_numpy().T
