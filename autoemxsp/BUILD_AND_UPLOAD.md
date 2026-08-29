@@ -50,4 +50,4 @@ You should see a `FutureWarning` about the rename, and `autoemx` should be insta
 
 - Version **0.1.8** is the compatibility redirect release after **0.1.7**.
 - Do **not** delete the old `autoemxsp` releases on PyPI; leave them for pinned installs.
-- `autoemxsp/autoemxsp/__init__.py` is the single compatibility shim used by both the redirect wheel and the main `autoemx` source tree.
+- The shim lives only in this redirect package (`autoemxsp/autoemxsp/__init__.py`). The main `autoemx` wheel does not ship `autoemxsp`.

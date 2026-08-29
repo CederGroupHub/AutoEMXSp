@@ -1,6 +1,6 @@
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["autoemx", "autoemx.*", "autoemxsp", "autoemxsp.*"]
+include = ["autoemx", "autoemx.*"]
 exclude = ["paper_data", "examples", "tests"]
 
 [build-system]
@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autoemx"
-version = "1.0.4"
+version = "1.0.5"
 description = "AutoEMX - Automated Electron Microscopy X-Ray Spectroscopy for Compositional Characterization of Materials"
 readme = "README.md"
 keywords = [
