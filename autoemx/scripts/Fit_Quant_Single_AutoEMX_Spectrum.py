@@ -20,12 +20,12 @@ Created on Tue Jul 29 13:18:16 2025
 # =============================================================================
 # Sample and spectrum to process
 # =============================================================================
-# sample_ID = 'Wulfenite_example'
-sample_ID = 'K-412_NISTstd_example'
+sample_ID = 'Wulfenite_example'
 
 spectrum_ID = 1  # Value reported in 'Spectrum #' metadata for the sample ledger
 
-results_path = None # Looks in default Results folder if left unspecified
+import os
+results_path = os.path.dirname(os.path.abspath(__file__)) # Default: save and load results in the same folder as this script. Set to None to use the current working directory, or replace with another path.
 
 # =============================================================================
 # Options

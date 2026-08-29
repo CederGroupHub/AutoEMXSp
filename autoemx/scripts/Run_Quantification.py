@@ -25,8 +25,6 @@ Created on Tue Jul 29 13:18:16 2025
 # =============================================================================
 sample_IDs = [
     'Wulfenite_example',
-    'K-412_NISTstd_example',
-    # 'known_powder_mixture_example'
     ]
 
 is_known_precursor_mixture = None # Loads value from config file, if unspecified. Otherwise set to True or False.

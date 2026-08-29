@@ -22,8 +22,7 @@ Created on Tue Jul 29 13:18:16 2025
 # =============================================================================
 # Sample Definition
 # =============================================================================
-# sample_ID = 'Wulfenite_example'
-sample_ID = 'K-412_NISTstd_example'
+sample_ID = 'Wulfenite_example'
 
 import os
 results_dir = os.path.dirname(os.path.abspath(__file__)) # Default: save and load results in the same folder as this script. Set to None to use the current working directory, or replace with another path.
