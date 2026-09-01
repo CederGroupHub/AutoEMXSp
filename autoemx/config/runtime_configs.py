@@ -33,6 +33,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pymatgen.core.periodic_table import Element # type: ignore
 from pymatgen.core import Composition # type: ignore
 
+from autoemx.utils.helper import composition_as_weight_dict
+
 import autoemx.utils.constants as cnst
 import autoemx.config.defaults as dflt
 import autoemx.core.em_runtime.particle_segmentation_models as par_seg_models
@@ -587,13 +589,7 @@ class ExpStandardsConfig(BaseModel):
                 raise ValueError("Formula must be provided when is_exp_std_measurement is True.")
             try:
                 comp = Composition(self.formula)
-                try:
-                    self.w_frs = {el: float(w) for el, w in comp.as_weight_dict.items()} # type: ignore
-                except Exception:
-                    import warnings
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore", category=FutureWarning)
-                        self.w_frs = {el: float(w) for el, w in comp.to_weight_dict.items()}
+                self.w_frs = composition_as_weight_dict(comp)
             except Exception as e:
                 raise ValueError(f"Invalid chemical formula '{self.formula}': {e}")
         return self

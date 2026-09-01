@@ -89,6 +89,7 @@ from autoemx.utils.helper import (
     print_single_separator,
     print_double_separator,
     make_unique_path,
+    composition_as_weight_dict,
 )
 from autoemx.config import (
     MicroscopeConfig,
@@ -1317,10 +1318,7 @@ class EMXSp_Composition_Analyzer:
             valid_formulae.append(formula)
             
             # Get mass fractions as dictionary el: w_fr
-            try:
-                w_fr_dict = comp.as_weight_dict()
-            except AttributeError:
-                w_fr_dict = comp.to_weight_dict
+            w_fr_dict = composition_as_weight_dict(comp)
     
             # Check for detectable elements at the beginning
             detectable_in_formula = [el for el in self.detectable_els_sample if el in w_fr_dict]

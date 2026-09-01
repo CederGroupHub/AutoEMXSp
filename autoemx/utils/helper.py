@@ -20,6 +20,8 @@ Main Features
 - `atomic_to_weight_fr()`: Convert atomic fractions to weight fractions.
 - `weight_to_atomic_fr()`: Convert weight fractions to atomic fractions.
   Both functions use `pymatgen.Element` for accurate atomic mass values.
+- `composition_as_weight_dict()`: Weight-fraction dict from a pymatgen ``Composition``,
+  compatible with both current ``as_weight_dict()`` and older ``to_weight_dict``.
 
 **Formula Handling**
 - `get_std_comp_from_formula()`: Parse chemical formulas into standardized element dictionaries.
@@ -67,6 +69,7 @@ from pathlib import Path
 from pymatgen.core import Element, Composition
 
 # Typing imports
+from collections.abc import Mapping
 from typing import Any, Sequence, List, Optional, Tuple, Dict, Union
 
 
@@ -127,6 +130,31 @@ def atomic_to_weight_fr(
 # Test
 if __name__ == "__main__":
     print(atomic_to_weight_fr([0.5,0.5], ['K', 'Cl']))
+
+
+def composition_as_weight_dict(comp: Any) -> Dict[str, float]:
+    """Return elemental weight fractions from a pymatgen Composition.
+
+    Newer pymatgen exposes ``as_weight_dict()`` as a method. Older releases
+    used the ``to_weight_dict`` property (now deprecated). Accept either a
+    mapping or a zero-argument callable under either name so AutoEMX stays
+    compatible across the supported pymatgen range.
+    """
+    for attr in ("as_weight_dict", "to_weight_dict"):
+        value = getattr(comp, attr, None)
+        if value is None:
+            continue
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=FutureWarning)
+                mapping = value() if callable(value) else value
+        except Exception:
+            continue
+        if isinstance(mapping, Mapping):
+            return {str(el): float(w) for el, w in mapping.items()}
+    raise AttributeError(
+        "Composition has neither a usable as_weight_dict nor to_weight_dict"
+    )
 
 
 def weight_to_atomic_fr(
