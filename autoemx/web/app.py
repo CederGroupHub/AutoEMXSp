@@ -209,6 +209,21 @@ def main() -> None:
     if not els_sample:
         st.error("Enter at least one sample element.")
         return
+
+    overlap = sorted(set(els_sample) & set(els_substrate))
+    if overlap:
+        st.warning(
+            f"**{', '.join(overlap)}** "
+            + ("is" if len(overlap) == 1 else "are")
+            + " listed in both sample and substrate elements. "
+            "Quantifying an element that is also present in the substrate (e.g. C on carbon tape) "
+            "may lead to **major quantification errors** when the substrate contributes substantial "
+            "signal for that element. It is recommended to quantify only elements that are not "
+            "present in major quantities in the substrate — for example, O from carbon tape is "
+            "unlikely to significantly affect the measurement and can generally be quantified with "
+            "confidence, while C cannot."
+        )
+
     if not uploads:
         st.error("Upload at least one spectrum file.")
         return
