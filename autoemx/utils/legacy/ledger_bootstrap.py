@@ -16,6 +16,7 @@ import pandas as pd
 
 import autoemx.config.defaults as dflt
 import autoemx.utils.constants as cnst
+from autoemx._logging import get_logger
 from autoemx.config.ledger_schemas import (
     AcquisitionDetails,
     ClusteringConfig,
@@ -36,6 +37,8 @@ from autoemx.utils.legacy.legacy_backfill import (
 )
 from autoemx.utils.legacy.legacy_config_loader import load_legacy_configurations_from_json
 from autoemx.utils.legacy.spectrum_pointer_writer import write_spectrum_pointer_file
+
+logger = get_logger(__name__)
 
 _MIN_BACKGROUND_COMMENT_PATTERN = re.compile(
     r"([0-9]+(?:\.[0-9]+)?)\s+min\.\s+ref\.\s+bckgrnd\s+counts",
@@ -999,10 +1002,9 @@ def load_or_create_ledger_with_legacy_data_csv(
             write_background_pointer=(write_background_pointer if use_instrument_background else None),
         )
         if n_written > 0:
-            warnings.warn(
-                "Deprecation warning: legacy Data.csv compatibility path was used to reconstruct spectra files. "
-                "Please reanalyse old samples so a ledger is created natively.",
-                UserWarning,
+            logger.info(
+                f"ℹ️ {n_written} spectrum files reconstructed from the legacy Data.csv in '{sample_result_dir}'; "
+                "results are now stored in ledger.json."
             )
         pointer_files = _list_pointer_files_in_spectra_dir(sample_result_dir)
 
