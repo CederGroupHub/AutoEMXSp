@@ -67,7 +67,7 @@ import os
 import re
 import warnings
 import traceback
-from typing import Any, Optional, Dict, Tuple, Sequence, List, Union
+from typing import Any, Optional, Dict, Iterable, Tuple, Sequence, List, Union
 
 # =============================================================================
 # Third-party library imports
@@ -186,6 +186,39 @@ class XSp_Quantifier:
     # Reference lines preferred for quantification: above this energy (keV) and overvoltage
     ideal_ref_line_energy_threshold = 2
     ideal_ref_line_overvoltage = 1.65
+    
+    @classmethod
+    def format_measured_pb(
+        cls,
+        peaks: Iterable[Tuple[str, str, Optional[float]]],
+        standard_elements: Optional[Iterable[str]] = None,
+    ) -> List[str]:
+        """
+        Format the measured P/B ratios of the reference lines of a fitted standard.
+
+        Parameters
+        ----------
+        peaks : iterable of (element, line, pb_ratio)
+            Fitted peaks. Lines that are not reference lines, and missing or non-positive P/B ratios, are skipped.
+        standard_elements : iterable of str, optional
+            If given, only peaks of these elements are reported.
+
+        Returns
+        -------
+        list of str
+            Lines "El_line: PB", ordered by reference-line priority. Empty if no peak can be reported.
+        """
+        ref_line_priority = {line: rank for rank, line in enumerate(cls.xray_quant_ref_lines)}
+        standard_elements = set(standard_elements or [])
+        pb_by_peak: Dict[str, Tuple[int, str, float]] = {}
+        for el, line, pb_ratio in peaks:
+            if line not in ref_line_priority or pb_ratio is None or pb_ratio <= 0:
+                continue
+            if standard_elements and el not in standard_elements:
+                continue
+            peak_label = f"{el}_{line}"
+            pb_by_peak[peak_label] = (ref_line_priority[line], peak_label, float(pb_ratio))
+        return [f"{label}: {pb:.1f}" for _, label, pb in sorted(pb_by_peak.values())]
     
     def __init__(
         self,

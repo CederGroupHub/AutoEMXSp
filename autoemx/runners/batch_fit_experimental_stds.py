@@ -126,7 +126,7 @@ def batch_fit_experimental_stds(
     ]
 
     for value, label, argname in _warnings:
-        if _has_entries(value) and n_samples > 0:
+        if _has_entries(value) and n_samples > 1:
             logging.info(
                 f"⚠️ Warning: More than one sample ID provided. Using the same provided sample "
                 f"{label} for all samples: {value}.\nEnsure this behaviour is intended, or provide "
@@ -226,7 +226,6 @@ def batch_fit_experimental_stds(
             plot_cfg             = configs[cnst.PLOT_CFG_KEY]
             powder_meas_cfg      = configs.get(cnst.POWDER_MEASUREMENT_CFG_KEY, None)
             bulk_meas_cfg        = configs.get(cnst.BULK_MEASUREMENT_CFG_KEY, None)
-            exp_stds_cfg         = configs.get(cnst.EXP_STD_MEASUREMENT_CFG_KEY, None)
         except KeyError as e:
             logging.warning(
                 f"Missing configuration '{e.args[0]}' in {ledger_path}. "
@@ -250,10 +249,10 @@ def batch_fit_experimental_stds(
             clustering_cfg = ClusteringConfig()
         if quant_cfg is None:
             quant_cfg = config_classes_dict[cnst.QUANTIFICATION_CFG_KEY]()
-        exp_stds_cfg_from_ledger = getattr(
+        exp_stds_cfg = getattr(
             ledger.configs.measurement_cfg, "exp_stds_cfg", None
         )
-        if exp_stds_cfg_from_ledger is None:
+        if exp_stds_cfg is None:
             logging.warning(
                 f"No ExpStandardsConfig found in ledger for '{std_id}'. "
                 f"Skipping — cannot fit a standard without a reference formula."
@@ -261,9 +260,7 @@ def batch_fit_experimental_stds(
             continue
 
         if els_w_frs is not None and len(els_w_frs) > 0:
-            exp_stds_cfg_from_ledger.w_frs = els_w_frs
-
-        configs[cnst.EXP_STD_MEASUREMENT_CFG_KEY] = exp_stds_cfg_from_ledger
+            exp_stds_cfg.w_frs = els_w_frs
 
         if min_bckgrnd_cnts is not None:
             clustering_cfg.min_bckgrnd_cnts = min_bckgrnd_cnts
@@ -332,19 +329,20 @@ def batch_fit_experimental_stds(
             )
 
             if standards_dict_path is not None:
-                standards_dir = Path(standards_dict_path).expanduser().resolve()
+                # standards_dict_path points to the standards file itself
+                standards_json_path = Path(standards_dict_path).expanduser().resolve()
+                standards_dir = standards_json_path.parent
             else:
                 standards_dir = (
                     Path(__file__).resolve().parents[1]
                     / cnst.CALIBS_DIR
                     / last_microscope_ID
                 )
-
-            standards_json_filename = (
-                f"{last_measurement_type}_{cnst.STD_FILENAME}_"
-                f"{int(last_beam_energy):d}keV.json"
-            )
-            standards_json_path = standards_dir / standards_json_filename
+                standards_json_filename = (
+                    f"{last_measurement_type}_{cnst.STD_FILENAME}_"
+                    f"{int(last_beam_energy):d}keV.json"
+                )
+                standards_json_path = standards_dir / standards_json_filename
 
             report_kwargs: Dict[str, Any] = {
                 "microscope_ID": last_microscope_ID,

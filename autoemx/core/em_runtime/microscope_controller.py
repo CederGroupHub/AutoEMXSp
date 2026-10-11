@@ -16,6 +16,7 @@ Created on 2026
 """
 import time
 import warnings
+from typing import Optional
 
 from autoemx.utils.helper import EMError, print_single_separator
 from autoemx import microscope_drivers as EM_driver
@@ -71,7 +72,7 @@ class MicroscopeController:
         self._last_EM_adjustment_time = 0.0
     
     
-    def initialise_SEM(self) -> None:
+    def initialise_SEM(self, center_pos: Optional[tuple] = None) -> None:
         """
         Activate and configure the Scanning Electron Microscope (SEM).
         
@@ -80,8 +81,15 @@ class MicroscopeController:
             2. Switches to SEM mode.
             3. Sets the electron detector mode to backscattered electrons (BSD).
             4. Sets the beam voltage and current according to measurement configuration.
-            5. Sets working distance.
-            6. Adjusts focus, brightness, and contrast.
+            5. Moves the stage to the sample center, if provided.
+            6. Sets working distance.
+            7. Adjusts focus, brightness, and contrast.
+        
+        Parameters
+        ----------
+        center_pos : tuple of float, optional
+            (x, y) stage position of the sample center, in mm. Focus, brightness and contrast
+            are adjusted there. If None, the stage is not moved.
         
         Raises
         ------
@@ -121,6 +129,10 @@ class MicroscopeController:
                     "Using current microscope configurations",
                     UserWarning
                 )
+            
+            # Move to the sample, so that focus, brightness and contrast are adjusted on it
+            if center_pos is not None:
+                self.move_to_pos(center_pos)
             
             # Set working distance (needed for reliable autofocus)
             self.EM_driver.adjust_focus(self.init_wd)

@@ -1295,19 +1295,23 @@ class EMXSp_Composition_Analyzer:
         - If the measurement is of a known powder mixture, the standards dictionary
           is compiled from reference data using `_compile_standards_from_references()`.
     
+        - If standards were passed to the analyzer, or project-specific standards are used,
+          the standards dictionary is taken from them.
+
         - Otherwise, the standards dictionary is expected to be loaded directly
           within the `XSp_Quantifier` and is set to `None` here.
-    
+
         Returns
         -------
         None
             This method modifies the `self.standards_dict` attribute in place.
         """
         is_known_mixture = getattr(self.powder_meas_cfg, "is_known_powder_mixture_meas", False)
-        
+
         if is_known_mixture:
             self.standards_dict = StandardsModule._compile_standards_from_references(self)
-        elif self.quant_cfg.use_project_specific_std_dict:
+        elif self.quant_cfg.use_project_specific_std_dict or self.standards is not None:
+            # _load_standards returns the standards passed to the analyzer when present
             standards, _ = StandardsModule._load_standards(self)
             self.standards_dict = standards.to_standards_dict().get(self.measurement_cfg.mode, {})
         else:
@@ -3946,38 +3950,17 @@ class EMXSp_Composition_Analyzer:
                                 lines.append(f"  {el} at%: {at_fr * 100:.2f}%")
                             lines.append(f"  Analytical error: {result[cnst.AN_ER_KEY] * 100:.2f}%")
                         else:
-                            fitted_peaks = getattr(fit_result, 'fitted_peaks', None)
-                            standard_elements = set(getattr(getattr(self, 'exp_stds_cfg', None), 'w_frs', {}) or {})
-                            ref_line_priority = {
-                                line: rank for rank, line in enumerate(XSp_Quantifier.xray_quant_ref_lines)
-                            }
-                            pb_by_peak: Dict[str, tuple[int, str, float]] = {}
-
-                            if fitted_peaks:
-                                for _, peak in fitted_peaks.items():
-                                    el = getattr(peak, 'element', None)
-                                    line = getattr(peak, 'line', None)
-                                    pb_ratio = getattr(peak, 'pb_ratio', None)
-
-                                    if el is None or line is None or pb_ratio is None:
-                                        continue
-                                    if line not in ref_line_priority:
-                                        continue
-                                    if standard_elements and el not in standard_elements:
-                                        continue
-
-                                    peak_label = f"{el}_{line}"
-                                    pb_by_peak[peak_label] = (
-                                        ref_line_priority[line],
-                                        peak_label,
-                                        float(pb_ratio),
-                                    )
-
-                            if pb_by_peak:
+                            fitted_peaks = getattr(fit_result, 'fitted_peaks', None) or {}
+                            pb_lines = XSp_Quantifier.format_measured_pb(
+                                (
+                                    (getattr(peak, 'element', None), getattr(peak, 'line', None), getattr(peak, 'pb_ratio', None))
+                                    for peak in fitted_peaks.values()
+                                ),
+                                standard_elements=getattr(getattr(self, 'exp_stds_cfg', None), 'w_frs', None),
+                            )
+                            if pb_lines:
                                 lines.append("  Measured PB:")
-                                sorted_peaks = sorted(pb_by_peak.values(), key=lambda x: (x[0], x[1]))
-                                for _, peak_label, pb_ratio in sorted_peaks:
-                                    lines.append(f"  {peak_label}: {pb_ratio:.1f}")
+                                lines.extend(f"  {pb_line}" for pb_line in pb_lines)
                             else:
                                 lines.append("  Fit completed")
                         if quant_flag not in (None, 0) and comment:
@@ -4160,6 +4143,10 @@ class EMXSp_Composition_Analyzer:
         min_conf : float or None
             Minimum confidence among assigned candidate phases.
         """
+        # The clustering config must record the error threshold actually used, so that a new value
+        # creates a new clustering analysis in the ledger instead of matching the existing one
+        self.clustering_cfg.max_analytical_error_percent = max_analytical_error_percent
+
         # Ensure in-memory state is fully synced from the ledger before analysis.
         # This is essential when analyse_data is called without a preceding
         # run_quantification (i.e. analysis-only path): we need the typed

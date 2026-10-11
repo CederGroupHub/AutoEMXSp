@@ -29,7 +29,7 @@ import os
 import warnings
 import logging
 from pathlib import Path
-from typing import Any, Optional, List
+from typing import Any, Dict, Optional, List
 
 import numpy as np
 
@@ -58,7 +58,7 @@ def fit_and_quantify_spectrum_from_ledger(
     sample_ID: str,
     spectrum_ID: int,
     els_sample: Optional[List[str]] = None,
-    els_w_frs: Optional[List[str]] = None,
+    els_w_frs: Optional[Dict[str, float]] = None,
     els_substrate: Optional[List[str]] = None,
     is_standard: bool = False,
     spectrum_lims: Optional[tuple] = None,
@@ -208,7 +208,6 @@ def fit_and_quantify_spectrum_from_ledger(
         sample_substrate_cfg= configs[cnst.SAMPLESUBSTRATE_CFG_KEY]
         quant_cfg           = configs[cnst.QUANTIFICATION_CFG_KEY]
         clustering_cfg      = configs.get(cnst.CLUSTERING_CFG_KEY)
-        exp_stds_cfg         = configs.get(cnst.EXP_STD_MEASUREMENT_CFG_KEY, None)
     except KeyError as e:
         logging.warning(f"Missing configuration '{e.args[0]}' in {spectral_info_f_path}. Skipping sample '{sample_ID}'.")
         return
@@ -317,30 +316,16 @@ def fit_and_quantify_spectrum_from_ledger(
     if els_substrate is None:
         els_substrate = []
 
+    # Weight fractions of a standard: from the sample config, otherwise from the experimental standard config
     if els_w_frs is None and is_standard:
-        if hasattr(sample_cfg, 'w_frs') and sample_cfg.w_frs is not None:
-            els_w_frs = sample_cfg.w_frs
-        elif exp_stds_cfg is not None and exp_stds_cfg.w_frs is not None:
-            els_w_frs = exp_stds_cfg.w_frs
-        else:
-            exp_stds_cfg_from_ledger = getattr(
-                ledger.configs.measurement_cfg, "exp_stds_cfg", None
+        exp_stds_cfg = getattr(ledger.configs.measurement_cfg, "exp_stds_cfg", None)
+        els_w_frs = sample_cfg.w_frs or getattr(exp_stds_cfg, "w_frs", None)
+        if els_w_frs is None:
+            raise ValueError(
+                f"No 'w_frs' (element weight fractions) found for standard '{sample_ID}' in the ledger "
+                f"(sample_cfg or measurement_cfg.exp_stds_cfg). Pass 'els_w_frs' directly, or add 'w_frs' to the ledger."
             )
-            if exp_stds_cfg_from_ledger is None:
-                logging.warning(
-                    f"No ExpStandardsConfig found in ledger for '{sample_ID}'. "
-                    f"Skipping — cannot fit a standard without a reference formula."
-                )
-                return
-            if exp_stds_cfg_from_ledger.w_frs is None:
-                raise ValueError(
-                    f"No 'w_frs' (element weight fractions) found for standard '{sample_ID}'. "
-                    f"Checked sample_cfg, exp_stds_cfg, and ledger's exp_stds_cfg. "
-                    f"You must pass 'els_w_frs' directly, or modify the ledger to include 'w_frs'."
-                )
-            configs[cnst.EXP_STD_MEASUREMENT_CFG_KEY] = exp_stds_cfg_from_ledger
-            els_w_frs = exp_stds_cfg_from_ledger.w_frs
-            
+
     quantifier = fit_and_quantify_spectrum(
         spectrum_vals = spectrum,
         spectrum_lims = spectrum_lims,

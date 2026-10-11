@@ -12,7 +12,7 @@ Created on Tue Jul 29 13:18:16 2025
 
 import time
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Any
 
 from autoemx.utils import print_double_separator
 from autoemx.core.quantifier import XSp_Quantifier
@@ -197,49 +197,24 @@ def fit_and_quantify_spectrum(
         logging.exception(f"Error during spectral quantification for '{sample_ID}': {e}")
         return
 
-    if els_w_frs is not None:
-        fitted_peaks_info = getattr(quantifier, 'fitted_peaks_info', None)
-
+    # Measured P/B ratios are reported when fitting a standard (known composition) without quantifying it
+    if els_w_frs is not None and not quantify_plot:
+        fitted_peaks_info = getattr(quantifier, 'fitted_peaks_info', None) or {}
+        pb_lines = XSp_Quantifier.format_measured_pb(
+            (
+                # Escape/pileup peaks (keys like 'Fe_Ka1_esc') are skipped
+                (*el_line.split('_'), peak_info.get(cnst.PB_RATIO_KEY))
+                for el_line, peak_info in fitted_peaks_info.items()
+                if len(el_line.split('_')) == 2
+            ),
+            standard_elements=els_w_frs,
+        )
         if not fitted_peaks_info:
             message = "No fitted peaks available — cannot report Measured PB."
+        elif pb_lines:
+            message = "\n".join(["Measured PB:"] + [f"  {pb_line}" for pb_line in pb_lines])
         else:
-            ref_line_priority = {
-                line: rank for rank, line in enumerate(XSp_Quantifier.xray_quant_ref_lines)
-            }
-            standard_elements = set(els_w_frs or {})
-
-            pb_by_peak: Dict[str, tuple[int, str, float]] = {}
-            for el_line, peak_info in fitted_peaks_info.items():
-                # Skip escape/pileup peaks (keys like 'Fe_Ka_esc')
-                parts = el_line.split('_')
-                if len(parts) != 2:
-                    continue
-                el, line = parts
-
-                if line not in ref_line_priority:
-                    continue
-                if standard_elements and el not in standard_elements:
-                    continue
-
-                pb_ratio = peak_info.get(cnst.PB_RATIO_KEY)
-                if pb_ratio is None or pb_ratio <= 0:
-                    continue
-
-                pb_by_peak[el_line] = (
-                    ref_line_priority[line],
-                    el_line,
-                    float(pb_ratio),
-                )
-
-            if pb_by_peak:
-                lines = ["Measured PB:"]
-                for _, peak_label, pb_ratio in sorted(
-                    pb_by_peak.values(), key=lambda x: (x[0], x[1])
-                ):
-                    lines.append(f"  {peak_label}: {pb_ratio:.1f}")
-                message = "\n".join(lines)
-            else:
-                message = "Fit completed (no reportable P/B peaks)."
+            message = "Fit completed (no reportable P/B peaks)."
 
         print_double_separator(message=message)
 

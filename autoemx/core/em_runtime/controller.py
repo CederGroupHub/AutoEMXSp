@@ -333,10 +333,11 @@ class EM_Controller:
         Delegates to MicroscopeController which performs:
             1. SEM activation
             2. Detector and beam setup
-            3. Working distance adjustment
-            4. Focus, brightness, contrast adjustment
+            3. Stage movement to the sample center (sample_cfg.center_pos)
+            4. Working distance adjustment
+            5. Focus, brightness, contrast adjustment
         """
-        self.microscope_ctrl.initialise_SEM()
+        self.microscope_ctrl.initialise_SEM(center_pos=self.sample_cfg.center_pos)
         self.is_initialized = True
         
         if self.verbose:
