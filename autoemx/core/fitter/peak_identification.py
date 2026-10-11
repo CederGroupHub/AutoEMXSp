@@ -524,6 +524,9 @@ def top_hat_matrix(energy_vals: np.ndarray, sigma_fn: Callable) -> np.ndarray:
     Each row has a positive central lobe about one FWHM wide and two negative side lobes of half that
     width, summing to zero, so that any background that is linear across the filter is removed.
     Rows whose filter does not fit within the spectrum are zero.
+
+    References: F. H. Schamber, in X-Ray Fluorescence Analysis of Environmental Samples, T. G. Dzubay (ed.),
+    Ann Arbor Science (1977) 241; P. J. Statham, Anal. Chem. 49 (1977) 2149.
     """
     n = len(energy_vals)
     ch_width = energy_vals[1] - energy_vals[0]

@@ -94,6 +94,16 @@ class Peaks_Model:
     F_loss_key = 'F_loss'
     R_e_key = 'R_e'
     escape_peaks_str = '_escSiKa'
+    # Significance (sigma) in the top-hat filtered spectrum above which a clear reference line is present
+    # (see _top_hat_presence). Chosen low to avoid missing elements present at low concentration (few
+    # false negatives), at the cost of fitting absent elements in part of the spectra (see the
+    # Report_peak_identification deck: on K-412 with added absent elements, kept in 25-55% of spectra at
+    # 1.5 sigma, against 72-100% with the prominence check alone)
+    TOP_HAT_PRESENCE_SIGMA = 1.5
+    # Significance (sigma) of a line of another element above which a line is considered overlapped
+    TOP_HAT_OVERLAP_SIGMA = 5.0
+    # Top-hat filter matrices, by energy axis and detector resolution
+    _top_hat_filters = {}
     pileup_peaks_str = '_pileup'
 
     def __init__(
@@ -177,6 +187,10 @@ class Peaks_Model:
 
         # Bookkeeping for overlapping/fixed peaks (populated elsewhere)
         self.fixed_peaks_dict = {}
+
+        # Presence of the reference-line peaks from the top-hat filtered spectrum (computed when needed)
+        self._top_hat_presence_dict = None
+        self._top_hat_significance = None
     
     @staticmethod
     def clear_cached_icc_spectra():
@@ -336,6 +350,74 @@ class Peaks_Model:
         return peak_indices, peak_height, is_small_peak, is_peak_overlapping
     
     
+    def _top_hat_presence(self, el_line):
+        """
+        Presence of the peak of a reference line from the top-hat filtered spectrum, decided per element.
+
+        A line above PeakIDSettings.low_energy_threshold_keV (1 keV) and clear of the peaks of other elements
+        is present if its significance in the filtered spectrum (see peak_identification) reaches
+        TOP_HAT_PRESENCE_SIGMA. Other lines cannot be judged: below 1 keV the filter is less reliable (weak,
+        absorbed lines next to strong low-energy peaks and the spectrum edge), and within the reach of the
+        filter (2 FWHM) of a line of another element above TOP_HAT_OVERLAP_SIGMA the side lobes push a line
+        down, or the other peak pushes it up. Such a line is present if a clear line of the same element is
+        present. Returns None if the element has no clear line (left to the prominence check, _identify_peak).
+
+        The top-hat filter (peak_identification.top_hat_matrix) removes any background that is linear across
+        the filter: F. H. Schamber, in X-Ray Fluorescence Analysis of Environmental Samples, T. G. Dzubay (ed.),
+        Ann Arbor Science (1977) 241; P. J. Statham, Anal. Chem. 49 (1977) 2149.
+        """
+        if self._top_hat_presence_dict is None:
+            # Imported here: peak_identification imports this module
+            from autoemx.core.fitter import peak_identification as pid
+
+            E = np.asarray(self.energy_vals, dtype=float)
+            sigma_fn = DetectorResponseFunction._det_sigma
+            settings = pid.PeakIDSettings()
+            threshold = self.TOP_HAT_PRESENCE_SIGMA
+            if self._top_hat_significance is None:
+                key = (len(E), round(float(E[0]), 6), round(float(E[1] - E[0]), 8),
+                       round(float(sigma_fn(1.0)), 8), round(float(sigma_fn(10.0)), 8))
+                if key not in Peaks_Model._top_hat_filters:
+                    Peaks_Model._top_hat_filters[key] = pid.top_hat_matrix(E, sigma_fn)
+                F = Peaks_Model._top_hat_filters[key]
+                y = np.asarray(self.spectrum_vals, dtype=float)
+                self._top_hat_significance = pid._ResidualAnalysis(y, None, E, F, sigma_fn, 0.0).sig
+            sig = self._top_hat_significance
+
+            def significance(en):
+                win = np.abs(E - en) <= sigma_fn(en)
+                return float(sig[win].max()) / settings.multiplier('', en) if win.any() else 0.0
+
+            def is_main_line(line):
+                return not (self._is_escape_line(line) or self._is_pileup_line(line))
+
+            # Lines of the elements in the model, and the reference lines whose presence is decided
+            lines = []
+            for line_key in self.xray_weight_refs_dict:
+                el, line = self._get_el_line_terms(line_key)
+                info = get_el_xray_lines(el).get(line)
+                if is_main_line(line) and info is not None and info['weight'] >= pid.PeakIDSettings().min_line_weight:
+                    lines.append((el, line_key, info['energy (keV)']))
+            refs = [(el, k, en) for el, k, en in lines if k in self.xray_weight_refs_lines]
+            clear = {}
+            for el, ref, en in refs:
+                if en < settings.low_energy_threshold_keV:
+                    clear[ref] = None
+                    continue
+                reach = 2 * pid.FWHM_PER_SIGMA * sigma_fn(en)
+                overlapped = any(o_el != el and abs(o_en - en) <= reach and significance(o_en) >= self.TOP_HAT_OVERLAP_SIGMA
+                                 for o_el, _, o_en in lines)
+                clear[ref] = None if overlapped else significance(en) >= threshold
+            self._top_hat_presence_dict = {}
+            for el, ref, _ in refs:
+                if clear[ref] is not None:
+                    self._top_hat_presence_dict[ref] = clear[ref]
+                else:
+                    el_clear = [clear[r] for e, r, _ in refs if e == el and clear[r] is not None]
+                    self._top_hat_presence_dict[ref] = any(el_clear) if el_clear else None
+        return self._top_hat_presence_dict.get(el_line)
+
+
     def _estimate_peak_area(self, line_energy, sigma_peak, el_line):
         """Estimate the area of a characteristic X-ray peak in the spectrum."""
         peak_indices, peak_height, is_small_peak, is_peak_overlapping = self._identify_peak(
@@ -489,6 +571,16 @@ class Peaks_Model:
         sigma_par = self._get_gaussian_sigma_param(line_prefix, sigma_init)
 
         initial_area, is_small_peak, is_peak_overlapping = self._estimate_peak_area(line_energy, sigma_init, el_line)
+        # Presence of the peaks of reference lines from the top-hat filtered spectrum (None: not decided)
+        top_hat_present = None
+        if el_line in self.xray_weight_refs_lines and not is_escape_peak and not is_pileup_peak:
+            top_hat_present = self._top_hat_presence(el_line)
+            if top_hat_present is False:
+                initial_area = 0
+            elif top_hat_present and initial_area == 0:
+                # Present, but without a prominent local maximum (e.g. a small or overlapped peak)
+                initial_area = 10
+                is_small_peak = True if is_small_peak is None else is_small_peak
         
         if el_line not in self.xray_weight_refs_lines:
             ref_line = self.xray_weight_refs_dict[el_line]
@@ -597,7 +689,9 @@ class Peaks_Model:
             else:
                 model += peak_m
     
-        if peak_m is None or (is_small_peak is None and not is_peak_overlapping):
+        if top_hat_present is not None:
+            is_peak_present = peak_m is not None
+        elif peak_m is None or (is_small_peak is None and not is_peak_overlapping):
             is_peak_present = False
         else:
             is_peak_present = True
