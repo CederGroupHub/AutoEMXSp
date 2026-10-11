@@ -84,6 +84,7 @@ from pymatgen.core import Element
 # =============================================================================
 import autoemx.calibrations as calibs 
 import autoemx.utils.constants as cnst
+import autoemx.config.defaults as dflt
 from autoemx.utils.helper import (
     print_nice_1d_row,
     print_single_separator,
@@ -318,7 +319,7 @@ class XSp_Quantifier:
         if els_sample is None:
             els_sample = []
         if els_substrate is None:
-            els_substrate = ['C', 'O', 'Al']
+            els_substrate = list(dflt.substrate_els_without_identification)
         if els_w_fr is None:
             els_w_fr = {}
 

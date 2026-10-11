@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List, Optional, cast
 
 import autoemx.utils.constants as cnst
+from autoemx._logging import get_logger
 
 from autoemx.config.ledger_schemas import (  # type: ignore
     AcquisitionDetails,
@@ -13,6 +14,11 @@ from autoemx.config.ledger_schemas import (  # type: ignore
     SampleLedger,
     SpectrumEntry,
 )
+
+logger = get_logger(__name__)
+
+# Missing quantified spectra already reported, to warn once per file (the ledger is synchronized repeatedly)
+_reported_missing_quantified_spectra: set[tuple[str, str]] = set()
 
 
 def _extract_spectrum_id(pointer_file: Path) -> str:
@@ -108,7 +114,9 @@ def ingest_spectra(ledger: SampleLedger) -> tuple[int, int]:
 
     Appends pointer files whose spectrum id is not already present in
     ``ledger.spectra`` and removes ledger entries whose spectrum id no longer
-    exists on disk.
+    exists on disk, so that wrong spectra can be deleted before quantification.
+    Entries that already have quantification results are kept even when their
+    file is missing, since deleting a quantified spectrum is assumed to be a mistake.
 
     Returns
     -------
@@ -124,19 +132,28 @@ def ingest_spectra(ledger: SampleLedger) -> tuple[int, int]:
         for pointer_file in pointer_files
     }
 
-    original_count = len(ledger.spectra)
-    ledger.spectra[:] = [
-        entry
-        for entry in ledger.spectra
-        if (
-            entry.spectrum_relpath in available_relpaths
-            or (
-                entry.spectrum_relpath in (None, "")
-                and entry.spectrum_id not in (None, "")
-                and str(entry.spectrum_id) in available_ids
-            )
+    def _is_on_disk(entry: SpectrumEntry) -> bool:
+        return entry.spectrum_relpath in available_relpaths or (
+            entry.spectrum_relpath in (None, "")
+            and entry.spectrum_id not in (None, "")
+            and str(entry.spectrum_id) in available_ids
         )
-    ]
+
+    original_count = len(ledger.spectra)
+    kept_entries = []
+    for entry in ledger.spectra:
+        if _is_on_disk(entry):
+            kept_entries.append(entry)
+        elif entry.quantification_results:
+            kept_entries.append(entry)
+            report_key = (str(sample_root), str(entry.spectrum_relpath or entry.spectrum_id))
+            if report_key not in _reported_missing_quantified_spectra:
+                _reported_missing_quantified_spectra.add(report_key)
+                logger.warning(
+                    f"⚠️ Spectrum file {entry.spectrum_relpath or entry.spectrum_id} not found, but spectrum "
+                    f"#{entry.spectrum_id} has already been quantified: keeping it and its results in the ledger."
+                )
+    ledger.spectra[:] = kept_entries
     n_removed = original_count - len(ledger.spectra)
 
     existing_ids = {

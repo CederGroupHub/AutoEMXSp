@@ -89,6 +89,11 @@ im_height: int = 1200
 # SEM image default width and height, in pixels.
 
 # =============================================================================
+# EDS Parameters
+# =============================================================================
+RAW_SPECTRUM_EXT: str = '.msa'  # Format used by the EDS software to export spectra
+
+# =============================================================================
 # Microscope Connection
 # =============================================================================
 # Delay API import/connection until microscope operations are actually requested.

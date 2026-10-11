@@ -178,7 +178,7 @@ def quantify_external_spectra(
     beam_energy : float
         Electron beam energy in keV.  Must match the energy used during acquisition.
     els_substrate : list of str, optional
-        Elements in the sample substrate.  Default: ``['C']``.
+        Elements in the sample substrate.  Default: ``['C']`` (defaults.substrate_els).
     sample_substrate_type : str
         Substrate material type (``'Ctape'`` or ``'None'``).
     sample_substrate_shape : str
@@ -240,7 +240,7 @@ def quantify_external_spectra(
         :func:`batch_quantify_and_analyze`).
     """
     if els_substrate is None:
-        els_substrate = ["C"]
+        els_substrate = list(dflt.substrate_els)
     if quant_flags_accepted is None:
         quant_flags_accepted = [0, -1]
     if results_path is None:

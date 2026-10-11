@@ -306,6 +306,17 @@ def _identification_settings(worker_payload: Dict[str, Any]):
     )
 
 
+def _spectrum_file_read_error(pointer_abs: Path) -> Optional[str]:
+    """Return why a spectrum file cannot be read, or None if it can."""
+    if not pointer_abs.exists():
+        return "file not found"
+    try:
+        SampleLedger._load_counts_from_pointer_file(pointer_abs)
+    except Exception as e:
+        return f"{type(e).__name__}: {e}"
+    return None
+
+
 def _quantify_spectrum_worker(worker_payload: Dict[str, Any]) -> tuple[int, Optional[Dict[str, Any]], QuantificationResult, Optional[float]]:
     """Process-safe worker for one spectrum quantification or fitting-only."""
     spectrum_index = int(worker_payload['spectrum_index'])
@@ -1891,7 +1902,15 @@ class EMXSp_Composition_Analyzer:
 
     def _build_spectrum_relpath(self, spectrum_id: str) -> str:
         """Build the relative path for one raw spectrum pointer file."""
-        filename = f"{cnst.SPECTRUM_FILENAME_PREFIX}{spectrum_id}{dflt.RAW_SPECTRUM_EXT}"
+        # Extension of the format used by the EDS software to export spectra, defined by the microscope driver
+        spectrum_ext = dflt.RAW_SPECTRUM_EXT
+        em_controller = getattr(self, "EM_controller", None)
+        if em_controller is not None:
+            try:
+                spectrum_ext = getattr(em_controller.EM_driver, "RAW_SPECTRUM_EXT", spectrum_ext)
+            except Exception:  # No driver loaded
+                pass
+        filename = f"{cnst.SPECTRUM_FILENAME_PREFIX}{spectrum_id}{spectrum_ext}"
         return os.path.join(cnst.SPECTRA_DIR, filename)
 
 
@@ -3774,6 +3793,8 @@ class EMXSp_Composition_Analyzer:
                 pass
 
             quant_worker_payloads: List[Dict[str, Any]] = []
+            # Spectra whose file cannot be read: (spectrum index, relative path, reason)
+            unreadable_spectra: List[Tuple[int, str, str]] = []
 
             if quantify:
                 # Always bootstrap/sync ledger before quantification cycles.
@@ -3823,6 +3844,10 @@ class EMXSp_Composition_Analyzer:
                 # Build fitting payloads (same structure as quantification payloads)
                 for i in indices_to_process:
                     spectrum_entry = _ledger_spectra[i]
+                    read_error = _spectrum_file_read_error(Path(self.sample_result_dir, spectrum_entry.spectrum_relpath))
+                    if read_error is not None:
+                        unreadable_spectra.append((i, spectrum_entry.spectrum_relpath, read_error))
+                        continue
                     background_abs = None
                     if self.quant_cfg.use_instrument_background and spectrum_entry.instrument_background_relpath:
                         background_abs = str(Path(self.sample_result_dir, spectrum_entry.instrument_background_relpath))
@@ -3890,6 +3915,10 @@ class EMXSp_Composition_Analyzer:
                         continue
 
                     spectrum_entry = _ledger_spectra[i]
+                    read_error = _spectrum_file_read_error(Path(self.sample_result_dir, spectrum_entry.spectrum_relpath))
+                    if read_error is not None:
+                        unreadable_spectra.append((i, spectrum_entry.spectrum_relpath, read_error))
+                        continue
                     background_abs = None
                     if self.quant_cfg.use_instrument_background and spectrum_entry.instrument_background_relpath:
                         background_abs = str(Path(self.sample_result_dir, spectrum_entry.instrument_background_relpath))
@@ -4029,6 +4058,25 @@ class EMXSp_Composition_Analyzer:
                     for payload in payloads:
                         idx, result, quant_record, quantification_time = _quantify_spectrum_worker(payload)
                         _finalize_quant_result(idx, result, quant_record, quantification_time)
+
+            # Unreadable spectrum files. A spectrum already quantified in this run keeps its result, since
+            # deleting it after quantification is assumed to be a mistake. Otherwise, it is flagged as having no data.
+            for idx, relpath, read_error in unreadable_spectra:
+                has_result = any(
+                    result.quantification_id == self.current_quantification_id
+                    for result in _ledger_spectra[idx].quantification_results
+                )
+                if has_result:
+                    logger.warning(f"⚠️ Could not read spectrum file {relpath} ({read_error}). Keeping its existing result.")
+                    continue
+                logger.warning(f"⚠️ Could not read spectrum file {relpath} ({read_error}).")
+                quant_record = QuantificationResult(
+                    quantification_id=int(self.current_quantification_id),
+                    quant_flag=1,
+                    comment=f"Could not read spectrum file ({read_error})",
+                    diagnostics=QuantificationDiagnostics(converged=False, interrupted=True),
+                )
+                _finalize_quant_result(idx, None, quant_record, None)
 
             def _build_identification_pool(records):
                 pool = []

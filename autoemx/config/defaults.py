@@ -48,8 +48,9 @@ identification_excluded_elements : tuple of str
     Elements the identification of missing elements never proposes. Default: Tc and Pm (no stable isotopes) and the noble
     gases Ne, Kr, Xe, Rn.
 RAW_SPECTRUM_EXT : str
-    File extension used when writing per-spectrum raw data pointer files.
-    Default is `'.msa'` (EMSA/MAS format).
+    Extension of spectrum files when no microscope driver is loaded (e.g. when AutoEMX writes spectrum files itself).
+    During acquisition, the extension defined by the microscope driver (RAW_SPECTRUM_EXT, the format used by the EDS
+    software to export spectra) is used instead. Default is `'.msa'` (EMSA/MAS format).
 saved_images_extension : str
     Image extension used when saving SEM frames.
     Default is `'png'`.
@@ -81,6 +82,8 @@ quantification_method: str = 'PB'
 spectrum_lims: Tuple[int, int] = (14, 1100)
 
 substrate_els = ['C']  # O and Al (e.g. Al stub) are found by the identification of missing elements if present
+
+substrate_els_without_identification = ['C', 'O', 'Al']  # Used when the identification of missing elements is off (e.g. experimental standards), since O and Al (e.g. Al stub) would otherwise be missed
 
 use_instrument_background: bool = False
 

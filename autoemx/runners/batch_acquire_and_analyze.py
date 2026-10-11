@@ -228,7 +228,7 @@ def batch_acquire_and_analyze(
         Default is `None` (MeasurementConfig.max_acquisition_time).
     els_substrate : list of str, optional
         List of substrate element symbols.
-        Default is `['C']` (SampleSubstrateConfig.elements).
+        Default is `['C']` (defaults.substrate_els).
     powder_meas_cfg_kwargs : dict, optional
         Additional keyword arguments for PowderMeasurementConfig.
     bulk_meas_cfg_kwargs : dict, optional
@@ -298,7 +298,7 @@ def batch_acquire_and_analyze(
     if max_XSp_acquisition_time is None:
         max_XSp_acquisition_time = target_Xsp_counts / 10000 * 5
     if els_substrate is None:
-        els_substrate = ['C']
+        els_substrate = list(dflt.substrate_els)
     if quant_flags_accepted is None:
         quant_flags_accepted = [0, -1]
 

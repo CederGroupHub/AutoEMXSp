@@ -200,7 +200,7 @@ class SampleSubstrateConfig(BaseModel):
         - Element symbols are validated. An error is raised if any symbol is unrecognized.
     """
 
-    elements: List[str] = Field(default_factory=lambda: ['C'])
+    elements: List[str] = Field(default_factory=lambda: list(dflt.substrate_els))
     type: str = cnst.CTAPE_SUBSTRATE_TYPE
     shape: str = cnst.CIRCLE_SUBSTRATE_SHAPE
     auto_detection: bool = True

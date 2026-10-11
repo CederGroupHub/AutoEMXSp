@@ -12,6 +12,7 @@ Created on Tue Jul 29 13:18:16 2025
 
 import time
 import logging
+import warnings
 from typing import Optional, Any
 
 from autoemx.utils import print_double_separator
@@ -50,7 +51,7 @@ def fit_and_quantify_spectrum(
     background_vals=None,
     fit_tol: float = 1e-4,
     is_particle: bool = False,
-    quantify_plot: bool = True,
+    quantify: bool = True,
     max_undetectable_w_fr: float = 0,
     force_single_iteration: bool = False,
     interrupt_fits_bad_spectra: bool = False,
@@ -65,6 +66,7 @@ def fit_and_quantify_spectrum(
     free_area_el_lines=None,
     peaks_to_annotate: str = 'main',
     identify_missing_elements: bool = dflt.identify_missing_elements,
+    quantify_plot: Optional[bool] = None,
 ):
     """
     Fit and (optionally) quantify a single spectrum.
@@ -103,8 +105,8 @@ def fit_and_quantify_spectrum(
         scipy fit tolerance. Defines conditions of fit convergence
     is_particle : bool, optional
         If True, treats sample as particle (powder). Uses particle geometry fitting parameters
-    quantify_plot : bool, optional
-        Whether to quantify the spectrum.
+    quantify : bool, optional
+        If True (default), fit and quantify the spectrum. If False, only fit it (e.g. to measure the P/B ratios of a standard).
     max_undetectable_w_fr : float, optional
         Maximum allowed weight fraction for undetectable elements (default: 0). Total mass fraction of fitted
         elements is forced to be between [1-max_undetectable_w_fr, 1]
@@ -134,12 +136,17 @@ def fit_and_quantify_spectrum(
         If True, prints quantification operations
     fitting_verbose : bool, optional
         If True, prints fitting operations
+    quantify_plot : bool, optional
+        Deprecated, use `quantify`.
         
     Returns
     -------
     quantifier : XSp_Quantifier
         The quantifier object containing the results, fit parameters, and methods for further analysis and plotting.
     """
+    if quantify_plot is not None:
+        warnings.warn("'quantify_plot' is deprecated, use 'quantify' instead.", FutureWarning, stacklevel=2)
+        quantify = quantify_plot
     sample_processing_time_start = time.time()
     
     # Quantification
@@ -179,11 +186,11 @@ def fit_and_quantify_spectrum(
             free_area_el_lines=free_area_el_lines,
         )
 
-    if quantify_plot:
+    if quantify:
         _warn_peak_overlaps()
 
     try:
-        if quantify_plot:
+        if quantify:
             quant_result, _, flag = quantifier.quantify_spectrum(
                 force_single_iteration=force_single_iteration,
                 interrupt_fits_bad_spectra=interrupt_fits_bad_spectra,
@@ -198,7 +205,7 @@ def fit_and_quantify_spectrum(
         return
 
     # Measured P/B ratios are reported when fitting a standard (known composition) without quantifying it
-    if els_w_frs is not None and not quantify_plot:
+    if els_w_frs is not None and not quantify:
         fitted_peaks_info = getattr(quantifier, 'fitted_peaks_info', None) or {}
         pb_lines = XSp_Quantifier.format_measured_pb(
             (
@@ -229,10 +236,10 @@ def fit_and_quantify_spectrum(
     total_process_time = (time.time() - sample_processing_time_start)
     print_double_separator()
     time_str = f"{total_process_time/60:.1f} min" if total_process_time > 100 else f"{total_process_time:.1f} sec"
-    quant_str = 'quantified' if quantify_plot else 'fitted'
+    quant_str = 'quantified' if quantify else 'fitted'
     logging.info(f"Sample '{sample_ID}' successfully {quant_str} in {time_str}.")
 
-    if quantify_plot:
+    if quantify:
         _warn_peak_overlaps()
 
     return quantifier

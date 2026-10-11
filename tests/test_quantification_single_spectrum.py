@@ -15,7 +15,7 @@ def test_single_spectrum_quantification(results_path):
         spectrum_ID=0,
         results_path=results_path,
         is_standard=False,
-        quantify_plot=False,
+        quantify=False,
         plot_signal=False,
         zoom_plot=False,
         fit_tol=1e-4,

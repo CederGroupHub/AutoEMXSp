@@ -1521,7 +1521,7 @@ def _run_fit(sample_dir: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         els_sample=info.elements,
         els_substrate=info.substrate,
         results_path=str(Path(sample_dir).parent),
-        quantify_plot=True,
+        quantify=True,
         plot_signal=False,
         fit_tol=float(opts.fit_tolerance),
         is_particle=bool(info.ledger.configs.sample_cfg.is_surface_rough),
@@ -1545,7 +1545,7 @@ def _run_single(sample_dir: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     kw = dict(payload["fit_kwargs"])
     quantify = kw.pop("quantify")
     common = dict(
-        quantify_plot=quantify,
+        quantify=quantify,
         plot_signal=False,
         print_results=False,
         quant_verbose=True,

@@ -323,7 +323,7 @@ def fit_uploaded_spectrum(
         els_sample=list(els_sample),
         els_substrate=list(els_substrate),
         spectrum_lims=spectrum_lims,
-        quantify_plot=True,
+        quantify=True,
         plot_signal=False,
         fit_tol=fit_tol,
         is_particle=is_particle,

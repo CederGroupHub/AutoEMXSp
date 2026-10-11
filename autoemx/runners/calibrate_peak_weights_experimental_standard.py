@@ -998,7 +998,7 @@ def calibrate_peak_weights_experimental_standard(
             spectrum_lims=spectrum_lims,
             results_path=str(results_root),
             use_instrument_background=use_instrument_background,
-            quantify_plot=False,
+            quantify=False,
             plot_signal=False,
             zoom_plot=False,
             line_to_plot="",

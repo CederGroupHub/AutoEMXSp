@@ -64,7 +64,7 @@ def fit_and_quantify_spectrum_from_ledger(
     spectrum_lims: Optional[tuple] = None,
     results_path: Optional[str] = None,
     use_instrument_background: bool = dflt.use_instrument_background,
-    quantify_plot: bool = True,
+    quantify: bool = True,
     plot_signal: bool = True,
     zoom_plot: bool = False,
     line_to_plot: str = '',
@@ -81,6 +81,7 @@ def fit_and_quantify_spectrum_from_ledger(
     peaks_to_annotate: str = 'main',
     ledger: Optional[Any] = None,
     identify_missing_elements: Optional[bool] = None,
+    quantify_plot: Optional[bool] = None,
 ):  
     """
     Fit and (optionally) quantify a single spectrum.
@@ -104,8 +105,8 @@ def fit_and_quantify_spectrum_from_ledger(
         Base directory where results are stored. Default: autoemx/Results
     use_instrument_background : bool, optional
         Whether to use instrument background if present. Default: False
-    quantify_plot : bool, optional
-        Whether to quantify the spectrum.
+    quantify : bool, optional
+        If True (default), fit and quantify the spectrum. If False, only fit it (e.g. to measure the P/B ratios of a standard).
     plot_signal : bool, optional
         Whether to plot the fitted spectrum.
     zoom_plot : bool, optional
@@ -136,12 +137,17 @@ def fit_and_quantify_spectrum_from_ledger(
         by the fit are added (and quantified if a standard is available); weaker detections are reported.
         If None (default), uses the setting of the sample's active quantification run (off for runs saved
         before this option existed).
+    quantify_plot : bool, optional
+        Deprecated, use `quantify`.
         
     Returns
     -------
     quantifier : XSp_Quantifier
         The quantifier object containing the results, fit parameters, and methods for further analysis and plotting.
     """
+    if quantify_plot is not None:
+        warnings.warn("'quantify_plot' is deprecated, use 'quantify' instead.", FutureWarning, stacklevel=2)
+        quantify = quantify_plot
     if results_path is None:
         results_path = os.path.join(os.getcwd(), cnst.RESULTS_DIR)
         
@@ -344,7 +350,7 @@ def fit_and_quantify_spectrum_from_ledger(
         background_vals=background,
         fit_tol = fit_tol,
         is_particle = is_particle,
-        quantify_plot = quantify_plot,
+        quantify = quantify,
         max_undetectable_w_fr = max_undetectable_w_fr,
         force_single_iteration = force_single_iteration,
         interrupt_fits_bad_spectra = interrupt_fits_bad_spectra,

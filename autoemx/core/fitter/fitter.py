@@ -160,6 +160,7 @@ from autoemx.utils.helper import (
     weight_to_atomic_fr, load_msa
 )
 import autoemx.utils.constants as cnst
+import autoemx.config.defaults as dflt
 import autoemx.calibrations as calibs 
 from autoemx.data.Xray_lines import get_el_xray_lines
 from autoemx.data.Xray_absorption_coeffs import xray_mass_absorption_coeff
@@ -311,7 +312,7 @@ class XSp_Fitter:
         if els_to_quantify is None:
             els_to_quantify = []
         if els_substrate is None:
-            els_substrate = ['C', 'O', 'Al']
+            els_substrate = list(dflt.substrate_els_without_identification)
         if els_w_fr is None:
             els_w_fr = {}
         self.free_area_el_lines = free_area_el_lines

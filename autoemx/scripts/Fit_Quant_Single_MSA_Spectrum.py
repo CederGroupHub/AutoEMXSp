@@ -36,7 +36,7 @@ els_substrate = ['C']
 is_particle = True
 
 #%% Fit and Quant definitions
-quantify_plot = True
+quantify = True
 
 spectrum_lims = (14, 1100)
 fit_tol = 1e-3
@@ -91,7 +91,7 @@ quantifier = fit_and_quantify_spectrum(
     els_sample = els_sample,
     els_substrate = els_substrate,
     spectrum_lims = spectrum_lims,
-    quantify_plot = quantify_plot,
+    quantify = quantify,
     plot_signal = plot_signal,
     fit_tol = fit_tol,
     is_particle = is_particle,

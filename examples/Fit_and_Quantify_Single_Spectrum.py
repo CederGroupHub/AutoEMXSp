@@ -33,7 +33,7 @@ results_path = os.path.join(os.path.dirname(__file__), 'Results')
 # =============================================================================
 is_particle = True
 is_standard = False
-quantify_plot = True
+quantify = True
 plot_signal = True
 zoom_plot = False
 line_to_plot = 'W_Ma'
@@ -58,7 +58,7 @@ quantifier = fit_and_quantify_spectrum_from_ledger(
     is_standard=is_standard,
     spectrum_lims=spectrum_lims,
     use_instrument_background=use_instrument_background,
-    quantify_plot=quantify_plot,
+    quantify=quantify,
     plot_signal=plot_signal,
     zoom_plot=zoom_plot,
     line_to_plot=line_to_plot,
