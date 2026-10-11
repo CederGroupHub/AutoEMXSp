@@ -13,21 +13,14 @@ options as arguments. This enables integration into larger workflows or pipeline
 
 Workflow
 --------
-- Loads sample configurations and spectral data from ``ledger.json`` (primary source).
-- Falls back to ``Data.csv`` only when no ledger exists; the first quantification run
-  then migrates the CSV data into a ``ledger.json`` for all subsequent runs.
+- Loads sample configurations and spectral data from ``ledger.json``. Results saved in the
+  legacy ``Data.csv`` format are converted to a ``ledger.json`` automatically.
 - Performs quantification and optionally clustering/statistical analysis and saves results.
 
 Notes
 -----
 - Only the ``sample_ID`` is required if acquisition output is saved in the default directory;
   otherwise, specify ``results_path``.
-- When a ``ledger.json`` is present it is always used as the authoritative source of
-  spectral data and quantification results; ``Data.csv`` is only read as a one-time
-  migration path when no ledger has been created yet.
-- ``spectra_quant`` (the in-memory composition buffer consumed by ``analyse_data``) is
-  always populated by ``run_quantification`` from ledger records — the runner never
-  needs to pre-build it.
 - Designed to continue processing even if some samples are missing or have errors.
 
 Typical usage:

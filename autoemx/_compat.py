@@ -52,18 +52,17 @@ def _find_stale_autoemxsp_artifacts() -> list[str]:
     return unique
 
 
-def _build_cleanup_command(paths: list[str]) -> str:
+def _build_cleanup_message(paths: list[str]) -> str:
     exe = shlex.quote(sys.executable)
-    quoted_paths = ", ".join(repr(p) for p in paths)
-    py_cleanup = (
-        "import os,shutil; "
-        f"paths=[{quoted_paths}]; "
-        "[shutil.rmtree(p, ignore_errors=True) if os.path.isdir(p) else (os.remove(p) if os.path.exists(p) else None) for p in paths]"
-    )
+    listed_paths = "\n".join(f"  {p}" for p in paths)
     return (
-        f"{exe} -m pip uninstall -y autoemxsp && "
-        f"{exe} -c \"{py_cleanup}\" && "
-        f"{exe} -m pip install -U autoemx"
+        "Leftover files from an old installation of 'autoemxsp' (the former name of AutoEMX) were found:\n"
+        f"{listed_paths}\n"
+        "They only affect scripts that still use 'import autoemxsp' (e.g. 'autoemxsp.runners'), which may fail "
+        "to import. AutoEMX itself is not affected.\n"
+        "To remove them:\n"
+        f"  1. {exe} -m pip uninstall -y autoemxsp   (skip if pip reports it is not installed)\n"
+        "  2. Delete the files and folders listed above."
     )
 
 
@@ -73,11 +72,4 @@ def warn_if_stale_autoemxsp_install() -> None:
     if not stale_paths:
         return
 
-    fix_cmd = _build_cleanup_command(stale_paths)
-    warnings.warn(
-        "Detected stale 'autoemxsp' installation artifacts that can break legacy imports "
-        "(e.g. 'autoemxsp.runners'). Run this one-time fix:\n"
-        f"  {fix_cmd}",
-        FutureWarning,
-        stacklevel=2,
-    )
+    warnings.warn(_build_cleanup_message(stale_paths), UserWarning, stacklevel=2)

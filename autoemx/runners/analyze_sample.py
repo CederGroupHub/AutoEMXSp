@@ -12,8 +12,8 @@ Import this module in your own code and call the
 to perform analysis programmatically.
 
 Workflow:
-    - Loads sample configuration and spectral data from ``ledger.json`` (primary source)
-    - Falls back to ``Data.csv`` only when no ledger exists (one-time migration)
+    - Loads sample configuration and spectral data from ``ledger.json``. Results saved in the
+      legacy ``Data.csv`` format are converted to a ``ledger.json`` automatically
     - Performs clustering/statistical analysis
     - Prints summary results
 
@@ -398,11 +398,8 @@ def analyze_sample(
         results_dir=sample_dir
     )
 
-    # analyse_data calls _sync_in_memory_spectra_from_ledger / _load_or_create_ledger
-    # and always hydrates spectra + quantification records from ledger-managed sources.
-
     has_ledger = os.path.exists(ledger_path)
-    source_label = "Data.csv (first-run migration)" if (not has_ledger) else "ledger.json"
+    source_label = "Data.csv (legacy format)" if (not has_ledger) else "ledger.json"
     logging.info(f"Running analysis for '{sample_ID}' (source: {source_label}).") 
 
     # Perform analysis and print results

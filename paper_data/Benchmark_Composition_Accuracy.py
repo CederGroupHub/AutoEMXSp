@@ -22,7 +22,7 @@ from collections import Counter
 from scipy.optimize import curve_fit
 
 import autoemx
-from autoemx.utils.helper import print_single_separator, print_double_separator, get_sample_dir
+from autoemx.utils.helper import print_single_separator, print_double_separator, get_sample_dir, composition_as_weight_dict
 import autoemx.utils.constants as cnst
 
 okabeito_green = '#009E73'
@@ -766,7 +766,7 @@ for sample in samples:
     elif comp_type == 'w_fr':
         pd_comp_str = cnst.W_FR_DF_KEY
         pd_phases_str = cnst.W_FR_DF_KEY
-        comp = filtered_ref_comp.to_weight_dict
+        comp = composition_as_weight_dict(filtered_ref_comp)
         ref_comp_dict = {el : float(w_fr) *100 for el, w_fr in comp.items()}
 
     

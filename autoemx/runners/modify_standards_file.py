@@ -163,7 +163,6 @@ def modify_standards_file(
                         not_found_exclusions.add(f"{id_}:{el}")
 
     # Validate and serialize using EDSStandardsFile to enforce schema
-    import autoemx.utils.helper
     from autoemx.config.schema_models.standards import EDSStandardsFile
     # Extract required fields for model
     schema_version = data.get("schema_version", 1)

@@ -339,12 +339,8 @@ def print_element_fractions_table(formula):
     print_nice_1d_row(formula, elements)
     print_nice_1d_row('at%', [x*100 for x in at_fr])
     print_nice_1d_row('w%',  [x*100 for x in w_fr])
-    
-# Test
-if __name__ == "__main__":
-    print_element_fractions_table('Mn2SiO4')  # header row with element names
-    
-    
+
+
 
 def _safe_autoemx_log_info(msg: str) -> None:
     """Log to autoemx logger; if stream handlers break, fall back to stdout."""

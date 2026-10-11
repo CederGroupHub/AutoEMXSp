@@ -61,6 +61,14 @@ annotate_particle_images : bool
     Whether to draw the X-ray spectrum spots (dot + spectrum ID) and a scale bar on the particle
     images saved during acquisition. If False, raw particle images are saved; annotated copies can
     be made afterwards with ``Annotate_Particle_Images.py``. Default is `False`.
+homogeneous_cluster_max_rms_dist : float
+    Clusters whose RMS distance of the spectra from the centroid, in atomic fractions, is below this value are
+    reported as likely homogeneous in Clusters.csv ("Homogeneous": "Likely"). Default is `0.03` (3 at%).
+inhomogeneous_cluster_min_rms_dist : float
+    Clusters whose RMS distance, in atomic fractions, is above this value are reported as unlikely to be
+    homogeneous ("Unlikely"); between the two thresholds, "Unsure". Default is `0.05` (5 at%).
+homogeneity_min_n_points : int
+    Clusters with fewer spectra than this are too small to judge homogeneity ("Not Applicable"). Default is `5`.
 
 Created on Sun Dec 21 18:59:50 2025
 
@@ -104,6 +112,12 @@ saved_images_extension: str = 'png'
 save_raw_images: bool = False
 
 annotate_particle_images: bool = False
+
+homogeneous_cluster_max_rms_dist: float = 0.03
+
+inhomogeneous_cluster_min_rms_dist: float = 0.05
+
+homogeneity_min_n_points: int = 5
 
 # These values are used as a general estimate but they should be properly defined in the microscope calibration module XS_calibrations.py
 escape_peak_probability = 0.03

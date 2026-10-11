@@ -114,6 +114,7 @@ MIX_MORE_DF_KEY = 'Mix_more'
 CL_ID_DF_KEY = 'Cluster_ID'
 N_PTS_DF_KEY = 'n_points'
 RMS_DIST_DF_KEY = 'RMS_dist'
+HOMOGENEOUS_DF_KEY = 'Homogeneous'
 WCSS_DF_KEY = 'wcss'
 
 # Headers common to both types of files
@@ -142,16 +143,14 @@ CALIBS_DIR = 'calibrations'
 XRAY_SPECTRA_CALIBS_DIR = 'calibrations'
 DETECTOR_CHANNEL_PARAMS_CALIBR_DIR = 'Detector_channel_params_calibs'
 SDD_CALIBS_MEAS_DIR = 'SDD calibrations'
-PAR_SEGMENTATION_MODELS_DIR = 'particle_segmentation_models'
 
 
 # File names
 STD_FILENAME = 'Stds'
-ACQUISITION_INFO_FILENAME = 'Comp_analysis_configs'  # legacy config filename (kept during transition)
+ACQUISITION_INFO_FILENAME = 'Comp_analysis_configs'  # config filename of results saved in the legacy Data.csv format
 CONFIG_FILENAME = 'config'  # new config filename
 LEDGER_FILENAME = 'ledger'  # new per-sample spectral ledger filename
 LEDGER_FILEEXT = '.json'
-ANALYSIS_TIMESTAMP_FORMAT = '%Y-%m-%d_%H-%M'  # timestamp format for analysis subdirectory names
 DATA_FILENAME = 'Data'
 MSA_SP_FILENAME = "EM_metadata.msa"
 SPECTRUM_FILENAME_PREFIX = "spectrum_"
@@ -181,32 +180,6 @@ INITIAL_SEM_IM_FILENAME = 'Initial_Position'
 DETECTOR_CONV_MATRICES_FILENAME = 'detector_response_convolution_matrices.json'
 DETECTOR_EFFICIENCY_FILENAME ='detector_efficiency.msa'
 DETECTOR_CHANNEL_PARAMS_CALIBR_FILENAME = 'detector_channel_params_calibs'
-
-
-# json files keys
-LIST_SPECTRAL_DATA_QUANT_KEYS = [
-        SPECTRUM_DF_KEY,
-        BACKGROUND_DF_KEY,
-        REAL_TIME_DF_KEY,
-        LIVE_TIME_DF_KEY,
-    ]
-
-LIST_SPECTRAL_DATA_KEYS = LIST_SPECTRAL_DATA_QUANT_KEYS + [
-        COMMENTS_DF_KEY,
-        QUANT_FLAG_DF_KEY,
-    ]
-
-LIST_SPECTRUM_COORDINATES_KEYS = [
-    SP_ID_DF_KEY,
-    FRAME_ID_DF_KEY,
-    PAR_ID_DF_KEY,
-    SP_X_COORD_DF_KEY,
-    SP_Y_COORD_DF_KEY,
-    SP_X_PIXEL_COORD_DF_KEY,
-    SP_Y_PIXEL_COORD_DF_KEY,
-    ] # Update this list if adding keys
-# This allows correct loading when quantifying or analysing spectra after acquisition
-
 
 
 ### CONFIGURATION DATACLASSES

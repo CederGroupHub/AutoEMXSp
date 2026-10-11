@@ -4932,6 +4932,19 @@ class EMXSp_Composition_Analyzer:
         els_other_fr_dict = {el + other_fr_key: np.round(el_comps * 100, 2) for el, el_comps in zip(self.all_els_sample, els_other_fr)}
         els_other_fr_stdevs_dict = {el + other_stddev_key: np.round(el_stddev * 100, 2) for el, el_stddev in zip(self.all_els_sample, els_stdevs_other_fr)}
     
+        # Homogeneity of each cluster, from the spread of its spectra in atomic fractions
+        rms_dist_at_fr = rms_dist_cluster if fr_key == cnst.AT_FR_DF_KEY else rms_dist_cluster_other_fr
+        homogeneity = []
+        for n_points, rms_dist in zip(n_points_per_cluster, rms_dist_at_fr):
+            if n_points < dflt.homogeneity_min_n_points:
+                homogeneity.append("Not Applicable")
+            elif rms_dist < dflt.homogeneous_cluster_max_rms_dist:
+                homogeneity.append("Likely")
+            elif rms_dist <= dflt.inhomogeneous_cluster_min_rms_dist:
+                homogeneity.append("Unsure")
+            else:
+                homogeneity.append("Unlikely")
+
         # Compose main cluster DataFrame
         clusters_dict = {
             cnst.N_PTS_DF_KEY: n_points_per_cluster,
@@ -4941,6 +4954,7 @@ class EMXSp_Composition_Analyzer:
             **els_other_fr_stdevs_dict,
             cnst.RMS_DIST_DF_KEY + fr_key: (np.array(rms_dist_cluster) * 100).round(2),
             cnst.RMS_DIST_DF_KEY + other_fr_key: (np.array(rms_dist_cluster_other_fr) * 100).round(2),
+            cnst.HOMOGENEOUS_DF_KEY: homogeneity,
             cnst.WCSS_DF_KEY + fr_key: (np.array(wcss_per_cluster) * 10000).round(2)
         }
         clusters_df = pd.DataFrame(clusters_dict)
@@ -5016,11 +5030,6 @@ class EMXSp_Composition_Analyzer:
         data_df: pd.DataFrame | None
             DataFrame object containing the exported composition data.
             None if no spectrum is available for export.
-    
-        Notes
-        -----
-        - Only the Compositions.csv export path is retained.
-        - Legacy Data.csv handling is intentionally removed.
     
         Raises
         ------

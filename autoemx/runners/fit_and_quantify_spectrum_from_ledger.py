@@ -6,14 +6,14 @@ Fitting and quantification of a single X-ray spectrum.
 For spectrum-level analysis of fitting and quantification performance.
 
 Import this module in your own code and call the
-`fit_and_quantify_spectrum()` function, passing your desired 'sample_ID', 'spectrum_ID' and
+`fit_and_quantify_spectrum_from_ledger()` function, passing your desired 'sample_ID', 'spectrum_ID' and
 options as arguments. This enables integration into larger workflows or pipelines.
 
 Workflow:
-    - Loads sample configurations and spectral data from `ledger.json` (primary source)
-    - Falls back to legacy `Data.csv` + config JSON only when no ledger exists
-    - Performs quantification (optionally only on unquantified spectra)
-    - Optionally performs clustering/statistical analysis and saves results
+    - Loads sample configurations and spectral data from `ledger.json`. Results saved in the
+      legacy `Data.csv` format are converted to a `ledger.json` automatically
+    - Fits and (optionally) quantifies the selected spectrum
+    - Optionally plots the fitted spectrum
 
 Notes
 -----
