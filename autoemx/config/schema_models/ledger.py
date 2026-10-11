@@ -7,7 +7,10 @@ import time
 from pathlib import Path, PureWindowsPath, PurePosixPath
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from packaging.version import InvalidVersion, Version
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+
+from autoemx._version import __version__ as AUTOEMX_VERSION
 
 import autoemx.utils.constants as cnst
 from autoemx.config.runtime_configs import (
@@ -89,9 +92,33 @@ class LedgerConfigs(BaseModel):
         return self.measurement_cfg.exp_stds_cfg
 
 
+class LedgerVersionError(ValueError):
+    """Raised when a ledger written by a newer AutoEMX version cannot be read by the installed one."""
+
+
+def _newer_ledger_version_message(payload: Any) -> Optional[str]:
+    """Explain which AutoEMX version to use, if the ledger was written by a newer one than installed."""
+    ledger_version = payload.get("autoemx_version") if isinstance(payload, dict) else None
+    if not ledger_version:
+        return None
+    try:
+        is_newer = Version(str(ledger_version)) > Version(AUTOEMX_VERSION)
+    except InvalidVersion:
+        return None
+    if not is_newer:
+        return None
+    return (
+        f"This ledger was written by AutoEMX {ledger_version}, but AutoEMX {AUTOEMX_VERSION} is installed. "
+        f"Update AutoEMX, or read it in a separate environment: pip install autoemx=={ledger_version}"
+    )
+
+
 class SampleLedger(BaseModel):
     """Single-sample ledger with per-spectrum pointers and configuration bundle."""
 
+    # Version of AutoEMX that last saved the ledger. Ledgers saved before this field existed get the current
+    # version, since the current version reads them (through the legacy compatibility code).
+    autoemx_version: str = AUTOEMX_VERSION
     sample_id: str
     sample_path: str
     configs: LedgerConfigs
@@ -270,11 +297,23 @@ class SampleLedger(BaseModel):
 
     @classmethod
     def from_json_file(cls, file_path: str | Path) -> "SampleLedger":
-        """Load and validate a ledger from JSON in one call."""
+        """Load and validate a ledger from JSON in one call.
+
+        Raises
+        ------
+        LedgerVersionError
+            If the ledger cannot be read because it was written by a newer AutoEMX version.
+        """
         path = Path(file_path)
         with path.open("r", encoding="utf-8") as f:
             payload = json.load(f)
-        return cls.model_validate(payload)
+        try:
+            return cls.model_validate(payload)
+        except ValidationError as e:
+            message = _newer_ledger_version_message(payload)
+            if message is not None:
+                raise LedgerVersionError(f"{message}\n(ledger: {path})") from e
+            raise
 
     def to_dict(
         self,
@@ -311,7 +350,8 @@ class SampleLedger(BaseModel):
         include_configs: bool = True,
         indent: int = 2,
     ) -> None:
-        """Write ledger to JSON in one call."""
+        """Write ledger to JSON in one call, recording the AutoEMX version that saved it."""
+        self.autoemx_version = AUTOEMX_VERSION
         path = Path(file_path)
         payload = self.to_dict(config_key_style=config_key_style, include_configs=include_configs)
         path.parent.mkdir(parents=True, exist_ok=True)

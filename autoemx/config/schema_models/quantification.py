@@ -9,6 +9,7 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 import autoemx.config.defaults as dflt
+from autoemx._version import LEGACY_VERSION
 from .fitting import FitResult
 from .clustering import ClusteringAnalysis, ClusteringResult # type: ignore
 
@@ -149,6 +150,9 @@ class QuantificationConfig(BaseModel):
 
     quantification_id: int
     label: Optional[str] = None
+    # Version of AutoEMX that computed this quantification run. Runs computed before AutoEMX recorded its
+    # version get LEGACY_VERSION ("<=1.4.0"). Not part of the fingerprint.
+    autoemx_version: str = LEGACY_VERSION
     sample_elements: List[str] = Field(default_factory=list)
     substrate_elements: List[str] = Field(default_factory=list)
     els_w_fr: Optional[Dict[str, float]] = None

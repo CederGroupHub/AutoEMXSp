@@ -6,6 +6,8 @@ Created on Thu Sep 18 13:30:06 2025
 @author: Andrea
 """
 
+from ._version import __version__
+
 import logging as _logging
 # Library best-practice: ship a NullHandler so users never see
 # "No handlers could be found for logger 'autoemx'" warnings.

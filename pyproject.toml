@@ -3,13 +3,16 @@ where = ["."]
 include = ["autoemx", "autoemx.*"]
 exclude = ["paper_data", "examples", "tests"]
 
+[tool.setuptools.dynamic]
+version = {attr = "autoemx._version.__version__"}  # Single source of the version
+
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "autoemx"
-version = "1.4.0"
+dynamic = ["version"]
 description = "AutoEMX - Automated Electron Microscopy X-Ray Spectroscopy for Compositional Characterization of Materials"
 readme = "README.md"
 keywords = [
@@ -40,6 +43,7 @@ dependencies = [
     "lmfit>=1.3.2,<=1.3.4",
     "matplotlib>=3.5.2,<=3.10.6",
     "numpy>=1.26.4,<=2.2.6",
+    "packaging>=20.0",
     "pandas>=2.2.2,<=2.3.3",
     "pydantic>=2.7.0,<=2.13.5",
     "pymatgen>=2024.11.13,<=2026.5.4",

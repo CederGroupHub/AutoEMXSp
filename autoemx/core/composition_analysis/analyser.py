@@ -111,6 +111,7 @@ from autoemx.config.ledger_schemas import (
     ClusteringConfig as LedgerClusteringConfig,
     Coordinate2D,
     LedgerConfigs,
+    LedgerVersionError,
     ParticleInfo,
     QuantificationConfig,
     QuantificationDiagnostics,
@@ -120,6 +121,7 @@ from autoemx.config.ledger_schemas import (
     SpectrumEntry,
 )
 from autoemx.config.ledger_io import ingest_spectra
+from autoemx._version import __version__ as AUTOEMX_VERSION
 from autoemx.config.schema_models.clustering import ClusteringAnalysis, ClusteringResult
 from autoemx.config.schema_models.standards import EDSStandardsFile
 from .clustering import ClusteringModule
@@ -1980,6 +1982,9 @@ class EMXSp_Composition_Analyzer:
             return None
         try:
             return SampleLedger.from_json_file(ledger_path)
+        except LedgerVersionError:
+            # Never replace a ledger written by a newer AutoEMX version with a new one
+            raise
         except Exception:
             return None
 
@@ -3024,6 +3029,7 @@ class EMXSp_Composition_Analyzer:
         return QuantificationConfig(
             quantification_id=quantification_id,
             label=label,
+            autoemx_version=AUTOEMX_VERSION,
             sample_elements=sample_elements,
             substrate_elements=substrate_elements,
             els_w_fr=self._get_forced_mass_fractions(),

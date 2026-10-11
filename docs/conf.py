@@ -4,8 +4,8 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 import os
+import re
 import sys
-import tomllib
 sys.path.insert(0, os.path.abspath(".."))
 
 
@@ -16,9 +16,9 @@ sys.path.insert(0, os.path.abspath(".."))
 project = 'AutoEMX'
 copyright = '2026, Andrea Giunto'
 author = 'Andrea Giunto'
-# Version of the package, read from pyproject.toml so that it follows each release
-with open(os.path.join(os.path.dirname(__file__), "..", "pyproject.toml"), "rb") as _f:
-    release = tomllib.load(_f)["project"]["version"]
+# Version of the package, read from autoemx/_version.py (its single source) so that it follows each release
+with open(os.path.join(os.path.dirname(__file__), "..", "autoemx", "_version.py"), encoding="utf-8") as _f:
+    release = re.search(r'^__version__ = "([^"]+)"', _f.read(), re.M).group(1)
 version = release
 
 

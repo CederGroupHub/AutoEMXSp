@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import autoemx
 import autoemx.core.composition_analysis.analyser as analyser_mod
 from autoemx.config.runtime_configs import (
     MeasurementConfig,
@@ -131,5 +132,8 @@ def test_acquisition_with_quantification(tmp_path: Path, monkeypatch):
     # Every spectrum is quantified exactly once, in the same quantification run
     assert all(len(s["quantification_results"]) == 1 for s in spectra)
     assert {s["quantification_results"][0]["quantification_id"] for s in spectra} == {0}
+    # The quantification run and the ledger record the AutoEMX version that produced them
+    assert [q["autoemx_version"] for q in ledger["quantifications"]] == [autoemx.__version__]
+    assert ledger["autoemx_version"] == autoemx.__version__
     # Pool is built from the first 3 spectra (across particles) and passed to the later ones
     assert received_pools == {0: [], 1: [], 2: [], 3: ["Ti"], 4: ["Ti"]}

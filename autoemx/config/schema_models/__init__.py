@@ -4,7 +4,7 @@
 from .acquisition import AcquisitionDetails, Coordinate2D, ParticleInfo, SpectrumEntry, SpotCoordinates
 from .clustering import AitchisonParams, ClusteringAnalysis, ClusteringConfig, ClusteringResult, ClusterMergeParams, DBSCANParams, MixtureParams
 from .fitting import FitResult, FittedPeakResult
-from .ledger import LedgerConfigs, SampleLedger
+from .ledger import LedgerConfigs, LedgerVersionError, SampleLedger
 from .quantification import (
     QuantificationConfig,
     QuantificationDiagnostics,
@@ -38,6 +38,7 @@ __all__ = [
     "QuantificationConfig",
     "QuantificationDiagnostics",
     "QuantificationResult",
+    "LedgerVersionError",
     "SampleLedger",
     "SpectrumEntry",
     "EDSStandardsFile",
