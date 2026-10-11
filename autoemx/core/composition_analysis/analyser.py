@@ -183,9 +183,9 @@ def _detect_prefit_spectrum_issues(
     if np.sum(spectrum) < min_total_counts_fraction * target_acquisition_counts:
         return 2, "Total counts too low"
 
-    n_vals_considered = 20
-    filter_len = 3
-    en_threshold = 2
+    n_vals_considered = dflt.prefit_bckgrnd_n_points
+    filter_len = dflt.prefit_bckgrnd_smoothing_channels
+    en_threshold = dflt.prefit_bckgrnd_max_energy_keV
 
     xy_data = zip(energy_vals, spectrum[sp_start:sp_end])
     spectrum_data_to_consider = [cnts for en, cnts in xy_data if cnts > 0 and en < en_threshold]
@@ -238,8 +238,7 @@ def _worker_flag_spectrum_for_clustering(
     min_bckgrnd_cnts: Optional[float],
 ) -> tuple[bool, int, str]:
     """Pure worker-safe version of clustering-validity flagging."""
-    is_spectrum_valid = True
-    sub_peak_int_threshold = 10
+    sub_peak_int_threshold = dflt.max_substrate_peak_percent_total_counts
     sub_peak_int_thresh_cnts = quantifier.tot_sp_counts * sub_peak_int_threshold / 100
 
     els_substrate_intensities = {el: 0 for el in detectable_els_substrate}
@@ -774,9 +773,10 @@ class EMXSp_Composition_Analyzer:
             # Set a threshold value below which counts are considered to be too low
             # Used to filter "bad" spectra out from clustering analysis. All spectra having less counts than this threshold are filtered out
             # Used also to avoid fitting spectra with excessive absorption, which inevitably lead to large quantification errors
-            if self.clustering_cfg.min_bckgrnd_cnts is None:
+            if self.quant_cfg.min_bckgrnd_cnts is None:
                 min_bckgrnd_cnts = measurement_cfg.target_acquisition_counts / (2 * 10**4)  # empirical value
-                self.clustering_cfg.min_bckgrnd_cnts = int(round(min_bckgrnd_cnts))
+                # Copy, since quant_cfg may be shared (e.g. the default argument)
+                self.quant_cfg = self.quant_cfg.model_copy(update={"min_bckgrnd_cnts": int(round(min_bckgrnd_cnts))})
 
         # --- Clustering
         if is_XSp_measurement:
@@ -1202,6 +1202,10 @@ class EMXSp_Composition_Analyzer:
             "  Min total counts     : "
             f"{_format_min_total_counts_percent(min_total_counts_fraction_used)} of target"
         )
+        min_bckgrnd_cnts_used = active_options.get("min_bckgrnd_cnts", getattr(q, "min_bckgrnd_cnts", None))
+        lines.append(
+            f"  Min background counts: {min_bckgrnd_cnts_used if min_bckgrnd_cnts_used is not None else 'disabled'}"
+        )
         lines.append(f"  Beam energy (keV)    : {beam_energy_used:.4f}")
         lines.append(
             f"  Emergence angle (deg): {emergence_angle_used:.4f}"
@@ -1248,9 +1252,6 @@ class EMXSp_Composition_Analyzer:
         if getattr(cc, "k_resolved", None) is not None:
             lines.append(f"  k (resolved)         : {cc.k_resolved}")
         lines.append(f"  Max analytical error : {cc.max_analytical_error_percent} w%")
-        lines.append(
-            f"  Min background counts: {cc.min_bckgrnd_cnts if cc.min_bckgrnd_cnts is not None else 'disabled'}"
-        )
         lines.append(f"  Accepted quant flags : {cc.quant_flags_accepted}")
         if getattr(cc, "method", "kmeans") == "kmeans":
             lines.append(f"  Merge clusters       : {'yes' if getattr(cc, 'auto_merge_clusters', False) else 'no'}")
@@ -2652,6 +2653,7 @@ class EMXSp_Composition_Analyzer:
             "det_ch_offset": float(self.det_ch_offset),
             "det_ch_width": float(self.det_ch_width),
             "min_total_counts_fraction": self._min_total_counts_fraction(),
+            "min_bckgrnd_cnts": getattr(self.quant_cfg, "min_bckgrnd_cnts", dflt.min_bckgrnd_cnts),
             "identify_missing_elements": bool(getattr(self.quant_cfg, "identify_missing_elements", dflt.identify_missing_elements)),
             "identification_seed_spectra": int(
                 getattr(self.quant_cfg, "identification_seed_spectra", dflt.identification_seed_spectra)
@@ -2906,7 +2908,6 @@ class EMXSp_Composition_Analyzer:
             ref_formulae=list(self.clustering_cfg.ref_formulae),
             do_matrix_decomposition=self.clustering_cfg.do_matrix_decomposition,
             max_analytical_error_percent=self.clustering_cfg.max_analytical_error_percent,
-            min_bckgrnd_cnts=self.clustering_cfg.min_bckgrnd_cnts,
             quant_flags_accepted=list(self.clustering_cfg.quant_flags_accepted),
             dbscan=self.clustering_cfg.dbscan.model_copy(deep=True),
             geometry=self.clustering_cfg.geometry,
@@ -3199,39 +3200,16 @@ class EMXSp_Composition_Analyzer:
         comment : str
             Human-readable comment describing the outcome or issue detected.
         """
-        # Prefix for comments if fit was interrupted
-        start_str_comments = 'Fit interrupted due to ' if not is_quant_fit_valid else ''
-    
-        if bad_quant_flag == 1:
-            if self.verbose and is_quant_fit_valid:
-                logger.warning("⚠️ Flagged for poor fit")
-            comment = start_str_comments + "poor fit"
-            quant_flag = 4
-        elif bad_quant_flag == 2:
-            if self.verbose and is_quant_fit_valid:
-                logger.warning("⚠️ Flagged for excessively high analytical error")
-            comment = start_str_comments + "excessively high analytical error"
-            quant_flag = 5
-        elif bad_quant_flag == 3:
-            if self.verbose and is_quant_fit_valid:
-                logger.warning("⚠️ Flagged for excessive X-ray absorption")
-            comment = start_str_comments + "excessive X-ray absorption"
-            quant_flag = 6
-        elif not is_quant_fit_valid:
-            comment = "Fit interrupted for unknown reasons"
-            quant_flag = 9
-        else:
-            # Fit completed with no apparent issue; check for low background counts, etc.
-            _, quant_flag, comment = self._flag_spectrum_for_clustering(min_bckgrnd_ref_lines, quantifier)
-    
-        # If fit was good but did not converge, annotate comment safely and set flag
-        if bad_quant_flag == -1 and quant_flag == 0:
-            if comment:
-                comment += " - Quantification did not converge."
-            else:
-                comment = "Quantification did not converge."
-            quant_flag = -1  # Signal non-convergence
-        
+        quant_flag, comment = _worker_check_fit_quant_validity(
+            is_quant_fit_valid=is_quant_fit_valid,
+            bad_quant_flag=bad_quant_flag,
+            quantifier=quantifier,
+            min_bckgrnd_ref_lines=min_bckgrnd_ref_lines,
+            detectable_els_substrate=self.detectable_els_substrate,
+            min_bckgrnd_cnts=self.quant_cfg.min_bckgrnd_cnts,
+        )
+        if self.verbose and is_quant_fit_valid and quant_flag in (4, 5, 6, 7, 8):
+            logger.warning(f"⚠️ Flagged: {comment}. This is likely to lead to large quantification errors.")
         return quant_flag, comment
         
     def _min_total_counts_fraction(self) -> float:
@@ -3343,7 +3321,7 @@ class EMXSp_Composition_Analyzer:
             sp_start=self.sp_start,
             sp_end=self.sp_end,
             target_acquisition_counts=int(self.measurement_cfg.target_acquisition_counts),
-            min_bckgrnd_cnts=self.clustering_cfg.min_bckgrnd_cnts,
+            min_bckgrnd_cnts=self.quant_cfg.min_bckgrnd_cnts,
             min_total_counts_fraction=self._min_total_counts_fraction(),
         )
 
@@ -3382,9 +3360,9 @@ class EMXSp_Composition_Analyzer:
                     "quantification because interrupt_fits_bad_spectra=False."
                 )
         elif prefit_quant_flag == 3 and self.verbose:
-            n_vals_considered = 20
-            en_threshold = 2
-            min_background_threshold = self.clustering_cfg.min_bckgrnd_cnts
+            n_vals_considered = dflt.prefit_bckgrnd_n_points
+            en_threshold = dflt.prefit_bckgrnd_max_energy_keV
+            min_background_threshold = self.quant_cfg.min_bckgrnd_cnts
             if _should_interrupt_prefit_issue(prefit_quant_flag, interrupt_fits_bad_spectra):
                 logger.info(
                     f"⏭️ Quantification skipped due to at least {n_vals_considered} spectrum "
@@ -3461,49 +3439,15 @@ class EMXSp_Composition_Analyzer:
         -----
         - Assumes all class attributes and keys are correctly initialized.
         """
-        is_spectrum_valid = True
-    
-        # Check that substrate signal is not too high
-        sub_peak_int_threshold = 10  # % of total counts
-        sub_peak_int_thresh_cnts = quantifier.tot_sp_counts * sub_peak_int_threshold / 100
-    
-        # Sum intensities from substrate peaks
-        els_substrate_intensities = {el: 0 for el in self.detectable_els_substrate}  # initialise dictionary of peak intensities
-        for el_line, peak_info in quantifier.fitted_peaks_info.items():
-            el = el_line.split('_')[0]
-            if el in self.detectable_els_substrate:
-                els_substrate_intensities[el] += peak_info[cnst.PEAK_INTENSITY_KEY]
-    
-        # Check that no substrate element has too high intensity
-        for el, peak_int in els_substrate_intensities.items():
-            if peak_int > sub_peak_int_thresh_cnts:
-                is_spectrum_valid = False
-                comment = f"{el} {peak_int:.0f} counts > {sub_peak_int_threshold} % of total counts"
-                quant_flag = 7
-                if self.verbose:
-                    logger.warning(f"⚠️ Intensity of substrate element {el} is {peak_int:.0f} cnts, larger than {sub_peak_int_threshold}% of total counts")
-                    logger.warning("⚠️ This is likely to lead to large quantification errors.")
-                break  # Stop if one element has too high intensity
-    
-        # Check that background intensity is high enough
-        if is_spectrum_valid:
-            comment = ""
-            min_background_threshold = self.clustering_cfg.min_bckgrnd_cnts
-            # Spectrum is not valid if any reference peak has average counts lower than the configured threshold.
-            if min_background_threshold is not None and min_bckgrnd_ref_lines < min_background_threshold:
-                is_spectrum_valid = False
-                comment = (
-                    f"Reference background counts too low "
-                    f"({min_bckgrnd_ref_lines:.1f} < {min_background_threshold})"
-                )
-                quant_flag = 8
-                if self.verbose:
-                    logger.warning(f"⚠️ Counts below a reference peak are on average < {min_background_threshold}")
-                    logger.warning("⚠️ This is likely to lead to large quantification errors.")
-            else:
-                quant_flag = 0  # Quantification is ok
-    
-        return is_spectrum_valid, quant_flag, comment  # Not used, but returned for completeness
+        is_spectrum_valid, quant_flag, comment = _worker_flag_spectrum_for_clustering(
+            min_bckgrnd_ref_lines=min_bckgrnd_ref_lines,
+            quantifier=quantifier,
+            detectable_els_substrate=self.detectable_els_substrate,
+            min_bckgrnd_cnts=self.quant_cfg.min_bckgrnd_cnts,
+        )
+        if self.verbose and not is_spectrum_valid:
+            logger.warning(f"⚠️ Flagged: {comment}. This is likely to lead to large quantification errors.")
+        return is_spectrum_valid, quant_flag, comment
     
     
     #%% Spectra acquisition and quantification routines
@@ -3865,7 +3809,7 @@ class EMXSp_Composition_Analyzer:
                         'sp_start': int(self.sp_start),
                         'sp_end': int(self.sp_end),
                         'target_acquisition_counts': int(self.measurement_cfg.target_acquisition_counts),
-                        'min_bckgrnd_cnts': self.clustering_cfg.min_bckgrnd_cnts,
+                        'min_bckgrnd_cnts': self.quant_cfg.min_bckgrnd_cnts,
                         'min_total_counts_fraction': self._min_total_counts_fraction(),
                         'microscope_id': self.microscope_cfg.ID,
                         'measurement_type': self.measurement_cfg.type,
@@ -3934,7 +3878,7 @@ class EMXSp_Composition_Analyzer:
                         'sp_start': int(self.sp_start),
                         'sp_end': int(self.sp_end),
                         'target_acquisition_counts': int(self.measurement_cfg.target_acquisition_counts),
-                        'min_bckgrnd_cnts': self.clustering_cfg.min_bckgrnd_cnts,
+                        'min_bckgrnd_cnts': self.quant_cfg.min_bckgrnd_cnts,
                         'min_total_counts_fraction': self._min_total_counts_fraction(),
                         'microscope_id': self.microscope_cfg.ID,
                         'measurement_type': self.measurement_cfg.type,
@@ -5287,7 +5231,7 @@ class EMXSp_Composition_Analyzer:
         if self.n_sp_too_low_counts > 0:
             logger.info(
                 f"  • {self.n_sp_too_low_counts} spectra were discarded due to insufficient total counts, "
-                f"background counts below the threshold ({self.clustering_cfg.min_bckgrnd_cnts}), "
+                f"background counts below the threshold ({self.quant_cfg.min_bckgrnd_cnts}), "
                 "or errors during spectrum collection/fitting."
             )
     

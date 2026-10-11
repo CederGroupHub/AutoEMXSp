@@ -39,6 +39,7 @@ from typing import Optional, List, Union
 
 import autoemx.utils as utils
 import autoemx.utils.constants as cnst
+import autoemx.config.defaults as dflt
 from autoemx.utils.plotting_helpers import (
     ensure_custom_plot_file,
     refresh_custom_plot_template_file,
@@ -115,7 +116,7 @@ def analyze_sample(
     cluster_merge_params: Optional[dict] = None,
     do_matrix_decomposition: bool = True,
     mixture_params: Optional[dict] = None,
-    max_analytical_error_percent: float = 5,
+    max_analytical_error_percent: float = dflt.max_analytical_error_percent,
     quant_flags_accepted: Optional[List[int]] = None,
     min_bckgrnd_cnts: Optional[float] = None,
     show_plots: bool = True,
@@ -204,8 +205,7 @@ def analyze_sample(
         Accepted quantification flags. See the user documentation page
         "Quantification flags (quant_flag)".
     min_bckgrnd_cnts : float, optional
-        Minimum background counts under the reference peaks, stored on the clustering config.
-        If None, the saved value is kept.
+        Deprecated and ignored: min_bckgrnd_cnts is a quantification setting. Re-run quantification to change it.
     plot_custom_plots : bool, optional
         Whether to use custom plots.
     show_unused_compositions_cluster_plot : bool, optional
@@ -352,7 +352,10 @@ def analyze_sample(
     if max_k is not None:
         clustering_cfg.max_k = ClusteringConfig.validate_max_k(int(max_k))
     if min_bckgrnd_cnts is not None:
-        clustering_cfg.min_bckgrnd_cnts = ClusteringConfig.validate_min_bckgrnd_cnts(float(min_bckgrnd_cnts))
+        logging.warning(
+            "⚠️ min_bckgrnd_cnts is ignored: it is a quantification setting. "
+            "Re-run quantification (e.g. Run_Quantification.py) to change it."
+        )
     if do_matrix_decomposition is not None:
         clustering_cfg.do_matrix_decomposition = do_matrix_decomposition
     if auto_merge_clusters is not None:

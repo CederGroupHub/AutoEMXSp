@@ -134,7 +134,7 @@ class SampleConfig(BaseModel):
     type: str = cnst.S_POWDER_SAMPLE_TYPE
     w_frs: Optional[Dict[str, float]] = None
     center_pos: Tuple[float, float] = (0.0, 0.0)  # in mm
-    half_width_mm: float = 2.9  # in mm
+    half_width_mm: float = dflt.sample_halfwidth_mm  # in mm
 
     ALLOWED_TYPES: ClassVar[Tuple[str, ...]] = (
         cnst.S_POWDER_SAMPLE_TYPE,
@@ -204,7 +204,7 @@ class SampleSubstrateConfig(BaseModel):
     type: str = cnst.CTAPE_SUBSTRATE_TYPE
     shape: str = cnst.CIRCLE_SUBSTRATE_SHAPE
     auto_detection: bool = True
-    stub_w_mm: float = 12
+    stub_w_mm: float = dflt.substrate_width_mm
 
     ALLOWED_TYPES: ClassVar[Tuple[str, ...]] = (cnst.CTAPE_SUBSTRATE_TYPE, cnst.NONE_SUBSTRATE_TYPE)
     ALLOWED_SHAPES: ClassVar[Tuple[str, ...]] = (cnst.CIRCLE_SUBSTRATE_SHAPE, cnst.SQUARE_SUBSTRATE_SHAPE)
@@ -260,15 +260,15 @@ class MeasurementConfig(BaseModel):
     type: str = dflt.measurement_type
     mode: str = dflt.measurement_mode
     working_distance: Optional[float] = None  # mm
-    working_distance_tolerance: float = 1  # mm
-    beam_energy_keV: float = 15.0  # in keV
+    working_distance_tolerance: float = dflt.working_distance_tolerance_mm  # mm
+    beam_energy_keV: float = dflt.beam_energy_keV  # in keV
     beam_current: Optional[float] = None
     emergence_angle: Optional[float] = None
     is_manual_navigation: bool = False
     max_acquisition_time: float = 30.0  # seconds
-    target_acquisition_counts: int = 50000
-    min_n_spectra: int = 30
-    max_n_spectra: int = 100
+    target_acquisition_counts: int = dflt.target_Xsp_counts
+    min_n_spectra: int = dflt.min_n_spectra
+    max_n_spectra: int = dflt.max_n_spectra
     powder_meas_cfg: Optional["PowderMeasurementConfig"] = Field(default_factory=lambda: PowderMeasurementConfig())
     bulk_meas_cfg: Optional["BulkMeasurementConfig"] = Field(default_factory=lambda: BulkMeasurementConfig())
     exp_stds_cfg: Optional["ExpStandardsConfig"] = None
@@ -315,6 +315,10 @@ class QuantificationOptionsConfig(BaseModel):
             ``target_acquisition_counts``. Spectra below this threshold are flagged
             ``quant_flag = 2`` ("Total counts too low"). Default is ``0.9`` (90%).
             Lower this to quantify shorter acquisitions; ``0`` disables the check.
+        min_bckgrnd_cnts (Optional[float]): Minimum background counts. Spectra whose low-energy background
+            (``quant_flag = 3``) or background under the reference peaks (``quant_flag = 8``) is lower are flagged.
+            Default is ``5.0`` (defaults.min_bckgrnd_cnts). If None, it is set from the target acquisition counts
+            (target counts / 20000).
         identify_missing_elements (bool): If True, each spectrum is checked for elements missing from its fit
             before quantification (see autoemx.core.fitter.peak_identification). Elements whose addition
             surely improves the fit of the peaks are added and quantified (or only fitted, if no standard is
@@ -330,10 +334,11 @@ class QuantificationOptionsConfig(BaseModel):
 
     method: str = dflt.quantification_method
     spectrum_lims: Tuple[float, float] = dflt.spectrum_lims
-    fit_tolerance: float = 1e-4
+    fit_tolerance: float = dflt.fit_tolerance
     use_instrument_background: bool = dflt.use_instrument_background
     use_project_specific_std_dict: bool = False
     min_total_counts_fraction: float = dflt.min_total_counts_fraction
+    min_bckgrnd_cnts: Optional[float] = dflt.min_bckgrnd_cnts
     identify_missing_elements: bool = dflt.identify_missing_elements
     identification_seed_spectra: int = dflt.identification_seed_spectra
     identification_z_range: Tuple[int, int] = dflt.identification_z_range
@@ -349,7 +354,6 @@ class QuantificationOptionsConfig(BaseModel):
         if isinstance(data, dict):
             cleaned = dict(data)
             cleaned.pop("interrupt_fits_bad_spectra", None)
-            cleaned.pop("min_bckgrnd_cnts", None)
             cleaned.pop("is_particle", None)
             cleaned.pop("beam_energy_keV", None)
             cleaned.pop("emergence_angle", None)
@@ -369,6 +373,8 @@ class QuantificationOptionsConfig(BaseModel):
         if not np.isfinite(fraction) or fraction < 0 or fraction > 1:
             raise ValueError("min_total_counts_fraction must be a finite value in [0, 1]")
         self.min_total_counts_fraction = fraction
+        if self.min_bckgrnd_cnts is not None and (not np.isfinite(self.min_bckgrnd_cnts) or self.min_bckgrnd_cnts < 0):
+            raise ValueError("min_bckgrnd_cnts must be a finite non-negative value or None")
         if int(self.identification_seed_spectra) < 0:
             raise ValueError("identification_seed_spectra must be non-negative")
         self.identification_seed_spectra = int(self.identification_seed_spectra)

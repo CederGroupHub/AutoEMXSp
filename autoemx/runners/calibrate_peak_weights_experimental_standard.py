@@ -27,6 +27,7 @@ from autoemx.runners.fit_and_quantify_spectrum_from_ledger import (
 from autoemx.core.fitter import Background_Model
 from autoemx.utils.helper import get_sample_dir, print_double_separator
 import autoemx.utils.constants as cnst
+import autoemx.config.defaults as dflt
 
 
 logging.basicConfig(
@@ -958,9 +959,9 @@ def calibrate_peak_weights_experimental_standard(
     els_substrate: Optional[List[str]] = None,
     is_particle: bool = True,
     use_instrument_background: bool = False,
-    fit_tol: float = 1e-4,
-    sum_cv_threshold: float = 0.12,
-    n_sig_figs: int = 5,
+    fit_tol: float = dflt.fit_tolerance,
+    sum_cv_threshold: float = dflt.peak_weights_sum_cv_threshold,
+    n_sig_figs: int = dflt.peak_weights_n_sig_figs,
     output_file_suffix: str = "",
 ) -> Dict[str, Any]:
     """
@@ -1063,8 +1064,8 @@ def recompute_calibration(
     spectrum_IDs_to_fit: Optional[Sequence[Any]] = None,
     manual_groups: Optional[Sequence[Sequence[str]]] = None,
     results_path: Optional[str] = None,
-    sum_cv_threshold: float = 0.12,
-    n_sig_figs: int = 5,
+    sum_cv_threshold: float = dflt.peak_weights_sum_cv_threshold,
+    n_sig_figs: int = dflt.peak_weights_n_sig_figs,
 ) -> Dict[str, Any]:
     """
     Recompute calibration outputs excluding specific spectra, without refitting.

@@ -67,24 +67,24 @@ def batch_acquire_experimental_stds(
     microscope_type: str = dflts.microscope_type,
     measurement_type: str = dflts.measurement_type,
     measurement_mode: str = dflts.measurement_mode,
-    sample_halfwidth: float = 3.0,
+    sample_halfwidth: float = dflts.sample_halfwidth_mm,
     sample_substrate_type: str = 'Ctape',
     sample_substrate_shape: str = 'circle',
-    working_distance: float = 5, #mm
-    working_distance_tolerance: float = 1, #mm
-    beam_energy: float = 15.0,
+    working_distance: float = dflts.working_distance_mm, #mm
+    working_distance_tolerance: float = dflts.working_distance_tolerance_mm, #mm
+    beam_energy: float = dflts.beam_energy_keV,
     spectrum_lims: Tuple[float, float] = dflts.spectrum_lims,
     use_instrument_background: bool = dflts.use_instrument_background,
-    min_bckgrnd_cnts: float = 5,
+    min_bckgrnd_cnts: Optional[float] = dflts.min_bckgrnd_cnts,
     fit_during_collection= True,
     update_std_library = True,
     is_auto_substrate_detection: bool = False,
     auto_adjust_brightness_contrast: bool = True,
     contrast: Optional[float] = None,
     brightness: Optional[float] = None,
-    min_n_spectra: int = 50,
-    max_n_spectra: int = 100,
-    target_Xsp_counts: int = 250000,
+    min_n_spectra: int = dflts.min_n_spectra,
+    max_n_spectra: int = dflts.max_n_spectra,
+    target_Xsp_counts: int = dflts.exp_std_target_Xsp_counts,
     max_XSp_acquisition_time: Optional[float] = None,
     els_substrate: Optional[List[str]] = None,
     powder_meas_cfg_kwargs: Optional[Dict[str, Any]] = None,
@@ -152,7 +152,7 @@ def batch_acquire_experimental_stds(
         Default is `False` (QuantificationOptionsConfig.use_instrument_background).
     min_bckgrnd_cnts : float, optional
         Minimum background counts required for a spectrum not to be filtered out.  
-        Default is `5` (ClusteringConfig.min_bckgrnd_cnts).
+        Default is `5` (QuantificationOptionsConfig.min_bckgrnd_cnts).
     fit_during_collection : bool, optional
         If True, fit spectra during acquisition; otherwise fit later.  
         Default is `True`.
@@ -243,9 +243,10 @@ def batch_acquire_experimental_stds(
     quant_cfg = QuantificationOptionsConfig(
         spectrum_lims=spectrum_lims,
         use_instrument_background=use_instrument_background,
+        min_bckgrnd_cnts=min_bckgrnd_cnts,
     )
 
-    clustering_cfg = ClusteringConfig(min_bckgrnd_cnts=min_bckgrnd_cnts)
+    clustering_cfg = ClusteringConfig()
 
     if powder_meas_cfg_kwargs:
         powder_meas_cfg = PowderMeasurementConfig(**powder_meas_cfg_kwargs)

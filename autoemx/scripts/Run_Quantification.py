@@ -47,7 +47,7 @@ max_analytical_error = 5 # w% Threhsold value of analytical error above which sp
 min_bckgrnd_cnts = 5 # Minimum value of background counts that a reference peak (used for quantification) has to possess in order for measurement to be valid
     # Spectra not satisfying this are flagged (quant_flag = 8) and not quantified if interrupt_fits_bad_spectra = True. If False, they are still quantified, and filtered out later in the clustering stage
     # If too many spectra end up being flagged, decrease min_bckgrnd_cnts or increase the spectra target total counts
-    # If you change min_bckgrnd_cnts, you can requantify the previously-interrupted spectra by setting interrupt_fits_bad_spectra = False
+    # If you change min_bckgrnd_cnts, a new quantification run is created, in which all spectra are requantified (previous runs are kept in the ledger)
 min_total_counts_fraction = 0.9 # Minimum accepted total spectrum counts as a fraction of target_acquisition_counts (default 0.9 = 90%). Spectra below this are flagged (quant_flag = 2). Lower this to quantify shorter acquisitions; 0 disables the check.
 
 

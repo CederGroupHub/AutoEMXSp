@@ -209,6 +209,31 @@ class QuantificationConfig(BaseModel):
 
         return normalized
 
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_min_bckgrnd_cnts(cls, data: Any) -> Any:
+        """Legacy compatibility: min_bckgrnd_cnts used to be stored in the clustering configs.
+
+        Runs saved before it became a quantification setting take the value of their first clustering analysis,
+        the one in use when they were quantified, so that their fingerprint is unchanged (no new quantification).
+        """
+        if not isinstance(data, dict):
+            return data
+        options = data.get("options")
+        if not isinstance(options, dict) or "min_bckgrnd_cnts" in options:
+            return data
+        min_bckgrnd_cnts = dflt.min_bckgrnd_cnts
+        clustering_analyses = data.get("clustering_analyses") or []
+        if clustering_analyses:
+            first_analysis = clustering_analyses[0]
+            first_config = (
+                first_analysis.get("config") if isinstance(first_analysis, dict)
+                else getattr(first_analysis, "config", None)
+            )
+            if isinstance(first_config, dict) and "min_bckgrnd_cnts" in first_config:
+                min_bckgrnd_cnts = first_config["min_bckgrnd_cnts"]
+        return {**data, "options": {**options, "min_bckgrnd_cnts": min_bckgrnd_cnts}}
+
     @field_validator("options")
     @classmethod
     def validate_options(cls, value: Dict[str, Any]) -> Dict[str, Any]:
@@ -260,6 +285,12 @@ class QuantificationConfig(BaseModel):
                 "options['min_total_counts_fraction'] must be a finite value in [0, 1]"
             )
         normalized["min_total_counts_fraction"] = fraction
+        min_bckgrnd_cnts = normalized.get("min_bckgrnd_cnts", dflt.min_bckgrnd_cnts)
+        if min_bckgrnd_cnts is not None:
+            min_bckgrnd_cnts = float(min_bckgrnd_cnts)
+            if not np.isfinite(min_bckgrnd_cnts) or min_bckgrnd_cnts < 0:
+                raise ValueError("options['min_bckgrnd_cnts'] must be a finite non-negative value or None")
+        normalized["min_bckgrnd_cnts"] = min_bckgrnd_cnts
         # Old ledgers predate the identification of missing elements: it was off (not the current default)
         normalized["identify_missing_elements"] = bool(normalized.get("identify_missing_elements", False))
         seed = int(normalized.get("identification_seed_spectra", dflt.identification_seed_spectra))

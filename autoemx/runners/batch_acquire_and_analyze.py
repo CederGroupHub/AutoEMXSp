@@ -70,21 +70,21 @@ def batch_acquire_and_analyze(
     measurement_mode: str = dflt.measurement_mode,
     quantification_method: str = dflt.quantification_method,
     sample_type: str = 'powder',
-    sample_halfwidth: float = 3.0,
+    sample_halfwidth: float = dflt.sample_halfwidth_mm,
     sample_substrate_type: str = 'Ctape',
     sample_substrate_shape: str = 'circle',
-    sample_substrate_width_mm: float = 12,
-    working_distance: float = 5, #mm
-    working_distance_tolerance: float = 1, #mm
-    beam_energy: float = 15.0,
+    sample_substrate_width_mm: float = dflt.substrate_width_mm,
+    working_distance: float = dflt.working_distance_mm, #mm
+    working_distance_tolerance: float = dflt.working_distance_tolerance_mm, #mm
+    beam_energy: float = dflt.beam_energy_keV,
     spectrum_lims: Tuple[float, float] = dflt.spectrum_lims,
     use_instrument_background: bool = dflt.use_instrument_background,
     use_project_specific_std_dict: bool = False,
     interrupt_fits_bad_spectra: bool = True,
-    max_analytical_error_percent: float = 5,
-    min_bckgrnd_cnts: float = 5,
+    max_analytical_error_percent: float = dflt.max_analytical_error_percent,
+    min_bckgrnd_cnts: Optional[float] = dflt.min_bckgrnd_cnts,
     quant_flags_accepted: Optional[List[int]] = None,
-    max_n_clusters: int = 6,
+    max_n_clusters: int = dflt.max_n_clusters,
     show_unused_comps_clust: bool = True,
     is_manual_navigation: bool = False,
     is_auto_substrate_detection: bool = False,
@@ -92,9 +92,9 @@ def batch_acquire_and_analyze(
     contrast: Optional[float] = None,
     brightness: Optional[float] = None,
     quantify_spectra: bool = False,
-    min_n_spectra: int = 50,
-    max_n_spectra: int = 100,
-    target_Xsp_counts: int = 50000,
+    min_n_spectra: int = dflt.min_n_spectra,
+    max_n_spectra: int = dflt.max_n_spectra,
+    target_Xsp_counts: int = dflt.target_Xsp_counts,
     max_XSp_acquisition_time: Optional[float] = None,
     els_substrate: Optional[List[str]] = None,
     powder_meas_cfg_kwargs: Optional[Dict[str, Any]] = None,
@@ -184,7 +184,7 @@ def batch_acquire_and_analyze(
         Default is `5` (ClusteringConfig.max_analytical_error_percent).
     min_bckgrnd_cnts : float, optional
         Minimum background counts required for a spectrum not to be filtered out.
-        Default is `5` (ClusteringConfig.min_bckgrnd_cnts).
+        Default is `5` (QuantificationOptionsConfig.min_bckgrnd_cnts).
     quant_flags_accepted : list of int, optional
         List of acceptable quantification flags; others are filtered out before clustering.
         Default is `[0, -1]` (ClusteringConfig.quant_flags_accepted).
@@ -346,7 +346,8 @@ def batch_acquire_and_analyze(
         method = quantification_method,
         spectrum_lims=spectrum_lims,
         use_instrument_background=use_instrument_background,
-        use_project_specific_std_dict = use_project_specific_std_dict
+        use_project_specific_std_dict = use_project_specific_std_dict,
+        min_bckgrnd_cnts=min_bckgrnd_cnts,
     )
 
     if powder_meas_cfg_kwargs:
@@ -457,7 +458,6 @@ def batch_acquire_and_analyze(
             max_k=max_n_clusters,
             ref_formulae=ref_formulae,
             max_analytical_error_percent=max_analytical_error_percent,
-            min_bckgrnd_cnts=min_bckgrnd_cnts,
             quant_flags_accepted=quant_flags_accepted
         )
 

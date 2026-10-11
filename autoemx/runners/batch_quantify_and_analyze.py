@@ -75,7 +75,7 @@ def batch_quantify_and_analyze(
     identify_missing_elements: Optional[bool] = None,
     output_filename_suffix: str = "",
     use_instrument_background: bool = dflt.use_instrument_background,
-    max_analytical_error: float = 5,
+    max_analytical_error: float = dflt.max_analytical_error_percent,
     run_analysis: bool = True,
     num_CPU_cores: Optional[int] = None,
     force_requantification: bool = False,
@@ -112,8 +112,8 @@ def batch_quantify_and_analyze(
     results_path : str, optional
         Base directory where results are stored. Default: autoemx/Results
     min_bckgrnd_cnts : float, optional
-        Minimum number of background counts underneath reference peaks below which spectra are flagged.
-        If None, leaves it unchanged. Default: None
+        Minimum background counts below which spectra are flagged (QuantificationOptionsConfig.min_bckgrnd_cnts).
+        If None, keeps the value of the sample's active quantification run. Default: None
     min_total_counts_fraction : float, optional
         Minimum accepted total spectrum counts as a fraction of ``target_acquisition_counts``.
         Spectra below this threshold are flagged ``quant_flag = 2`` ("Total counts too low").
@@ -296,7 +296,7 @@ def batch_quantify_and_analyze(
             quant_cfg = config_classes_dict[cnst.QUANTIFICATION_CFG_KEY]()
         
         if min_bckgrnd_cnts is not None:
-            clustering_cfg.min_bckgrnd_cnts = min_bckgrnd_cnts
+            quant_cfg.min_bckgrnd_cnts = min_bckgrnd_cnts
         if min_total_counts_fraction is not None:
             quant_cfg.min_total_counts_fraction = min_total_counts_fraction
         if identify_missing_elements is not None:

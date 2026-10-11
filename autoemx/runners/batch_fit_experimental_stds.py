@@ -46,7 +46,7 @@ def batch_fit_experimental_stds(
     std_ids: List[str],
     spectrum_lims: Tuple[float, float] = dflts.spectrum_lims,
     use_instrument_background: bool = dflts.use_instrument_background,
-    min_bckgrnd_cnts: float = 5,
+    min_bckgrnd_cnts: Optional[float] = None,
     update_std_library: bool = True,
     force_refitting: bool = False,
     els_sample: Optional[List[str]] = None,
@@ -69,7 +69,9 @@ def batch_fit_experimental_stds(
     use_instrument_background : bool, optional
         Whether to use instrument background files during fitting.
     min_bckgrnd_cnts : float, optional
-        Minimum background counts required for a spectrum not to be filtered out.
+        Minimum background counts required for a spectrum not to be filtered out
+        (QuantificationOptionsConfig.min_bckgrnd_cnts). If None (default), keeps the value of the standard's
+        active quantification run.
     update_std_library : bool, optional
         If True, the experimental standard library will be updated with the newly fitted PB ratios.
     force_refitting : bool, optional
@@ -263,7 +265,7 @@ def batch_fit_experimental_stds(
             sample_cfg.w_frs = els_w_frs
 
         if min_bckgrnd_cnts is not None:
-            clustering_cfg.min_bckgrnd_cnts = min_bckgrnd_cnts
+            quant_cfg.min_bckgrnd_cnts = min_bckgrnd_cnts
         if use_instrument_background is not None:
             quant_cfg.use_instrument_background = use_instrument_background
         if spectrum_lims is not None:

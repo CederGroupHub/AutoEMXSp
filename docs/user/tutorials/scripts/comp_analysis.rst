@@ -169,8 +169,8 @@ but require re-quantification:
   - If too many spectra end up being flagged, consider decreasing ``min_bckgrnd_cnts`` 
     or increasing ``target_Xsp_counts`` in your following measurements.
   - You can also change ``min_bckgrnd_cnts`` and requantify the spectra (Step 8).
-    In this case, to re-quantify efficiently after changing ``min_bckgrnd_cnts``, set
-    ``quantify_only_unquantified_spectra = True`` when running Step 8.
+    This creates a new quantification run, in which all spectra are requantified
+    (previous runs are kept in the ledger).
 
 The following parameters require only re-analysis of compositions:
 
@@ -331,7 +331,7 @@ script, and have been previously decribed. Additional parameters are:
 
 - ``run_clustering_analysis``: If ``True``, the clustering analysis will run automatically after quantification. Recommended: ``True``.
 - ``num_CPU_cores``: Number of CPU cores used for parallel fitting and quantification. If set to ``None``, `AutoEMX` will automatically select half of the available cores.
-- ``quantify_only_unquantified_spectra``: If ``True``, quantifies only the previously unquantified spectra, for example after modifying ``min_bckgrnd_cnts``. If ``False``, all spectra are quantified regardless.
+- ``quantify_only_unquantified_spectra``: If ``True``, quantifies only the previously unquantified spectra, for example after an interrupted quantification. If ``False``, all spectra are quantified regardless.
 - ``interrupt_fits_bad_spectra``: If ``True``, saves time by interrupting the quantification of spectra likely leading to large quantification errors, including:
 
   - Spectra with total counts below ``min_total_counts_fraction`` of the target (default 90%)

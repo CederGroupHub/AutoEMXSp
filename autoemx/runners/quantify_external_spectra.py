@@ -119,20 +119,20 @@ def quantify_external_spectra(
     microscope_type: str = dflt.microscope_type,
     measurement_type: str = dflt.measurement_type,
     measurement_mode: str = dflt.measurement_mode,
-    beam_energy: float = 15.0,
+    beam_energy: float = dflt.beam_energy_keV,
     els_substrate: Optional[List[str]] = None,
     sample_substrate_type: str = "Ctape",
     sample_substrate_shape: str = "circle",
-    sample_substrate_width_mm: float = 12,
+    sample_substrate_width_mm: float = dflt.substrate_width_mm,
     sample_type: str = "bulk",
-    sample_halfwidth: float = 2.9,
+    sample_halfwidth: float = dflt.sample_halfwidth_mm,
     quantification_method: str = dflt.quantification_method,
     use_project_specific_std_dict: bool = False,
     use_instrument_background: bool = dflt.use_instrument_background,
-    max_analytical_error_percent: float = 5.0,
-    min_bckgrnd_cnts: float = 5.0,
+    max_analytical_error_percent: float = dflt.max_analytical_error_percent,
+    min_bckgrnd_cnts: Optional[float] = dflt.min_bckgrnd_cnts,
     quant_flags_accepted: Optional[List[int]] = None,
-    max_n_clusters: int = 6,
+    max_n_clusters: int = dflt.max_n_clusters,
     show_unused_comps_clust: bool = True,
     interrupt_fits_bad_spectra: bool = False,
     num_CPU_cores: Optional[int] = None,
@@ -268,6 +268,7 @@ def quantify_external_spectra(
         method=quantification_method,
         use_project_specific_std_dict=use_project_specific_std_dict,
         use_instrument_background=use_instrument_background,
+        min_bckgrnd_cnts=min_bckgrnd_cnts,
     )
     plot_cfg = PlotConfig(show_unused_comps_clust=show_unused_comps_clust)
     powder_meas_cfg = PowderMeasurementConfig(**(powder_meas_cfg_kwargs or {}))
@@ -372,7 +373,6 @@ def quantify_external_spectra(
             max_k=max_n_clusters,
             ref_formulae=ref_formulae,
             max_analytical_error_percent=max_analytical_error_percent,
-            min_bckgrnd_cnts=min_bckgrnd_cnts,
             quant_flags_accepted=quant_flags_accepted,
         )
 

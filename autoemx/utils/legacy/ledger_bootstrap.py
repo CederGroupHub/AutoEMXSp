@@ -531,6 +531,7 @@ def build_legacy_import_quantification_config(
     raw_quant_cfg = raw_config_payload.get(cnst.QUANTIFICATION_CFG_KEY, {})
     raw_measurement_cfg = raw_config_payload.get(cnst.MEASUREMENT_CFG_KEY, {})
     raw_microscope_cfg = raw_config_payload.get(cnst.MICROSCOPE_CFG_KEY, {})
+    raw_clustering_cfg = raw_config_payload.get(cnst.CLUSTERING_CFG_KEY) or {}
 
     quant_cfg = getattr(ledger_configs, "quant_cfg", None)
     if quant_cfg is None:
@@ -606,6 +607,11 @@ def build_legacy_import_quantification_config(
                 ),
             )
         ),
+        # Legacy configs stored it in the clustering config
+        "min_bckgrnd_cnts": raw_clustering_cfg.get(
+            "min_bckgrnd_cnts",
+            raw_quant_cfg.get("min_bckgrnd_cnts", dflt.min_bckgrnd_cnts),
+        ),
     }
 
     reference_values_by_el_line: Dict[str, Any] = {}
@@ -670,7 +676,6 @@ def build_legacy_import_quantification_config(
                     ref_formulae=list(getattr(legacy_clustering_cfg, "ref_formulae", []) or []),
                     do_matrix_decomposition=bool(getattr(legacy_clustering_cfg, "do_matrix_decomposition", True)),
                     max_analytical_error_percent=getattr(legacy_clustering_cfg, "max_analytical_error_percent", 5.0),
-                    min_bckgrnd_cnts=getattr(legacy_clustering_cfg, "min_bckgrnd_cnts", 5),
                     quant_flags_accepted=list(getattr(legacy_clustering_cfg, "quant_flags_accepted", [0, -1]) or []),
                 ),
                 result=None,

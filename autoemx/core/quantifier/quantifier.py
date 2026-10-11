@@ -1911,11 +1911,10 @@ class XSp_Quantifier:
                 3 if absorption increase is excessive,
                 None if quantification is considered reliable.
         """
-        # Thresholds for unreliable quantification
-        redchi_threshold = 0.16    # Threshold of reduced-chi squared value as % of total counts
-        redchi_threshold_val = self.tot_sp_counts * redchi_threshold / 100
-        an_err_threshold = 0.5    # Analytical error threshold (50 w%)
-        abs_increase_threshold = 0.7  # Absorption increase threshold (170% of bulk absorption)
+        # Thresholds for unreliable quantification (see defaults.py)
+        redchi_threshold_val = self.tot_sp_counts * dflt.max_redchi_percent_total_counts / 100
+        an_err_threshold = dflt.max_quant_analytical_error
+        abs_increase_threshold = dflt.max_absorption_increase
     
         bad_quant_flag = None  # Default: quantification is considered reliable
         abs_att_param_name = '_abs_attenuation_phirho' # TODO does not work for models different than 'phirho' absorption attenuation model

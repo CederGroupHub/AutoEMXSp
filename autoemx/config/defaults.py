@@ -35,6 +35,28 @@ use_instrument_background : bool
 min_total_counts_fraction : float
     Minimum accepted total spectrum counts as a fraction of ``target_acquisition_counts``.
     Default is `0.9` (QuantificationOptionsConfig.min_total_counts_fraction).
+min_bckgrnd_cnts : float
+    Minimum background counts: spectra whose low-energy background (quant_flag 3) or background under the reference
+    peaks (quant_flag 8) is lower are flagged. Default is `5.0` (QuantificationOptionsConfig.min_bckgrnd_cnts).
+
+Quality checks of spectra and quantifications (quant_flag values, see the user documentation page "Quantification
+flags"). Fixed thresholds, not settings.
+
+prefit_bckgrnd_max_energy_keV : float
+    quant_flag 3: the background is checked on the spectrum below this energy. Default is `2` keV.
+prefit_bckgrnd_n_points : int
+    quant_flag 3: number of lowest (smoothed) spectrum points that must all be below min_bckgrnd_cnts. Default is `20`.
+prefit_bckgrnd_smoothing_channels : int
+    quant_flag 3: width of the moving average applied to the spectrum before the check, in channels. Default is `3`.
+max_redchi_percent_total_counts : float
+    quant_flag 4 (poor fit): maximum reduced chi-squared of the fit, in % of the total spectrum counts. Default is `0.16`.
+max_quant_analytical_error : float
+    quant_flag 5: maximum analytical error (deviation of the total mass fraction from 1). Default is `0.5` (50 w%).
+max_absorption_increase : float
+    quant_flag 6: maximum increase of the X-ray absorption around the reference peaks of particles, relative to a
+    bulk sample. Default is `0.7` (absorption up to 170% of the bulk one).
+max_substrate_peak_percent_total_counts : float
+    quant_flag 7: maximum intensity of a substrate element peak, in % of the total spectrum counts. Default is `10`.
 identify_missing_elements : bool
     Whether to look for elements missing from the fit of each spectrum (added_elements) before quantifying it.
     Default is `True` (QuantificationOptionsConfig.identify_missing_elements). Quantification runs of ledgers saved
@@ -61,6 +83,43 @@ annotate_particle_images : bool
     Whether to draw the X-ray spectrum spots (dot + spectrum ID) and a scale bar on the particle
     images saved during acquisition. If False, raw particle images are saved; annotated copies can
     be made afterwards with ``Annotate_Particle_Images.py``. Default is `False`.
+Default values of runner parameters (also used by the configuration classes with the same default).
+
+sample_halfwidth_mm : float
+    Half-width of the sample area, in mm (SampleConfig.half_width_mm). Default is `2.9`.
+substrate_width_mm : float
+    Lateral dimension of the substrate holder (stub), in mm (SampleSubstrateConfig.stub_w_mm). Default is `12`.
+working_distance_mm : float
+    Approximate working distance at which the sample is in focus, in mm. Default is `5`.
+working_distance_tolerance_mm : float
+    Allowed deviation from the working distance during autofocus, in mm
+    (MeasurementConfig.working_distance_tolerance). Default is `1`.
+beam_energy_keV : float
+    Electron beam energy, in keV (MeasurementConfig.beam_energy_keV). Default is `15.0`.
+target_Xsp_counts : int
+    Target counts of each spectrum (MeasurementConfig.target_acquisition_counts). Default is `50000`.
+exp_std_target_Xsp_counts : int
+    Target counts of each spectrum of experimental standards. Default is `250000`.
+min_n_spectra : int
+    Number of spectra after which acquisition runners check the convergence of the analysis. Default is `50`.
+max_n_spectra : int
+    Maximum number of spectra collected per sample (MeasurementConfig.max_n_spectra). Default is `100`.
+max_analytical_error_percent : float
+    Maximum analytical error, in w%, of the compositions used for clustering
+    (ClusteringConfig.max_analytical_error_percent). Default is `5.0`.
+max_n_clusters : int
+    Maximum number of clusters (ClusteringConfig.max_k). Default is `6`.
+fit_tolerance : float
+    lmfit tolerance for fit convergence (QuantificationOptionsConfig.fit_tolerance). Default is `1e-4`.
+max_undetectable_w_fr : float
+    Maximum total mass fraction of undetectable elements, in single-spectrum fits. Default is `0`.
+particle_stats_contrast, particle_stats_brightness : float
+    SEM contrast and brightness used for particle statistics when automatic adjustment is off (PhenomXL values).
+    Defaults are `4.3877` and `0.4504`.
+peak_weights_sum_cv_threshold : float
+    Peak-weight calibration: maximum coefficient of variation of the summed line weights. Default is `0.12`.
+peak_weights_n_sig_figs : int
+    Peak-weight calibration: significant figures of the calibrated weights. Default is `5`.
 homogeneous_cluster_max_rms_dist : float
     Clusters whose RMS distance of the spectra from the centroid, in atomic fractions, is below this value are
     reported as likely homogeneous in Clusters.csv ("Homogeneous": "Likely"). Default is `0.03` (3 at%).
@@ -97,6 +156,17 @@ use_instrument_background: bool = False
 
 min_total_counts_fraction: float = 0.9
 
+min_bckgrnd_cnts: float = 5.0
+
+# Quality checks of spectra and quantifications (fixed thresholds, see the module docstring)
+prefit_bckgrnd_max_energy_keV: float = 2
+prefit_bckgrnd_n_points: int = 20
+prefit_bckgrnd_smoothing_channels: int = 3
+max_redchi_percent_total_counts: float = 0.16
+max_quant_analytical_error: float = 0.5
+max_absorption_increase: float = 0.7
+max_substrate_peak_percent_total_counts: float = 10
+
 identify_missing_elements: bool = True
 
 identification_seed_spectra: int = 10
@@ -112,6 +182,25 @@ saved_images_extension: str = 'png'
 save_raw_images: bool = False
 
 annotate_particle_images: bool = False
+
+# Default values of runner parameters (see the module docstring)
+sample_halfwidth_mm: float = 2.9
+substrate_width_mm: float = 12
+working_distance_mm: float = 5
+working_distance_tolerance_mm: float = 1
+beam_energy_keV: float = 15.0
+target_Xsp_counts: int = 50000
+exp_std_target_Xsp_counts: int = 250000
+min_n_spectra: int = 50
+max_n_spectra: int = 100
+max_analytical_error_percent: float = 5.0
+max_n_clusters: int = 6
+fit_tolerance: float = 1e-4
+max_undetectable_w_fr: float = 0
+particle_stats_contrast: float = 4.3877
+particle_stats_brightness: float = 0.4504
+peak_weights_sum_cv_threshold: float = 0.12
+peak_weights_n_sig_figs: int = 5
 
 homogeneous_cluster_max_rms_dist: float = 0.03
 

@@ -132,10 +132,7 @@ def _saved_quant_options(cfgs: Dict[str, Any], active: Optional[Dict[str, Any]])
     """Values of the quantification-form options saved for a sample (keys of QUANT_SPECS)."""
     defaults = QuantificationOptionsConfig()
     opts = dict((active or {}).get("options") or {})
-    analyses = (active or {}).get("clustering_analyses") or []
-    idx = (active or {}).get("active_clustering_analysis_index")
-    cluster_cfg = (analyses[idx] if idx is not None and idx < len(analyses) else (analyses[-1] if analyses else {}))
-    min_cnts = (cluster_cfg.get("config") or {}).get("min_bckgrnd_cnts", ClusteringConfig().min_bckgrnd_cnts)
+    min_cnts = opts.get("min_bckgrnd_cnts", defaults.min_bckgrnd_cnts)
     powder = ((cfgs.get("measurement_cfg") or {}).get("powder_meas_cfg") or {})
     lims = opts.get("spectrum_lims", defaults.spectrum_lims)
     return {
@@ -1534,8 +1531,8 @@ def _run_fit(sample_dir: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     )
     if quantifier is None or getattr(quantifier, "fit_result", None) is None:
         raise RuntimeError("Fit failed. See the log for details.")
-    active = info.active_analysis
-    min_cnts = active.config.min_bckgrnd_cnts if active else ClusteringConfig().min_bckgrnd_cnts
+    active_q = _active_quant_config(info.ledger)
+    min_cnts = active_q.options.get("min_bckgrnd_cnts") if active_q else QuantificationOptionsConfig().min_bckgrnd_cnts
     flag = _ledger_quant_flag(quantifier, info.elements, info.substrate, min_cnts)
     return {"spectrum_id": payload["spectrum_id"], **_fit_payload(quantifier, flag)}
 
@@ -1595,9 +1592,10 @@ def _run_single(sample_dir: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         extra = {"beam_energy_kV": info.ledger.configs.measurement_cfg.beam_energy_keV}
     if quantifier is None or getattr(quantifier, "fit_result", None) is None:
         raise RuntimeError("Fit failed. See the log for details.")
-    min_cnts = ClusteringConfig().min_bckgrnd_cnts
-    if payload["source"] != "file" and info.active_analysis is not None:
-        min_cnts = info.active_analysis.config.min_bckgrnd_cnts
+    min_cnts = QuantificationOptionsConfig().min_bckgrnd_cnts
+    active_q = _active_quant_config(info.ledger) if payload["source"] != "file" else None
+    if active_q is not None:
+        min_cnts = active_q.options.get("min_bckgrnd_cnts")
     flag = (_ledger_quant_flag(quantifier, kw.get("els_sample") or [], kw.get("els_substrate") or [], min_cnts)
             if quantify else None)
     return {**_fit_payload(quantifier, flag), **extra, "quantified": bool(quantify)}
