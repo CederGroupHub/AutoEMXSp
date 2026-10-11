@@ -92,6 +92,7 @@ def batch_acquire_and_analyze(
     contrast: Optional[float] = None,
     brightness: Optional[float] = None,
     quantify_spectra: bool = False,
+    is_known_phase_mixture: bool = False,
     min_n_spectra: int = dflt.min_n_spectra,
     max_n_spectra: int = dflt.max_n_spectra,
     target_Xsp_counts: int = dflt.target_Xsp_counts,
@@ -214,6 +215,10 @@ def batch_acquire_and_analyze(
     quantify_spectra : bool, optional
         If True, perform quantification after acquisition.
         Default is `False`.
+    is_known_phase_mixture : bool, optional
+        Whether the samples are mixtures of known phases (their candidate phases, 'cnd'). If True, spectra are
+        quantified with the reference P/B values of these phases, and the analysis characterizes their intermixing
+        (QuantificationOptionsConfig.is_known_phase_mixture). Default is `False`.
     min_n_spectra : int, optional
         Minimum number of spectra to acquire.
         Default is `50` (MeasurementConfig.min_n_spectra).
@@ -303,6 +308,16 @@ def batch_acquire_and_analyze(
         quant_flags_accepted = [0, -1]
 
     resolved_spot_selector = xsp_spot_selector
+    if powder_meas_cfg_kwargs and "is_known_powder_mixture_meas" in powder_meas_cfg_kwargs:
+        # Legacy compatibility: it is now the quantification setting is_known_phase_mixture
+        powder_meas_cfg_kwargs = dict(powder_meas_cfg_kwargs)
+        legacy_known_mixture = bool(powder_meas_cfg_kwargs.pop("is_known_powder_mixture_meas"))
+        logging.warning(
+            "⚠️ powder_meas_cfg_kwargs['is_known_powder_mixture_meas'] is deprecated: "
+            "pass is_known_phase_mixture to batch_acquire_and_analyze instead."
+        )
+        is_known_phase_mixture = is_known_phase_mixture or legacy_known_mixture
+
     if powder_meas_cfg_kwargs and powder_meas_cfg_kwargs.get('par_spot_selection_mode') == 'callback':
         if resolved_spot_selector is None:
             raise ValueError(
@@ -348,6 +363,7 @@ def batch_acquire_and_analyze(
         use_instrument_background=use_instrument_background,
         use_project_specific_std_dict = use_project_specific_std_dict,
         min_bckgrnd_cnts=min_bckgrnd_cnts,
+        is_known_phase_mixture=is_known_phase_mixture,
     )
 
     if powder_meas_cfg_kwargs:

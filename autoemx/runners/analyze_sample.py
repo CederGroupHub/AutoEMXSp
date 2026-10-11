@@ -123,6 +123,7 @@ def analyze_sample(
     plot_custom_plots: bool = False,
     show_unused_compositions_cluster_plot: bool = True,
     plot_best_mixture: Optional[bool] = None,
+    intermixing_violin_plots: Optional[bool] = None,
     show_legend_clustering: Optional[bool] = None,
 ) -> Optional[EMXSp_Composition_Analyzer]:
     """
@@ -212,6 +213,9 @@ def analyze_sample(
         Whether to show unused compositions in cluster plot.
     plot_best_mixture : bool, optional
         Whether to save the plot of the top-ranked mixture of each cluster. If None, the saved value is kept.
+    intermixing_violin_plots : bool, optional
+        Whether to plot the intermixing of the reported mixtures as violin plots. If None, the saved value is kept
+        (by default, they are plotted for samples quantified as known phase mixtures).
     show_legend_clustering : bool, optional
         Whether to show the legend in the clustering plot. If None, the saved value is kept.
         
@@ -377,6 +381,8 @@ def analyze_sample(
         plot_cfg.els_to_plot = els_to_plot
     if plot_best_mixture is not None:
         plot_cfg.plot_best_mixture = bool(plot_best_mixture)
+    if intermixing_violin_plots is not None:
+        plot_cfg.intermixing_violin_plots = bool(intermixing_violin_plots)
     if show_legend_clustering is not None:
         plot_cfg.show_legend_clustering = bool(show_legend_clustering)
     _ensure_custom_plot_file(sample_dir, plot_cfg)

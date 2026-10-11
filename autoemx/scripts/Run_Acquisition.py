@@ -85,6 +85,8 @@ quantify_spectra = False # Whether to quantify spectra during acquisition. Not r
 
 use_project_specific_std_dict = False # If True, loads standards from the project folder (i.e. results_dir) during quantification.
 
+is_known_phase_mixture = False # If True, samples are mixtures of known phases (their 'cnd'): spectra are quantified with the reference P/B values of these phases, and their intermixing is characterized. Can be changed when re-quantifying.
+
 interrupt_fits_bad_spectra = True # Whether to interrupt the quantification of spectra expected to lead to gross quantification errors. Tested extensively. Speeds up quantification.
 
 max_analytical_error_percent = 5 # Maximum analytical error to employ to filter out compositions during clustering. Can be modified later. Does not influence quantification
@@ -100,7 +102,6 @@ show_unused_comps_clust = True # Whether to show discarded compositions in clust
 # To be used when sample_type = 'powder'
 powder_meas_cfg_kwargs = dict(
     par_selection_mode='auto',
-    is_known_powder_mixture_meas = False,
     img_shift_tracking = True,
     max_n_par_per_frame=30,
     max_spectra_per_par=3,
@@ -156,6 +157,7 @@ comp_analyzer = batch_acquire_and_analyze(
     annotate_particle_images=annotate_particle_images,
     save_raw_images=save_raw_images,
     quantify_spectra=quantify_spectra,
+    is_known_phase_mixture=is_known_phase_mixture,
     min_n_spectra=min_n_spectra,
     max_n_spectra=max_n_spectra,
     target_Xsp_counts=target_Xsp_counts,

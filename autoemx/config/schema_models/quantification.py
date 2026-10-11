@@ -3,7 +3,7 @@
 
 import hashlib
 import json
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -148,6 +148,10 @@ class QuantificationConfig(BaseModel):
     runs to detect whether line selection changed, which would require requantification.
     """
 
+    # Options stored with the run but not compared: is_known_phase_mixture selects the reference P/B values, which are
+    # compared through reference_values_by_el_line
+    NON_FINGERPRINT_OPTIONS: ClassVar[Tuple[str, ...]] = ("is_known_phase_mixture",)
+
     quantification_id: int
     label: Optional[str] = None
     # Version of AutoEMX that computed this quantification run. Runs computed before AutoEMX recorded its
@@ -291,6 +295,7 @@ class QuantificationConfig(BaseModel):
             if not np.isfinite(min_bckgrnd_cnts) or min_bckgrnd_cnts < 0:
                 raise ValueError("options['min_bckgrnd_cnts'] must be a finite non-negative value or None")
         normalized["min_bckgrnd_cnts"] = min_bckgrnd_cnts
+        normalized["is_known_phase_mixture"] = bool(normalized.get("is_known_phase_mixture", False))
         # Old ledgers predate the identification of missing elements: it was off (not the current default)
         normalized["identify_missing_elements"] = bool(normalized.get("identify_missing_elements", False))
         seed = int(normalized.get("identification_seed_spectra", dflt.identification_seed_spectra))
@@ -430,7 +435,9 @@ class QuantificationConfig(BaseModel):
             "sample_elements": sorted(self.sample_elements),
             "substrate_elements": sorted(self.substrate_elements),
             "els_w_fr": _canonicalize_json_value(self.els_w_fr),
-            "options": _canonicalize_json_value(self.options),
+            "options": _canonicalize_json_value(
+                {key: value for key, value in self.options.items() if key not in self.NON_FINGERPRINT_OPTIONS}
+            ),
             "reference_values_by_el_line": _canonicalize_json_value(reference_values_for_signature),
             "reference_lines_by_element": _canonicalize_json_value(reference_lines_for_signature),
         }

@@ -41,6 +41,7 @@ import os
 import time
 import logging
 import traceback
+import warnings
 from typing import Any, Dict, List, Optional, cast
 
 from autoemx.utils.helper import (
@@ -81,13 +82,15 @@ def batch_quantify_and_analyze(
     force_requantification: bool = False,
     interrupt_fits_bad_spectra: bool = False,
     use_project_specific_std_dict: Optional[bool] = None,
-    is_known_precursor_mixture: Optional[bool] = None,
+    is_known_phase_mixture: Optional[bool] = None,
+    intermixing_violin_plots: Optional[bool] = None,
     standards_dict: Optional[dict] = None,
     spectrum_lims: Optional[tuple] = None,
     els_substrate: Optional[List[str]] = None,
     fit_tolerance: Optional[float] = None,
     requantify_only_unquantified_spectra: bool = False,
     max_spectra_to_quantify: Optional[int] = None,
+    is_known_precursor_mixture: Optional[bool] = None,
 ) -> List[EMXSp_Composition_Analyzer]:
     """
     Batch quantification and analysis for a list of samples.
@@ -160,11 +163,15 @@ def batch_quantify_and_analyze(
     use_project_specific_std_dict : bool, optional
         If True, loads standards from project folder (i.e. results_dir) during quantification.
         Default: None. Loads it from quant_cfg file
-    is_known_precursor_mixture : bool, optional
-        Whether sample is a mixture of two known powders. Used to characterize extent of intermixing in powders.
-        See example at:
+    is_known_phase_mixture : bool, optional
+        Whether the sample is a mixture of known phases (the candidate phases). If True, spectra are quantified with
+        the reference P/B values of these phases, and the analysis characterizes their intermixing.
+        Default: None, keeps the value of the sample's active quantification run. See example at:
             L. N. Walters et al., Synthetic Accessibility and Sodium Ion Conductivity of the Na 8– x A x P 2 O 9 (NAP)
             High-Temperature Sodium Superionic Conductor Framework, Chem. Mater. 37, 6807 (2025).
+    intermixing_violin_plots : bool, optional
+        Whether to plot the intermixing of the reported mixtures as violin plots (PlotConfig.intermixing_violin_plots).
+        Default: None, keeps the saved setting (by default, plotted for known phase mixtures).
     standards_dict : dict, optional
         Dictionary of reference PB values from experimental standards. Default : None.
         If None, dictionary of standards is loaded from the XSp_calibs/Your_Microscope_ID directory.
@@ -178,12 +185,19 @@ def batch_quantify_and_analyze(
     max_spectra_to_quantify : int, optional
         Quantify at most this number of spectra per sample, among those that need quantification
         (in acquisition order), e.g. for quick tests. None (default) quantifies all of them.
+    is_known_precursor_mixture : bool, optional
+        Deprecated, use `is_known_phase_mixture`.
             
     Returns
     -------
     quant_results : list()
         List of EMXSp_Composition_Analyzer, the composition analysis object containing the results and methods for further analysis.
     """
+    if is_known_precursor_mixture is not None:
+        warnings.warn("'is_known_precursor_mixture' is deprecated, use 'is_known_phase_mixture' instead.", FutureWarning, stacklevel=2)
+        if is_known_phase_mixture is None:
+            is_known_phase_mixture = is_known_precursor_mixture
+
     if results_path is None:
         results_path = os.path.join(os.getcwd(), cnst.RESULTS_DIR)
 
@@ -312,14 +326,10 @@ def batch_quantify_and_analyze(
         if use_instrument_background is not None:
             quant_cfg.use_instrument_background = use_instrument_background
 
-        # Change is_known_precursor_mixture if provided
-        if is_known_precursor_mixture is not None:
-            if powder_meas_cfg is not None:
-                powder_meas_cfg.is_known_powder_mixture_meas = is_known_precursor_mixture
-            else:
-                from autoemx.config.runtime_configs import PowderMeasurementConfig
-                powder_meas_cfg = PowderMeasurementConfig()
-                powder_meas_cfg.is_known_powder_mixture_meas = is_known_precursor_mixture
+        if is_known_phase_mixture is not None:
+            quant_cfg.is_known_phase_mixture = bool(is_known_phase_mixture)
+        if intermixing_violin_plots is not None:
+            plot_cfg.intermixing_violin_plots = bool(intermixing_violin_plots)
 
         # --- Run Composition Analysis or Spectral Acquisition
         comp_analyzer = EMXSp_Composition_Analyzer(

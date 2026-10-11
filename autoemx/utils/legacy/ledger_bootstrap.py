@@ -607,6 +607,15 @@ def build_legacy_import_quantification_config(
                 ),
             )
         ),
+        # Legacy configs stored it in the powder measurement config
+        "is_known_phase_mixture": bool(
+            (
+                raw_config_payload.get(cnst.POWDER_MEASUREMENT_CFG_KEY)
+                or (raw_config_payload.get(cnst.ACQUISITION_CFG_KEY) or {}).get(cnst.POWDER_MEASUREMENT_CFG_KEY)
+                or raw_measurement_cfg.get(cnst.POWDER_MEASUREMENT_CFG_KEY)
+                or {}
+            ).get("is_known_powder_mixture_meas", False)
+        ),
         # Legacy configs stored it in the clustering config
         "min_bckgrnd_cnts": raw_clustering_cfg.get(
             "min_bckgrnd_cnts",

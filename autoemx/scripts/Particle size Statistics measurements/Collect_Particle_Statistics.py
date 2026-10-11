@@ -290,7 +290,6 @@ saved_images_extension = 'tif' # High-resolution output.
 # =============================================================================
 powder_meas_cfg_kwargs = dict(
     par_selection_mode='auto',
-    is_known_powder_mixture_meas = False,
     par_search_frame_width_um = None,
     # Use a large finite cap; pydantic rejects non-finite values like np.inf.
     max_n_par_per_frame=1000000,

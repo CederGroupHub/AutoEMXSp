@@ -86,8 +86,9 @@ triangle, of the reported phases.
    that differ most between the two phases. Each spot is linked to its position on
    the mixture line (red crosses), which gives its phase fractions.
 
-For known powder mixtures (``is_known_powder_mixture_meas = True``), a violin plot
-of the molar fractions is also drawn.
+For known phase mixtures (``is_known_phase_mixture = True``), a violin plot
+of the molar fractions is also drawn. Set ``intermixing_violin_plots`` to ``True``
+or ``False`` to draw them or not regardless.
 
 
 Things to keep in mind

@@ -76,7 +76,7 @@ to create standard reference values for each powder material that you'll want
 to mix and measure.
  
 The only difference is that you should set
-``powder_meas_cfg_kwargs.is_known_powder_mixture_meas = True``.
+``is_known_phase_mixture = True`` in ``Run_Experimental_Standard_Collection.py``.
 This will trigger two configurations:
 
 - ``exp_stds_meas_cfg_kwargs.use_for_mean_PB_calc = False``; this prevents
@@ -109,14 +109,16 @@ The only differences are that, when preparing the acquisition script (i.e.,
 - Set ``use_project_specific_std_dict = True`` to use the standard reference
   dictionary saved in the project folder, defined in ``results_dir``.
   If not found, it will use the default standard reference values.
-- Set ``powder_meas_cfg_kwargs.is_known_powder_mixture_meas = True``. This
-  option tells `AutoEMX` to use reference P/B values obtained from the known
-  powder compositions, instead of the `Mean` of reference values measured also
-  from other chemistries. Note that you can always turn off this option later
-  when quantifying the spectra in ``run_quantification_analysis.py``, setting
-  ``is_known_precursor_mixture = False`` and passing this option to
-  ``batch_quantify_and_analyze()``. In this case, `AutoEMX` will use
-  the P/B reference values commonly employed during regular compositional
-  characterization of unknown sample chemistries for phase identification. 
+- Set ``is_known_phase_mixture = True``. This option tells `AutoEMX` to use
+  reference P/B values obtained from the known phase compositions, instead of
+  the `Mean` of reference values measured also from other chemistries, and to
+  characterize the intermixing of the phases (violin plots of their molar
+  fractions). Note that you can always turn off this option later when
+  quantifying the spectra in ``Run_Quantification.py``, setting
+  ``is_known_phase_mixture = False``. In this case, `AutoEMX` will use the P/B
+  reference values commonly employed during regular compositional
+  characterization of unknown sample chemistries for phase identification.
+  To keep the violin plots, set ``intermixing_violin_plots = True`` in
+  ``Run_Analysis.py``. 
 
  

@@ -133,7 +133,6 @@ def _saved_quant_options(cfgs: Dict[str, Any], active: Optional[Dict[str, Any]])
     defaults = QuantificationOptionsConfig()
     opts = dict((active or {}).get("options") or {})
     min_cnts = opts.get("min_bckgrnd_cnts", defaults.min_bckgrnd_cnts)
-    powder = ((cfgs.get("measurement_cfg") or {}).get("powder_meas_cfg") or {})
     lims = opts.get("spectrum_lims", defaults.spectrum_lims)
     return {
         "quant.min_bckgrnd_cnts": min_cnts,
@@ -142,7 +141,7 @@ def _saved_quant_options(cfgs: Dict[str, Any], active: Optional[Dict[str, Any]])
         "quant.fit_tolerance": opts.get("fit_tolerance", defaults.fit_tolerance),
         "quant.use_project_specific_std_dict": bool(opts.get("use_project_specific_std_dict",
                                                             defaults.use_project_specific_std_dict)),
-        "quant.is_known_precursor_mixture": bool(powder.get("is_known_powder_mixture_meas", False)),
+        "quant.is_known_phase_mixture": bool(opts.get("is_known_phase_mixture", False)),
     }
 
 
@@ -495,7 +494,7 @@ _HELP: Dict[str, str] = {
     "quant.spectrum_lims": "Lower and upper channel indices of the fitted spectral range, e.g. 14, 1100. Empty = keep each sample's saved value.",
     "quant.fit_tolerance": "Tolerance for fit convergence. Empty = keep each sample's saved value (default 1e-4).",
     "quant.use_project_specific_std_dict": "Load the P/B standards file from the results folder instead of the default calibration file. 'saved' keeps each sample's setting.",
-    "quant.is_known_precursor_mixture": "Sample is a mixture of known powders: characterizes their extent of intermixing. 'saved' keeps each sample's setting.",
+    "quant.is_known_phase_mixture": "Sample is a mixture of known phases (its candidate phases): quantified with the P/B values of their standards. 'saved' keeps each sample's setting.",
     "quant.identify_missing_elements": "Before fitting each spectrum, look for peaks of elements missing from the known elements. Elements surely present are added (quantified if a standard exists, otherwise only fitted); doubtful ones are only reported. The elements found are listed per spectrum and per sample. Slower. 'saved' keeps each sample's setting.",
     "qrun.interrupt_fits_bad_spectra": "Stop fitting spectra as soon as they are found to give a poor quantification. Much faster.",
     "qrun.force_requantification": "Quantify all spectra again, in a new quantification run, even if a run with the same settings exists.",
@@ -565,6 +564,7 @@ _HELP: Dict[str, str] = {
     "plot.show_unused_comps_clust": "Show discarded compositions in the saved clustering plot.",
     "plot.show_legend_clustering": "Show the legend in the saved clustering plot.",
     "plot.plot_best_mixture": "Save a plot of the best mixture of each cluster.",
+    "plot.intermixing_violin_plots": "Violin plots of the intermixing of the reported mixtures. 'saved' keeps the sample's setting (by default, plotted for known phase mixtures).",
 }
 
 _CHOICES: Dict[str, List[Any]] = {
@@ -641,6 +641,8 @@ def build_param_specs() -> List[ParamSpec]:
         ["els_to_plot", "els_excluded_clust_plot", "show_unused_comps_clust",
          "show_legend_clustering", "plot_best_mixture"],
     )
+    specs.append(ParamSpec("plot", "intermixing_violin_plots", "intermixing violin plots", "choice", SAVED,
+                           choices=[SAVED, YES, NO]))
     for s in specs:
         if s.key in ("clust.ref_formulae",):
             s.kind = "formulae"
@@ -664,7 +666,7 @@ def build_quant_specs() -> List[ParamSpec]:
         ParamSpec("quant", "fit_tolerance", "fit tolerance", "float_opt", None, placeholder="saved"),
         ParamSpec("quant", "use_project_specific_std_dict", "project-specific standards", "choice", SAVED,
                   choices=tri),
-        ParamSpec("quant", "is_known_precursor_mixture", "known precursor mixture", "choice", SAVED, choices=tri),
+        ParamSpec("quant", "is_known_phase_mixture", "known phase mixture", "choice", SAVED, choices=tri),
         ParamSpec("quant", "identify_missing_elements", "identify missing elements", "choice", SAVED, choices=tri),
         ParamSpec("qrun", "interrupt_fits_bad_spectra", "interrupt fits of bad spectra", "bool", True),
         ParamSpec("qrun", "force_requantification", "force requantification (new run)", "bool", False),
@@ -734,6 +736,7 @@ def build_acq_specs() -> List[ParamSpec]:
         "aimg.save_raw_images": "Also save the non-annotated version of annotated images (frames, and particles if annotated).",
         "aacq.quantify_spectra": "Quantify spectra during acquisition, and stop when the clustering converges (between min and max spectra). Not recommended on slow microscope computers.",
         "aquant.use_project_specific_std_dict": "Load the P/B standards from the results folder.",
+        "aquant.is_known_phase_mixture": "The samples are mixtures of known phases (their candidate phases): quantified with the P/B values of their standards, and their intermixing is characterized.",
         "aquant.interrupt_fits_bad_spectra": "Stop fitting spectra expected to give gross quantification errors.",
         "aquant.max_analytical_error_percent": "Maximum analytical error of the spectra used for clustering (can be changed later).",
         "aquant.min_bckgrnd_cnts": "Minimum background counts under the reference peaks for a spectrum to be used.",
@@ -799,7 +802,6 @@ def build_acq_specs() -> List[ParamSpec]:
     # Readable labels (field names abbreviate "particle" as "par") and units shown next to the fields
     labels = {
         "par_selection_mode": ("particle selection mode", ""),
-        "is_known_powder_mixture_meas": ("is known powder mixture measurement", ""),
         "img_shift_tracking": ("image drift tracking", ""),
         "par_search_frame_width_um": ("particle search frame width", "µm"),
         "max_n_par_per_frame": ("max particles per frame", ""),
@@ -819,7 +821,6 @@ def build_acq_specs() -> List[ParamSpec]:
     }
     helps = {
         "par_selection_mode": "auto: frames are scanned and particles detected automatically; manual: a window asks you to centre each particle.",
-        "is_known_powder_mixture_meas": "The sample is a mixture of known powders: characterizes their extent of intermixing.",
         "img_shift_tracking": "Track and correct the image drift while acquiring spectra on a particle.",
         "par_search_frame_width_um": "Width of the frames in which particles are searched. Empty = min(20 × max particle radius, 500 µm).",
         "max_n_par_per_frame": "Maximum number of particles analysed in a frame, for a representative sampling.",
@@ -845,6 +846,7 @@ def build_acq_specs() -> List[ParamSpec]:
     specs += powder + bulk
     specs += [
         ParamSpec("aquant", "use_project_specific_std_dict", "project-specific standards", "bool", False),
+        ParamSpec("aquant", "is_known_phase_mixture", "known phase mixture", "bool", False),
         ParamSpec("aquant", "interrupt_fits_bad_spectra", "interrupt fits of bad spectra", "bool", True),
         ParamSpec("aquant", "max_analytical_error_percent", "max analytical error (w%)", "float", 5.0),
         ParamSpec("aquant", "min_bckgrnd_cnts", "min background counts", "float", 5.0),
@@ -1122,6 +1124,7 @@ def analysis_kwargs(values: Dict[str, Any]) -> Dict[str, Any]:
         show_unused_compositions_cluster_plot=values["plot.show_unused_comps_clust"],
         show_legend_clustering=values["plot.show_legend_clustering"],
         plot_best_mixture=values["plot.plot_best_mixture"],
+        intermixing_violin_plots=_TRISTATE[values["plot.intermixing_violin_plots"]],
         show_plots=False,
         plot_custom_plots=False,
     )
@@ -1141,7 +1144,7 @@ def quantification_kwargs(values: Dict[str, Any]) -> Dict[str, Any]:
         spectrum_lims=tuple(lims) if lims else None,
         fit_tolerance=values["quant.fit_tolerance"],
         use_project_specific_std_dict=_TRISTATE[values["quant.use_project_specific_std_dict"]],
-        is_known_precursor_mixture=_TRISTATE[values["quant.is_known_precursor_mixture"]],
+        is_known_phase_mixture=_TRISTATE[values["quant.is_known_phase_mixture"]],
         identify_missing_elements=_TRISTATE[values["quant.identify_missing_elements"]],
         interrupt_fits_bad_spectra=values["qrun.interrupt_fits_bad_spectra"],
         force_requantification=values["qrun.force_requantification"],
@@ -1227,6 +1230,7 @@ def acquisition_kwargs(values: Dict[str, Any]) -> Dict[str, Any]:
         bulk_meas_cfg_kwargs=_section_dict(values, "abulk"),
         quantify_spectra=quantify,
         use_project_specific_std_dict=values["aquant.use_project_specific_std_dict"],
+        is_known_phase_mixture=values["aquant.is_known_phase_mixture"],
         interrupt_fits_bad_spectra=values["aquant.interrupt_fits_bad_spectra"],
         max_analytical_error_percent=values["aquant.max_analytical_error_percent"],
         min_bckgrnd_cnts=values["aquant.min_bckgrnd_cnts"],

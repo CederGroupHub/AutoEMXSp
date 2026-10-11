@@ -344,7 +344,7 @@ def register(app) -> None:
 
     # Options shown as 'saved' display the value saved for the ticked samples when they all share it
     _number_keys = ["quant.min_bckgrnd_cnts", "quant.min_total_counts_fraction", "quant.fit_tolerance"]
-    _choice_keys = ["quant.use_project_specific_std_dict", "quant.is_known_precursor_mixture"]
+    _choice_keys = ["quant.use_project_specific_std_dict", "quant.is_known_phase_mixture"]
 
     def _fmt_saved(key: str, value: Any) -> str:
         if key == "quant.fit_tolerance":

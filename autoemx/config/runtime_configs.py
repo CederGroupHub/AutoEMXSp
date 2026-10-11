@@ -319,6 +319,10 @@ class QuantificationOptionsConfig(BaseModel):
             (``quant_flag = 3``) or background under the reference peaks (``quant_flag = 8``) is lower are flagged.
             Default is ``5.0`` (defaults.min_bckgrnd_cnts). If None, it is set from the target acquisition counts
             (target counts / 20000).
+        is_known_phase_mixture (bool): Whether the sample is a mixture of known phases (the candidate phases). If True,
+            spectra are quantified with the reference P/B values of the standards of these phases, and the analysis
+            characterizes their intermixing. Default is False. Not part of the quantification fingerprint, since the
+            P/B values it selects are (reference_values_by_el_line).
         identify_missing_elements (bool): If True, each spectrum is checked for elements missing from its fit
             before quantification (see autoemx.core.fitter.peak_identification). Elements whose addition
             surely improves the fit of the peaks are added and quantified (or only fitted, if no standard is
@@ -339,6 +343,7 @@ class QuantificationOptionsConfig(BaseModel):
     use_project_specific_std_dict: bool = False
     min_total_counts_fraction: float = dflt.min_total_counts_fraction
     min_bckgrnd_cnts: Optional[float] = dflt.min_bckgrnd_cnts
+    is_known_phase_mixture: bool = False
     identify_missing_elements: bool = dflt.identify_missing_elements
     identification_seed_spectra: int = dflt.identification_seed_spectra
     identification_z_range: Tuple[int, int] = dflt.identification_z_range
@@ -396,7 +401,6 @@ class PowderMeasurementConfig(BaseModel):
             - ``'manual'``: prompt the user to center each particle
             - ``'list'``: visit a caller-supplied list of ledger particle ids or
               absolute stage coordinates in mm (see ``batch_acquire_and_analyze``)
-        is_known_powder_mixture_meas (bool): Whether sample is a known binary mixture of powders. Used to characterize precursor extent of intermixing (Default = False).
         img_shift_tracking (bool): Whether to use image shift tracking during acquisition (Default = True).
         par_search_frame_width_um (float, optional): Frame width used when searching for particles, in um.
             Default: min(20*max_par_radius, 500 um)
@@ -422,7 +426,6 @@ class PowderMeasurementConfig(BaseModel):
     AVAILABLE_PAR_SELECTION: ClassVar[Tuple[str, ...]] = ('auto', 'manual', 'list')
 
     par_selection_mode: Literal['auto', 'manual', 'list'] = 'auto'
-    is_known_powder_mixture_meas: bool = False
     img_shift_tracking: bool = True
     par_search_frame_width_um: Optional[float] = None
     max_n_par_per_frame: int = 30
@@ -452,6 +455,8 @@ class PowderMeasurementConfig(BaseModel):
             legacy_manual = cleaned.pop("is_manual_particle_selection", None)
             if legacy_manual is not None and "par_selection_mode" not in cleaned:
                 cleaned["par_selection_mode"] = "manual" if legacy_manual else "auto"
+            # Now QuantificationOptionsConfig.is_known_phase_mixture (moved there by SampleLedger for old ledgers)
+            cleaned.pop("is_known_powder_mixture_meas", None)
             return cleaned
         return data
 
@@ -567,7 +572,7 @@ class ExpStandardsConfig(BaseModel):
             Whether the acquired reference standard values are added to the current reference dictionary. If True,
             copies the current standard dictionary to the project folder and updates it. If such .json file is already
             present in the project folder, then it updates it. This is generally used when measuring the extent of
-            powder precursor intermixing (i.e., powder_meas_cfg_kwargs["is_known_powder_mixture_meas"] = True).
+            the intermixing of known phases (samples quantified with QuantificationOptionsConfig.is_known_phase_mixture = True).
 
         min_acceptable_PB_ratio (float):
             Minimum PB ratio required for a peak to be accepted as a standard. in cnts/cnts*keV^-1 (Default = 10).
@@ -664,6 +669,9 @@ class PlotConfig(BaseModel):
         custom_plot_file (Optional[str]): Path to a user-editable custom plotting file.
         plot_best_mixture (bool): Whether to plot the top-ranked mixture of each cluster, when it
             combines 2 or 3 candidate phases (Mixture_plot_cl<i>.png). Default: True
+        intermixing_violin_plots (Optional[bool]): Whether to plot the intermixing of the phases of the reported
+            mixtures as violin plots (Mixture_decomposition_plot_cl<i>_*.png). If None (default), they are plotted
+            for samples quantified as known phase mixtures (QuantificationOptionsConfig.is_known_phase_mixture).
     """
 
     show_unused_comps_clust: bool = True
@@ -675,6 +683,7 @@ class PlotConfig(BaseModel):
     use_custom_plots: bool = False
     custom_plot_file: Optional[str] = None
     plot_best_mixture: bool = True
+    intermixing_violin_plots: Optional[bool] = None
 
     model_config = ConfigDict(extra="forbid")
 

@@ -85,9 +85,11 @@ els_substrate = ['C', 'O', 'Al']  # Contaminants that may be present in the spec
 # =============================================================================
 # Powder options
 # =============================================================================
+is_known_phase_mixture = False # Set to True when measuring standards of phases to be mixed (see the precursor-mixture tutorial):
+                               # their P/B values are then saved in a separate standards file and not used for the mean P/B values
+
 powder_meas_cfg_kwargs = dict(
     par_selection_mode='auto',
-    is_known_powder_mixture_meas = False,
     img_shift_tracking = True,
     max_n_par_per_frame=30,
     max_spectra_per_par=3,
@@ -118,8 +120,8 @@ bulk_meas_cfg_kwargs = dict(
 exp_stds_meas_cfg_kwargs = dict(
     min_acceptable_PB_ratio = 10,
     quant_flags_accepted = [0],
-    els_to_use_for_mean_PB_calc = ["all"] if not powder_meas_cfg_kwargs["is_known_powder_mixture_meas"] else ["none"],
-    generate_separate_std_dict = powder_meas_cfg_kwargs["is_known_powder_mixture_meas"]
+    els_to_use_for_mean_PB_calc = ["all"] if not is_known_phase_mixture else ["none"],
+    generate_separate_std_dict = is_known_phase_mixture
 )
 
 # =============================================================================

@@ -98,6 +98,7 @@ els_to_plot = None # List of elements forced onto the clustering plot axes (oppo
                    # detectable elements. Must yield 2 or 3 axes. Uses defaults if None.
 plot_custom_plots = False # If True, auto-creates sample_folder/custom_plot.py (first run) and uses it for plotting.
 show_unused_compositions_cluster_plot = True
+intermixing_violin_plots = None # Violin plots of the intermixing of the reported mixtures. None keeps the saved value (by default, plotted for known phase mixtures)
 output_filename_suffix = ''
 
 # =============================================================================
@@ -123,5 +124,6 @@ comp_analyzer = analyze_sample(
     quant_flags_accepted=quant_flags_accepted,
     plot_custom_plots=plot_custom_plots,
     show_unused_compositions_cluster_plot=show_unused_compositions_cluster_plot,
+    intermixing_violin_plots=intermixing_violin_plots,
     output_filename_suffix=output_filename_suffix,
 )

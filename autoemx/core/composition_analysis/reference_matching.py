@@ -19,6 +19,21 @@ from autoemx.core.composition_analysis.plotting import PlottingModule
 _POINT_MOLAR_FRS_KEY = '_point_molar_frs'
 
 
+def _is_known_phase_mixture(analyzer: Any) -> bool:
+	"""Whether the sample was quantified as a mixture of known phases (setting of the active quantification run)."""
+	quant_config = getattr(analyzer, "current_quant_config", None)
+	options = getattr(quant_config, "options", None) or {}
+	if "is_known_phase_mixture" in options:
+		return bool(options["is_known_phase_mixture"])
+	return bool(getattr(getattr(analyzer, "quant_cfg", None), "is_known_phase_mixture", False))
+
+
+def _draw_intermixing_violin_plots(analyzer: Any) -> bool:
+	"""Whether to plot the intermixing of mixtures as violin plots (by default, for known phase mixtures)."""
+	setting = getattr(getattr(analyzer, "plot_cfg", None), "intermixing_violin_plots", None)
+	return _is_known_phase_mixture(analyzer) if setting is None else bool(setting)
+
+
 class ReferenceMatchingModule:
 	"""Container for reference matching algorithms extracted from the analyser."""
 
@@ -148,7 +163,7 @@ class ReferenceMatchingModule:
 			else:
 				is_cluster_single_phase = False
 
-			if is_cluster_single_phase and not self.powder_meas_cfg.is_known_powder_mixture_meas:
+			if is_cluster_single_phase and not _is_known_phase_mixture(self):
 				# Cluster determined to stem from a single phase
 				pass
 			elif len(ref_formulae) > 1:
@@ -160,7 +175,7 @@ class ReferenceMatchingModule:
 					mixtures_dicts.append(mixture_dict)
 				max_mix_conf = max(max_mix_conf, mix_nmf_conf)
 			mixtures_dicts = ReferenceMatchingModule._rank_mixtures(mixtures_dicts, mixture_cfg.equivalent_recon_error_tol)
-			if getattr(self.powder_meas_cfg, "is_known_powder_mixture_meas", False):
+			if _draw_intermixing_violin_plots(self):
 				reported, _ = ReferenceMatchingModule._reported_mixtures(self, mixtures_dicts)
 				for mixture in reported:
 					if _POINT_MOLAR_FRS_KEY not in mixture:
@@ -485,11 +500,7 @@ class ReferenceMatchingModule:
 
 		# For known powder mixtures, all binary mixtures are kept (violin plots are drawn in
 		# _assign_mixtures, for the mixtures reported in Clusters.csv)
-		keep_binary = len(ref_names) == 2 and getattr(
-			self.powder_meas_cfg,
-			"is_known_powder_mixture_meas",
-			False,
-		)
+		keep_binary = len(ref_names) == 2 and _is_known_phase_mixture(self)
 
 		if reconstruction_error < max_recon_error or keep_binary:
 			conf = np.exp(-reconstruction_error**2 / (2 * mixture_cfg.conf_sigma**2))

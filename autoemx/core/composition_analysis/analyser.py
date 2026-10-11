@@ -1315,7 +1315,7 @@ class EMXSp_Composition_Analyzer:
         This method determines how the `standards_dict` attribute is initialised
         based on the sample configuration and measurement type:
     
-        - If the measurement is of a known powder mixture, the standards dictionary
+        - If the sample is a known phase mixture (quant_cfg.is_known_phase_mixture), the standards dictionary
           is compiled from reference data using `_compile_standards_from_references()`.
     
         - If standards were passed to the analyzer, or project-specific standards are used,
@@ -1329,9 +1329,7 @@ class EMXSp_Composition_Analyzer:
         None
             This method modifies the `self.standards_dict` attribute in place.
         """
-        is_known_mixture = getattr(self.powder_meas_cfg, "is_known_powder_mixture_meas", False)
-
-        if is_known_mixture:
+        if getattr(self.quant_cfg, "is_known_phase_mixture", False):
             self.standards_dict = StandardsModule._compile_standards_from_references(self)
         elif self.quant_cfg.use_project_specific_std_dict or self.standards is not None:
             # _load_standards returns the standards passed to the analyzer when present
@@ -2577,6 +2575,7 @@ class EMXSp_Composition_Analyzer:
         ):
             self.current_quant_config = active_quant_config
             self.current_quantification_id = active_quant_config.quantification_id
+            self._update_non_fingerprint_options(self.current_quant_config, candidate_config)
             # Even when reusing quantification settings, clustering inputs (e.g., ref_formulae
             # passed via runners as sample['cnd']) may have changed for this run.
             self._ensure_current_clustering_run(
@@ -2596,6 +2595,7 @@ class EMXSp_Composition_Analyzer:
                 latest_match = max(matching_prior, key=lambda config: config.quantification_id)
                 self.current_quant_config = latest_match
                 self.current_quantification_id = latest_match.quantification_id
+                self._update_non_fingerprint_options(self.current_quant_config, candidate_config)
                 self._ensure_current_clustering_run(self.current_quant_config)
                 self._apply_active_clustering_config(self.current_quant_config)
                 return
@@ -2636,6 +2636,15 @@ class EMXSp_Composition_Analyzer:
         self._apply_active_clustering_config(self.current_quant_config)
 
 
+    @staticmethod
+    def _update_non_fingerprint_options(quant_config: QuantificationConfig, candidate: QuantificationConfig) -> None:
+        """Store the current values of the options that do not affect the results (not in the fingerprint) in a
+        reused quantification run, e.g. is_known_phase_mixture, which the analysis reads."""
+        for key in QuantificationConfig.NON_FINGERPRINT_OPTIONS:
+            if key in candidate.options:
+                quant_config.options[key] = candidate.options[key]
+
+
     def _build_quantification_options(self) -> Dict[str, Any]:
         """Build the subset of quantification options that defines result reuse."""
         options: Dict[str, Any] = {
@@ -2654,6 +2663,7 @@ class EMXSp_Composition_Analyzer:
             "det_ch_width": float(self.det_ch_width),
             "min_total_counts_fraction": self._min_total_counts_fraction(),
             "min_bckgrnd_cnts": getattr(self.quant_cfg, "min_bckgrnd_cnts", dflt.min_bckgrnd_cnts),
+            "is_known_phase_mixture": bool(getattr(self.quant_cfg, "is_known_phase_mixture", False)),
             "identify_missing_elements": bool(getattr(self.quant_cfg, "identify_missing_elements", dflt.identify_missing_elements)),
             "identification_seed_spectra": int(
                 getattr(self.quant_cfg, "identification_seed_spectra", dflt.identification_seed_spectra)
@@ -4421,7 +4431,7 @@ class EMXSp_Composition_Analyzer:
         n_spectra_to_collect = min(max_n_sp_per_iter, max(0, tot_spectra_to_collect - tot_n_spectra), self.min_n_spectra)
 
         if is_spectral_quant:
-            self._initialise_std_dict() # Initialise dictionary of standards to (optionally) pass onto XSp_Quantifier. Only used with known powder mixtures
+            self._initialise_std_dict() # Initialise dictionary of standards to (optionally) pass onto XSp_Quantifier. Only used with known phase mixtures
         
         if quantify:
             if is_exp_std_measurement:

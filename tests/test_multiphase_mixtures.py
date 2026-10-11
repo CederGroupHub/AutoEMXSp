@@ -30,7 +30,7 @@ def _make_analyzer(mixture=None, names=('CuO', 'Al2O3', 'Cu')):
         ref_weights_in_mixture=[REFS[n][1] for n in names],
         detectable_els_sample=ELS,
         clustering_cfg=ClusteringConfig(mixture=mixture or MixtureParams()),
-        powder_meas_cfg=SimpleNamespace(is_known_powder_mixture_meas=False),
+        quant_cfg=SimpleNamespace(is_known_phase_mixture=False),
     )
 
 
@@ -266,7 +266,7 @@ def test_violin_plots_only_for_reported_mixtures(monkeypatch):
     analyzer = SimpleNamespace(
         ref_formulae=names, ref_phases_df=pd.DataFrame([SR_TA_O[n] for n in names], columns=els),
         ref_weights_in_mixture=[2, 7, 11, 9, 15], detectable_els_sample=els, clustering_cfg=ClusteringConfig(),
-        powder_meas_cfg=SimpleNamespace(is_known_powder_mixture_meas=True),
+        quant_cfg=SimpleNamespace(is_known_phase_mixture=True),
     )
     rng = np.random.default_rng(0)
     H = np.array([SR_TA_O['SrTa2O6'], SR_TA_O['Sr4Ta2O9']])
@@ -276,13 +276,13 @@ def test_violin_plots_only_for_reported_mixtures(monkeypatch):
         analyzer, 1, np.zeros(40, dtype=int), pd.DataFrame(X, columns=els),
         rms_dist_cluster=[1.0], max_raw_confs=[0.0], n_points_per_cluster=[40],
     )[0]
-    assert len(mixtures) == 10  # all pairs are kept for known powder mixtures
+    assert len(mixtures) == 10  # all pairs are kept for known phase mixtures
     assert len(calls) == 1      # all pairs are collinear: only the top-ranked one is reported
     assert not any('_point_molar_frs' in m for m in mixtures)
 
 
 def test_violin_plots_for_reported_three_phase_mixtures(monkeypatch):
-    """Known powder mixtures: a reported mixture of three phases gets a violin plot per phase."""
+    """Known phase mixtures: a reported mixture of three phases gets a violin plot per phase."""
     from autoemx.core.composition_analysis.plotting import PlottingModule
     calls = []
     monkeypatch.setattr(PlottingModule, '_save_violin_plot_powder_mixture',
@@ -290,7 +290,7 @@ def test_violin_plots_for_reported_three_phase_mixtures(monkeypatch):
     monkeypatch.setattr(PlottingModule, '_save_violin_plot_powder_mixture_multi',
                         staticmethod(lambda self, W, names, cid: calls.append(('multi', tuple(names), W.shape))))
     analyzer = _make_analyzer()
-    analyzer.powder_meas_cfg = SimpleNamespace(is_known_powder_mixture_meas=True)
+    analyzer.quant_cfg = SimpleNamespace(is_known_phase_mixture=True)
     X = _mixture_cluster(['CuO', 'Al2O3', 'Cu'])
     ReferenceMatchingModule._assign_mixtures(
         analyzer, 1, np.zeros(len(X), dtype=int), pd.DataFrame(X, columns=ELS),

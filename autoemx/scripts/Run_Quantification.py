@@ -35,7 +35,7 @@ sample_IDs = [
     'Wulfenite_example',
     ]
 
-is_known_precursor_mixture = None # Loads value from config file, if unspecified. Otherwise set to True or False.
+is_known_phase_mixture = None # If True, samples are mixtures of known phases (their candidate phases), quantified with the reference P/B values of these phases. None keeps the saved value.
 
 import os
 results_dir = os.path.dirname(os.path.abspath(__file__)) # Default: save and load results in the same folder as this script. Set to None to use the current working directory, or replace with another path.
@@ -81,5 +81,5 @@ comp_analyzer = batch_quantify_and_analyze(
     fit_tolerance=fit_tolerance,
     interrupt_fits_bad_spectra=interrupt_fits_bad_spectra,
     use_project_specific_std_dict = use_project_specific_std_dict,
-    is_known_precursor_mixture = is_known_precursor_mixture,
+    is_known_phase_mixture = is_known_phase_mixture,
 )

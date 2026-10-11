@@ -28,7 +28,7 @@ def _analyzer(tmp_path, els, refs, weights, els_to_plot=()):
         detectable_els_sample=list(els),
         clustering_cfg=ClusteringConfig(),
         plot_cfg=PlotConfig(els_to_plot=list(els_to_plot)),
-        powder_meas_cfg=SimpleNamespace(is_known_powder_mixture_meas=False),
+        quant_cfg=SimpleNamespace(is_known_phase_mixture=False),
     )
 
 

@@ -129,6 +129,28 @@ class SampleLedger(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    @model_validator(mode="before")
+    @classmethod
+    def move_legacy_known_phase_mixture(cls, data: Any) -> Any:
+        """Legacy compatibility: is_known_powder_mixture_meas (powder settings) is now the quantification setting
+        is_known_phase_mixture, stored in the options of each quantification run."""
+        # Only saved ledgers (plain JSON data) can contain the legacy setting
+        if not isinstance(data, dict) or not isinstance(data.get("configs"), dict):
+            return data
+        measurement_cfg = data["configs"].get("measurement_cfg")
+        powder_meas_cfg = measurement_cfg.get("powder_meas_cfg") if isinstance(measurement_cfg, dict) else None
+        if not isinstance(powder_meas_cfg, dict) or "is_known_powder_mixture_meas" not in powder_meas_cfg:
+            return data
+        is_known_phase_mixture = bool(powder_meas_cfg["is_known_powder_mixture_meas"])
+        quantifications = []
+        for quant_config in data.get("quantifications") or []:
+            if isinstance(quant_config, dict) and isinstance(quant_config.get("options"), dict):
+                options = quant_config["options"]
+                if "is_known_phase_mixture" not in options:
+                    quant_config = {**quant_config, "options": {**options, "is_known_phase_mixture": is_known_phase_mixture}}
+            quantifications.append(quant_config)
+        return {**data, "quantifications": quantifications}
+
     @field_validator("sample_path")
     @classmethod
     def validate_sample_path(cls, v: str) -> str:
