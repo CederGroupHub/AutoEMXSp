@@ -831,6 +831,15 @@ class EMXSp_Composition_Analyzer:
         # Reconcile ledger / existing spectra before touching the microscope so resume
         # runs with sufficient data skip instrument initialization entirely.
         if is_acquisition:
+            if self.measurement_cfg.is_manual_navigation and self.powder_meas_cfg.par_selection_mode == "list":
+                raise ValueError(
+                    "par_selection_mode='list' cannot be used with is_manual_navigation=True. "
+                    "List mode moves the stage automatically to the listed particles (by ledger id or stage "
+                    "coordinates), while manual navigation never moves the stage and leaves all positioning "
+                    "to the user, so the list would be ignored. Set is_manual_navigation=False to measure the "
+                    "listed particles, or use par_selection_mode='auto' with manual navigation."
+                )
+
             spectrum_acquisition_needed = True
             is_particle_stats = (
                 measurement_cfg.type == measurement_cfg.PARTICLE_STATS_MEAS_TYPE_KEY

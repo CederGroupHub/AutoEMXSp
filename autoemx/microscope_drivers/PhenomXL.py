@@ -556,6 +556,22 @@ def move_by(x: float, y: float) -> None:
     """
     phenom.MoveBy(x * 0.001, y * 0.001)
 
+
+def get_position() -> Tuple[float, float]:
+    """
+    Get the current absolute stage position.
+
+    Optional driver function: during manual navigation, it is used to record where the user
+    moved the stage. Without it, the sample center position is assumed.
+
+    Returns
+    -------
+    tuple of float
+        (x, y) stage coordinates in millimeters.
+    """
+    pos = phenom.GetStageModeAndPosition().position
+    return pos.x * 1000, pos.y * 1000
+
 # =============================================================================
 # Imaging Parameters
 # =============================================================================

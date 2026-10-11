@@ -129,8 +129,30 @@ class FrameNavigator:
             If the sample type is not supported.
         """
         self.grid_search_fw_mm = grid_search_fw_mm
-        
-        if self.sample_cfg.is_particle_acquisition:
+
+        if self.measurement_cfg.is_manual_navigation:
+            # Frames are chosen by the user: no automated frame grid. Checked first, because every
+            # sample type is either a particle or a grid acquisition.
+            self.frame_pos_mm = None
+            self.frame_labels = None
+            self.num_frames = np.inf
+
+            # Particle statistics segment the particles in each frame selected by the user.
+            # During manual EDS acquisition, spectra are acquired at the image center instead.
+            is_particle_stats_measurement = (
+                self.measurement_cfg.type == self.measurement_cfg.PARTICLE_STATS_MEAS_TYPE_KEY
+            )
+            if is_particle_stats_measurement:
+                self.particle_finder = EM_Particle_Finder(
+                    self.EM_controller,
+                    powder_meas_cfg=self.powder_meas_cfg,
+                    xsp_spot_selector=self.xsp_spot_selector,
+                    results_dir=self.results_dir,
+                    verbose=self.verbose,
+                    development_mode=self.development_mode
+                )
+
+        elif self.sample_cfg.is_particle_acquisition:
             # Set frame width, and update current pixel size
             if self.EM_driver.is_microscope_connected():
                 min_fw, max_fw = self.EM_driver.get_range_frame_width()
@@ -172,12 +194,7 @@ class FrameNavigator:
             self.EM_controller.microscope_ctrl.set_frame_width(self.grid_search_fw_mm)
             # Construct grid of acquisition spots
             self._calc_bulk_grid_acquisition_spots()
-        
-        elif self.measurement_cfg.is_manual_navigation:
-            self.frame_pos_mm = None
-            self.frame_labels = None
-            self.num_frames = np.inf
-        
+
         else:
             raise NotImplementedError(
                 f"Sample type '{self.sample_cfg.type}' is not supported for automated composition analysis. "
@@ -435,6 +452,30 @@ class FrameNavigator:
         self._visited_band_frames.append(descriptor)
     
     
+    def update_current_pos_from_stage(self) -> None:
+        """
+        Set the current frame position to the stage position, after the user moved the stage manually.
+
+        Uses the optional driver function get_position(). If the driver does not provide it, or the
+        position cannot be read, the last known position is kept (initially the sample center).
+        """
+        try:
+            get_position = getattr(self.EM_driver, "get_position", None)
+        except Exception:
+            get_position = None
+
+        if get_position is not None:
+            try:
+                x, y = get_position()
+                self._current_pos = (float(x), float(y))
+                return
+            except Exception as e:
+                logger.warning(f"⚠️ Could not read the stage position ({e}). Using the last known position.")
+
+        if self._current_pos is None:
+            self._current_pos = self._center_pos
+
+
     def go_to_next_frame(self, microscope_ctrl) -> bool:
         """
         Move the microscope to the next frame position.
@@ -471,10 +512,7 @@ class FrameNavigator:
                 self.current_frame_label = self._frame_cntr
                 frame_width = self.EM_driver.get_frame_width()
                 self.grid_search_fw_mm = frame_width
-                # In manual mode, keep the last known stage position as frame reference.
-                # If no explicit frame move occurred yet, use configured sample center.
-                if self._current_pos is None:
-                    self._current_pos = self._center_pos
+                self.update_current_pos_from_stage()
         
         else:
             # Check if all frames have been analysed
@@ -499,7 +537,8 @@ class FrameNavigator:
         
         if self.verbose:
             print_single_separator()
-            logger.info(f"▶️ Moved to frame {self.current_frame_label} (#{self._frame_cntr + 1}/{self.num_frames}).")
+            n_frames_str = f"/{self.num_frames}" if np.isfinite(self.num_frames) else ""
+            logger.info(f"▶️ Moved to frame {self.current_frame_label} (#{self._frame_cntr + 1}{n_frames_str}).")
 
         self._record_visited_frame()
         

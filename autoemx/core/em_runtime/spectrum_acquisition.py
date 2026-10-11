@@ -148,6 +148,7 @@ class SpectrumAcquisition:
             return False, None, None
         
         if prompt.ok_pressed:
+            frame_navigator.update_current_pos_from_stage()
             spots_xy_list = [(int(self.im_width / 2), int(self.im_height / 2))]
             frame_navigator.current_frame_label = frame_navigator._frame_cntr
             frame_navigator._frame_cntr += 1
