@@ -47,11 +47,9 @@ Created on Mon Jul 22 17:43:35 2024
 
 # Standard library imports
 import os
-import json
 import re
 import time
 import shutil
-import itertools
 import warnings
 import traceback
 from pathlib import Path
@@ -72,9 +70,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from pymatgen.core.composition import Composition
-from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
-import cvxpy as cp
  
 
 # Project-specific imports
@@ -120,7 +116,7 @@ from autoemx.config.ledger_schemas import (
     SpotCoordinates,
     SpectrumEntry,
 )
-from autoemx.config.ledger_io import ingest_spectra
+from autoemx.config.ledger_io import get_active_quantification_config, ingest_spectra
 from autoemx._version import __version__ as AUTOEMX_VERSION
 from autoemx.config.schema_models.clustering import ClusteringAnalysis, ClusteringResult
 from autoemx.config.schema_models.standards import EDSStandardsFile
@@ -2982,15 +2978,7 @@ class EMXSp_Composition_Analyzer:
     @staticmethod
     def _get_active_quantification_config(existing_ledger: Optional[SampleLedger]) -> Optional[QuantificationConfig]:
         """Return the active quantification config from the ledger when available."""
-        if existing_ledger is None or not existing_ledger.quantifications:
-            return None
-
-        if existing_ledger.active_quant is not None:
-            for quant_config in existing_ledger.quantifications:
-                if quant_config.quantification_id == existing_ledger.active_quant:
-                    return quant_config
-
-        return existing_ledger.quantifications[-1]
+        return get_active_quantification_config(existing_ledger)
 
 
     @staticmethod
@@ -3580,10 +3568,6 @@ class EMXSp_Composition_Analyzer:
                 )
 
                 # Immediately update ledger after each successful acquisition
-                try:
-                    from autoemx.config.ledger_schemas import SpectrumEntry, SampleLedger
-                except ImportError:
-                    pass  # Already imported at top
                 # Build SpectrumEntry directly from the pointer file and current acquisition metadata
                 frame_id_str = (
                     str(frame_ID).strip()

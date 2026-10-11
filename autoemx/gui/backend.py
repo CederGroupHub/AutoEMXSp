@@ -35,7 +35,7 @@ import pandas as pd
 
 import autoemx.utils.constants as cnst
 from autoemx.utils.helper import parse_xsp_spots_image_name
-from autoemx.config.ledger_io import load_sample_ledger
+from autoemx.config.ledger_io import get_active_quantification_config, load_sample_ledger
 from autoemx.config.ledger_schemas import (
     AitchisonParams,
     ClusterMergeParams,
@@ -344,12 +344,7 @@ class SampleInfo:
 
 
 def _active_quant_config(ledger) -> Optional[Any]:
-    if not ledger.quantifications:
-        return None
-    return next(
-        (q for q in ledger.quantifications if q.quantification_id == ledger.active_quant),
-        ledger.quantifications[-1],
-    )
+    return get_active_quantification_config(ledger)
 
 
 def undetectable_elements(ledger) -> List[str]:

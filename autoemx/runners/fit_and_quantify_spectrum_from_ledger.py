@@ -36,10 +36,8 @@ import numpy as np
 import autoemx.utils.helper as utils
 import autoemx.utils.constants as cnst
 import autoemx.config.defaults as dflt
-from autoemx.config import config_classes_dict
-from autoemx.config.ledger_schemas import ClusteringConfig
 from .fit_and_quantify_spectrum import fit_and_quantify_spectrum
-from autoemx.config.ledger_io import load_sample_ledger
+from autoemx.config.ledger_io import ledger_runtime_configs, load_sample_ledger
 
 # Configure logging
 logging.basicConfig(
@@ -166,39 +164,7 @@ def fit_and_quantify_spectrum_from_ledger(
     try:
         if ledger is None:
             ledger = load_sample_ledger(ledger_path)
-        configs = {
-            cnst.MICROSCOPE_CFG_KEY: ledger.configs.microscope_cfg,
-            cnst.SAMPLE_CFG_KEY: ledger.configs.sample_cfg,
-            cnst.MEASUREMENT_CFG_KEY: ledger.configs.measurement_cfg,
-            cnst.SAMPLESUBSTRATE_CFG_KEY: ledger.configs.sample_substrate_cfg,
-            cnst.PLOT_CFG_KEY: ledger.configs.plot_cfg,
-        }
-        if ledger.quantifications:
-            active_quant_id = ledger.active_quant
-            active_quant_config = next(
-                (
-                    quant_config
-                    for quant_config in ledger.quantifications
-                    if quant_config.quantification_id == active_quant_id
-                ),
-                ledger.quantifications[-1],
-            )
-            configs[cnst.QUANTIFICATION_CFG_KEY] = config_classes_dict[cnst.QUANTIFICATION_CFG_KEY](
-                **active_quant_config.options
-            )
-            active_clustering_analysis = active_quant_config.get_active_clustering_analysis()
-            active_clustering_config = (
-                active_clustering_analysis.config if active_clustering_analysis is not None else None
-            )
-            if active_clustering_config is not None:
-                configs[cnst.CLUSTERING_CFG_KEY] = active_clustering_config
-        else:
-            configs[cnst.QUANTIFICATION_CFG_KEY] = config_classes_dict[cnst.QUANTIFICATION_CFG_KEY]()
-        if ledger.configs.powder_meas_cfg is not None:
-            configs[cnst.POWDER_MEASUREMENT_CFG_KEY] = ledger.configs.powder_meas_cfg
-        if ledger.configs.bulk_meas_cfg is not None:
-            configs[cnst.BULK_MEASUREMENT_CFG_KEY] = ledger.configs.bulk_meas_cfg
-        metadata = {}
+        ledger_cfgs = ledger_runtime_configs(ledger)
     except FileNotFoundError:
         logging.warning(f"Could not find {spectral_info_f_path}. Skipping sample '{sample_ID}'.")
         return
@@ -207,19 +173,12 @@ def fit_and_quantify_spectrum_from_ledger(
         return
 
     # Retrieve configuration objects
-    try:
-        microscope_cfg      = configs[cnst.MICROSCOPE_CFG_KEY]
-        sample_cfg          = configs[cnst.SAMPLE_CFG_KEY]
-        measurement_cfg     = configs[cnst.MEASUREMENT_CFG_KEY]
-        sample_substrate_cfg= configs[cnst.SAMPLESUBSTRATE_CFG_KEY]
-        quant_cfg           = configs[cnst.QUANTIFICATION_CFG_KEY]
-        clustering_cfg      = configs.get(cnst.CLUSTERING_CFG_KEY)
-    except KeyError as e:
-        logging.warning(f"Missing configuration '{e.args[0]}' in {spectral_info_f_path}. Skipping sample '{sample_ID}'.")
-        return
+    microscope_cfg       = ledger_cfgs.microscope_cfg
+    sample_cfg           = ledger_cfgs.sample_cfg
+    measurement_cfg      = ledger_cfgs.measurement_cfg
+    sample_substrate_cfg = ledger_cfgs.sample_substrate_cfg
+    quant_cfg            = ledger_cfgs.quant_cfg
 
-    if clustering_cfg is None:
-        clustering_cfg = ClusteringConfig()
     
     # Resolve requested spectrum directly from ledger entries.
     target_entry = None

@@ -42,7 +42,7 @@ import time
 import logging
 import traceback
 import warnings
-from typing import Any, Dict, List, Optional, cast
+from typing import List, Optional
 
 from autoemx.utils.helper import (
     print_double_separator,
@@ -50,12 +50,8 @@ from autoemx.utils.helper import (
 )
 import autoemx.utils.constants as cnst
 import autoemx.config.defaults as dflt
-from autoemx.config.ledger_io import load_sample_ledger
-import autoemx.config as config_module
-from autoemx.config.ledger_schemas import ClusteringConfig # type: ignore
+from autoemx.config.ledger_io import ledger_runtime_configs, load_sample_ledger
 from autoemx.core.composition_analysis import EMXSp_Composition_Analyzer
-
-config_classes_dict = cast(Dict[str, Any], getattr(config_module, "config_classes_dict"))
 
 # Configure logging
 logging.basicConfig(
@@ -226,40 +222,8 @@ def batch_quantify_and_analyze(
         
         try:
             ledger = load_sample_ledger(ledger_path)
-            active_quant_config = None
-            configs = {
-                cnst.MICROSCOPE_CFG_KEY: ledger.configs.microscope_cfg,
-                cnst.SAMPLE_CFG_KEY: ledger.configs.sample_cfg,
-                cnst.MEASUREMENT_CFG_KEY: ledger.configs.measurement_cfg,
-                cnst.SAMPLESUBSTRATE_CFG_KEY: ledger.configs.sample_substrate_cfg,
-                cnst.PLOT_CFG_KEY: ledger.configs.plot_cfg,
-            }
-            if ledger.quantifications:
-                active_quant_id = ledger.active_quant
-                active_quant_config = next(
-                    (
-                        quant_config
-                        for quant_config in ledger.quantifications
-                        if quant_config.quantification_id == active_quant_id
-                    ),
-                    ledger.quantifications[-1],
-                )
-                configs[cnst.QUANTIFICATION_CFG_KEY] = config_classes_dict[cnst.QUANTIFICATION_CFG_KEY](
-                    **active_quant_config.options
-                )
-                active_clustering_analysis = active_quant_config.get_active_clustering_analysis()
-                active_clustering_config = (
-                    active_clustering_analysis.config if active_clustering_analysis is not None else None
-                )
-                if active_clustering_config is not None:
-                    configs[cnst.CLUSTERING_CFG_KEY] = active_clustering_config
-            else:
-                configs[cnst.QUANTIFICATION_CFG_KEY] = config_classes_dict[cnst.QUANTIFICATION_CFG_KEY]()
-            if ledger.configs.measurement_cfg.powder_meas_cfg is not None:
-                configs[cnst.POWDER_MEASUREMENT_CFG_KEY] = ledger.configs.measurement_cfg.powder_meas_cfg
-            if ledger.configs.measurement_cfg.bulk_meas_cfg is not None:
-                configs[cnst.BULK_MEASUREMENT_CFG_KEY] = ledger.configs.measurement_cfg.bulk_meas_cfg
-            metadata = {}
+            ledger_cfgs = ledger_runtime_configs(ledger)
+            active_quant_config = ledger_cfgs.active_quant_config
         except FileNotFoundError:
             logging.warning(f"Could not find {spectral_info_f_path}. Skipping sample '{sample_ID}'.")
             continue
@@ -270,19 +234,15 @@ def batch_quantify_and_analyze(
         sample_processing_time_start = time.time()
     
         # Retrieve configuration objects for this sample
-        try:
-            microscope_cfg      = configs[cnst.MICROSCOPE_CFG_KEY]
-            sample_cfg          = configs[cnst.SAMPLE_CFG_KEY]
-            measurement_cfg     = configs[cnst.MEASUREMENT_CFG_KEY]
-            sample_substrate_cfg= configs[cnst.SAMPLESUBSTRATE_CFG_KEY]
-            quant_cfg           = configs[cnst.QUANTIFICATION_CFG_KEY]
-            clustering_cfg      = configs.get(cnst.CLUSTERING_CFG_KEY)
-            plot_cfg            = configs[cnst.PLOT_CFG_KEY]
-            powder_meas_cfg     = configs.get(cnst.POWDER_MEASUREMENT_CFG_KEY, None)  # Optional
-            bulk_meas_cfg     = configs.get(cnst.BULK_MEASUREMENT_CFG_KEY, None)  # Optional
-        except KeyError as e:
-            logging.warning(f"Missing configuration '{e.args[0]}' in {spectral_info_f_path}. Skipping sample '{sample_ID}'.")
-            continue
+        microscope_cfg       = ledger_cfgs.microscope_cfg
+        sample_cfg           = ledger_cfgs.sample_cfg
+        measurement_cfg      = ledger_cfgs.measurement_cfg
+        sample_substrate_cfg = ledger_cfgs.sample_substrate_cfg
+        quant_cfg            = ledger_cfgs.quant_cfg
+        clustering_cfg       = ledger_cfgs.clustering_cfg
+        plot_cfg             = ledger_cfgs.plot_cfg
+        powder_meas_cfg      = ledger_cfgs.powder_meas_cfg
+        bulk_meas_cfg        = ledger_cfgs.bulk_meas_cfg
         
         # Sample elements
         if els_sample is not None and (els_sample[0] == "" or els_sample[0] is None):
@@ -304,10 +264,6 @@ def batch_quantify_and_analyze(
         elif len(els_substrate) > 0:
             sample_substrate_cfg.elements = els_substrate
 
-        if clustering_cfg is None:
-            clustering_cfg = ClusteringConfig()
-        if quant_cfg is None:
-            quant_cfg = config_classes_dict[cnst.QUANTIFICATION_CFG_KEY]()
         
         if min_bckgrnd_cnts is not None:
             quant_cfg.min_bckgrnd_cnts = min_bckgrnd_cnts

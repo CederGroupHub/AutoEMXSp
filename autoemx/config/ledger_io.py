@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """Convenience I/O helpers for sample ledgers."""
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, cast
 
@@ -10,9 +11,21 @@ from autoemx._logging import get_logger
 
 from autoemx.config.ledger_schemas import (  # type: ignore
     AcquisitionDetails,
+    ClusteringConfig,
     LedgerConfigs,
+    QuantificationConfig,
     SampleLedger,
     SpectrumEntry,
+)
+from autoemx.config.runtime_configs import (
+    BulkMeasurementConfig,
+    MeasurementConfig,
+    MicroscopeConfig,
+    PlotConfig,
+    PowderMeasurementConfig,
+    QuantificationOptionsConfig,
+    SampleConfig,
+    SampleSubstrateConfig,
 )
 
 logger = get_logger(__name__)
@@ -279,6 +292,66 @@ def load_sample_ledger(file_path: str | Path) -> SampleLedger:
         f"from '{sample_result_dir}' (ledger.json and Data.csv not found)."
     )
     return ledger
+
+
+def get_active_quantification_config(ledger: Optional[SampleLedger]) -> Optional[QuantificationConfig]:
+    """Return the active quantification run of the ledger (the last one if none is active), or None if none."""
+    if ledger is None or not ledger.quantifications:
+        return None
+    return next(
+        (config for config in ledger.quantifications if config.quantification_id == ledger.active_quant),
+        ledger.quantifications[-1],
+    )
+
+
+@dataclass
+class LedgerRuntimeConfigs:
+    """Configurations of a sample ledger, as used by the runners.
+
+    The acquisition configurations are the ledger's own objects (not copies). The quantification options and the
+    clustering configuration are those of the active quantification run, or defaults if the sample was never
+    quantified or analysed.
+    """
+
+    microscope_cfg: MicroscopeConfig
+    sample_cfg: SampleConfig
+    measurement_cfg: MeasurementConfig
+    sample_substrate_cfg: SampleSubstrateConfig
+    plot_cfg: PlotConfig
+    powder_meas_cfg: Optional[PowderMeasurementConfig]
+    bulk_meas_cfg: Optional[BulkMeasurementConfig]
+    quant_cfg: QuantificationOptionsConfig
+    clustering_cfg: ClusteringConfig
+    active_quant_config: Optional[QuantificationConfig]
+
+
+def ledger_runtime_configs(ledger: SampleLedger) -> LedgerRuntimeConfigs:
+    """Collect the configurations of a sample ledger needed to quantify or analyse it again."""
+    active_quant_config = get_active_quantification_config(ledger)
+    quant_cfg = (
+        QuantificationOptionsConfig(**active_quant_config.options)
+        if active_quant_config is not None
+        else QuantificationOptionsConfig()
+    )
+    active_clustering_analysis = (
+        active_quant_config.get_active_clustering_analysis() if active_quant_config is not None else None
+    )
+    clustering_cfg = (
+        active_clustering_analysis.config if active_clustering_analysis is not None else ClusteringConfig()
+    )
+    configs = ledger.configs
+    return LedgerRuntimeConfigs(
+        microscope_cfg=configs.microscope_cfg,
+        sample_cfg=configs.sample_cfg,
+        measurement_cfg=configs.measurement_cfg,
+        sample_substrate_cfg=configs.sample_substrate_cfg,
+        plot_cfg=configs.plot_cfg,
+        powder_meas_cfg=configs.measurement_cfg.powder_meas_cfg,
+        bulk_meas_cfg=configs.measurement_cfg.bulk_meas_cfg,
+        quant_cfg=quant_cfg,
+        clustering_cfg=clustering_cfg,
+        active_quant_config=active_quant_config,
+    )
 
 
 def save_sample_ledger(

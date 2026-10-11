@@ -44,7 +44,8 @@ from autoemx.utils.plotting_helpers import (
     ensure_custom_plot_file,
     refresh_custom_plot_template_file,
 )
-from autoemx.config import config_classes_dict, load_sample_ledger
+from autoemx.config import load_sample_ledger
+from autoemx.config.ledger_io import ledger_runtime_configs
 from autoemx.config.ledger_schemas import (
     AitchisonParams,
     ClusterMergeParams,
@@ -235,39 +236,7 @@ def analyze_sample(
     spectral_info_f_path = ledger_path
     try:
         ledger = load_sample_ledger(ledger_path)
-        configs = {
-            cnst.MICROSCOPE_CFG_KEY: ledger.configs.microscope_cfg,
-            cnst.SAMPLE_CFG_KEY: ledger.configs.sample_cfg,
-            cnst.MEASUREMENT_CFG_KEY: ledger.configs.measurement_cfg,
-            cnst.SAMPLESUBSTRATE_CFG_KEY: ledger.configs.sample_substrate_cfg,
-            cnst.PLOT_CFG_KEY: ledger.configs.plot_cfg,
-        }
-        if ledger.quantifications:
-            active_quant_id = ledger.active_quant
-            active_quant_config = next(
-                (
-                    quant_config
-                    for quant_config in ledger.quantifications
-                    if quant_config.quantification_id == active_quant_id
-                ),
-                ledger.quantifications[-1],
-            )
-            configs[cnst.QUANTIFICATION_CFG_KEY] = config_classes_dict[cnst.QUANTIFICATION_CFG_KEY](
-                **active_quant_config.options
-            )
-            active_clustering_analysis = active_quant_config.get_active_clustering_analysis()
-            active_clustering_config = (
-                active_clustering_analysis.config if active_clustering_analysis is not None else None
-            )
-            if active_clustering_config is not None:
-                configs[cnst.CLUSTERING_CFG_KEY] = active_clustering_config
-        else:
-            configs[cnst.QUANTIFICATION_CFG_KEY] = config_classes_dict[cnst.QUANTIFICATION_CFG_KEY]()
-        if ledger.configs.measurement_cfg.powder_meas_cfg is not None:
-            configs[cnst.POWDER_MEASUREMENT_CFG_KEY] = ledger.configs.measurement_cfg.powder_meas_cfg
-        if ledger.configs.measurement_cfg.bulk_meas_cfg is not None:
-            configs[cnst.BULK_MEASUREMENT_CFG_KEY] = ledger.configs.measurement_cfg.bulk_meas_cfg
-        metadata = {}
+        ledger_cfgs = ledger_runtime_configs(ledger)
     except Exception as e:
         logging.error(f"Error loading {spectral_info_f_path}. Skipping sample '{sample_ID}': {e}")
         return
@@ -275,24 +244,16 @@ def analyze_sample(
     sample_processing_time_start = time.time()
 
     # Retrieve configuration objects for this sample
-    try:
-        microscope_cfg      = configs[cnst.MICROSCOPE_CFG_KEY]
-        sample_cfg          = configs[cnst.SAMPLE_CFG_KEY]
-        measurement_cfg     = configs[cnst.MEASUREMENT_CFG_KEY]
-        sample_substrate_cfg= configs[cnst.SAMPLESUBSTRATE_CFG_KEY]
-        quant_cfg           = configs[cnst.QUANTIFICATION_CFG_KEY]
-        clustering_cfg      = configs.get(cnst.CLUSTERING_CFG_KEY)
-        plot_cfg            = configs[cnst.PLOT_CFG_KEY]
-        powder_meas_cfg     = configs.get(cnst.POWDER_MEASUREMENT_CFG_KEY, None)  # Optional
-        bulk_meas_cfg     = configs.get(cnst.BULK_MEASUREMENT_CFG_KEY, None)  # Optional
-    except KeyError as e:
-        logging.error(f"Missing configuration '{e.args[0]}' in {spectral_info_f_path}. Skipping sample '{sample_ID}'.")
-        return
+    microscope_cfg       = ledger_cfgs.microscope_cfg
+    sample_cfg           = ledger_cfgs.sample_cfg
+    measurement_cfg      = ledger_cfgs.measurement_cfg
+    sample_substrate_cfg = ledger_cfgs.sample_substrate_cfg
+    quant_cfg            = ledger_cfgs.quant_cfg
+    clustering_cfg       = ledger_cfgs.clustering_cfg
+    plot_cfg             = ledger_cfgs.plot_cfg
+    powder_meas_cfg      = ledger_cfgs.powder_meas_cfg
+    bulk_meas_cfg        = ledger_cfgs.bulk_meas_cfg
 
-    if clustering_cfg is None:
-        clustering_cfg = ClusteringConfig()
-    if quant_cfg is None:
-        quant_cfg = config_classes_dict[cnst.QUANTIFICATION_CFG_KEY]()
 
     # --- Modify Clustering Configuration
     forced_key = "forced"
