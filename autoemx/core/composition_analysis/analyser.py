@@ -3865,17 +3865,15 @@ class EMXSp_Composition_Analyzer:
         
             if quantify:
                 indices_to_process_set = set(indices_to_process)
+                n_already_quantified = sum(
+                    1 for i in range(tot_spectra_collected)
+                    if i not in indices_to_process_set and self.spectra_quant_records[i] is not None
+                )
+                if self.verbose and n_already_quantified > 0 and not force_requantification:
+                    print_single_separator()
+                    logger.info(f"⏭️ {n_already_quantified} spectra already quantified. Skipping them...")
                 for i in range(tot_spectra_collected):
                     if i not in indices_to_process_set:
-                        quant_record = self.spectra_quant_records[i]
-                        if quant_record is not None and not force_requantification:
-                            if self.verbose:
-                                print_single_separator()
-                                logger.info(
-                                    "⏭️ Spectrum #%d/%d already quantified. Skipping...",
-                                    i + 1,
-                                    tot_spectra_collected,
-                                )
                         continue
 
                     spectrum_entry = _ledger_spectra[i]
@@ -4040,19 +4038,31 @@ class EMXSp_Composition_Analyzer:
                         idx, result, quant_record, quantification_time = _quantify_spectrum_worker(payload)
                         _finalize_quant_result(idx, result, quant_record, quantification_time)
 
-            n_seed = self._identification_seed_spectra()
-            if self._identify_missing_elements() and 0 < n_seed < len(quant_worker_payloads):
-                # Element pool: elements confirmed in the first spectra are tested first in the others
-                seed_payloads, other_payloads = quant_worker_payloads[:n_seed], quant_worker_payloads[n_seed:]
-                _execute(seed_payloads)
+            def _build_identification_pool(records):
                 pool = []
-                for payload in seed_payloads:
-                    record = self.spectra_quant_records[int(payload['spectrum_index'])]
+                for record in records:
                     diag = getattr(record, 'diagnostics', None) if record is not None else None
                     for el in (getattr(diag, 'added_elements', None) or []) + (getattr(diag, 'added_unquantified_elements', None) or []):
                         if el not in pool:
                             pool.append(el)
-                if pool:
+                return pool
+
+            # Element pool: elements confirmed in the first spectra are tested first in the others.
+            # Spectra already processed in this run (e.g. earlier particles during acquisition) count as seed.
+            n_seed = self._identification_seed_spectra()
+            payload_indices = {int(payload['spectrum_index']) for payload in quant_worker_payloads}
+            prior_records = [
+                record for i, record in enumerate(self.spectra_quant_records[:tot_spectra_collected])
+                if i not in payload_indices and record is not None
+            ]
+            n_seed_missing = n_seed - len(prior_records)
+            if self._identify_missing_elements() and n_seed > 0 and n_seed_missing <= len(quant_worker_payloads):
+                n_seed_missing = max(0, n_seed_missing)
+                seed_payloads, other_payloads = quant_worker_payloads[:n_seed_missing], quant_worker_payloads[n_seed_missing:]
+                _execute(seed_payloads)
+                seed_records = [self.spectra_quant_records[int(payload['spectrum_index'])] for payload in seed_payloads]
+                pool = _build_identification_pool(prior_records + seed_records)
+                if pool and seed_payloads:
                     logger.info(f"🔎 Element identification: elements found in the first {n_seed} spectra, "
                                 f"tested first in the others: {', '.join(pool)}")
                 for payload in other_payloads:
@@ -4428,11 +4438,11 @@ class EMXSp_Composition_Analyzer:
         
         if quantify:
             if is_exp_std_measurement:
-                quant_str = ' and fitting'
+                quant_str, quant_verb_str = ' and fitting', ' and fitting'
             else:
-                quant_str = ' and quantification'
+                quant_str, quant_verb_str = ' and quantification', ' and quantifying'
         else:
-            quant_str = ''
+            quant_str, quant_verb_str = '', ''
 
         
         if self.verbose:
@@ -4444,7 +4454,7 @@ class EMXSp_Composition_Analyzer:
         while tot_n_spectra < self.max_n_spectra:
             if self.verbose:
                 print_double_separator()
-                logger.info(f"🔬 Collecting{quant_str} {n_spectra_to_collect} spectra...")
+                logger.info(f"🔬 Collecting{quant_verb_str} {n_spectra_to_collect} spectra...")
     
             # Collect the next batch of spectra (and quantify if requested)
             n_spectra_before = tot_n_spectra
@@ -4498,13 +4508,19 @@ class EMXSp_Composition_Analyzer:
         logger.info('ℹ️ Sample ID: %s', self.sample_id)
         if self.sample_cfg.is_particle_acquisition:
             if n_spectra_collected_this_session > 0:
-                par_str = f' over {self.particle_cntr} particles'
+                final_ledger = self._load_or_create_ledger()
+                n_particles = len({
+                    s.acquisition_details.particle_id
+                    for s in (final_ledger.spectra if final_ledger is not None else [])
+                    if s.acquisition_details is not None and s.acquisition_details.particle_id is not None
+                })
+                par_str = f' over {n_particles} particles'
             else:
                 par_str = ' (no new spectra collected in this session)'
         else:
             par_str = ''
         if n_spectra_collected_this_session > 0:
-            logger.info(f'✅ {n_spectra_collected_this_session} new spectra collected (total: {tot_n_spectra}){par_str}.')
+            logger.info(f'✅ {n_spectra_collected_this_session} new spectra collected (total: {tot_n_spectra}{par_str}).')
         else:
             logger.info(f'✅ {tot_n_spectra} total spectra available{par_str}.')
         process_time = (time.time() - self.start_process_time) / 60
