@@ -340,14 +340,16 @@ class StandardsModule:
         peak_energies_dict: Dict[str, float] = {}
         means_pb: List[float] = []
         w_frs: List[float] = []
+        # Composition of the standard
+        std_w_frs_by_el = self.sample_cfg.w_frs or {}
 
         for el_line, line_result in std_ref_lines.items():
             peak_energies_dict[el_line] = float(line_result.peak_theoretical_energy_keV)
             means_pb.append(float(line_result.measured_pb))
             el = el_line.split('_')[0]
-            if el not in self.exp_stds_cfg.w_frs:
-                raise RuntimeError(f"Mass fraction for element '{el}' not found in exp_stds_cfg.w_frs.")
-            w_frs.append(float(self.exp_stds_cfg.w_frs[el]))
+            if el not in std_w_frs_by_el:
+                raise RuntimeError(f"Mass fraction for element '{el}' not found in sample_cfg.w_frs.")
+            w_frs.append(float(std_w_frs_by_el[el]))
 
         zaf_calculator = Quant_Corrections(
             elements=self.detectable_els_sample,
@@ -357,11 +359,11 @@ class StandardsModule:
             verbose=False,
         )
 
-        missing_elements = [el for el in self.detectable_els_sample if el not in self.exp_stds_cfg.w_frs]
+        missing_elements = [el for el in self.detectable_els_sample if el not in std_w_frs_by_el]
         if missing_elements:
             missing_txt = ", ".join(missing_elements)
             raise RuntimeError(f"Missing mass fraction(s) for detectable element(s): {missing_txt}.")
-        nominal_w_frs = np.asarray([self.exp_stds_cfg.w_frs[el] for el in self.detectable_els_sample], dtype=float)
+        nominal_w_frs = np.asarray([std_w_frs_by_el[el] for el in self.detectable_els_sample], dtype=float)
         zaf_pb, z_sample = zaf_calculator.get_ZAF_mult_f_pb(nominal_w_frs, peak_energies_dict)
         pb_corrected = zaf_pb * np.array(means_pb) / np.array(w_frs)
         return pb_corrected, z_sample
@@ -387,7 +389,7 @@ class StandardsModule:
         if len(pb_corrected) != len(line_keys):
             raise ValueError("Length of pb_corrected does not match number of reference lines.")
 
-        std_w_frs = {el: float(w) for el, w in dict(self.exp_stds_cfg.w_frs).items()}
+        std_w_frs = {el: float(w) for el, w in dict(self.sample_cfg.w_frs).items()}
         std_elements = list(std_w_frs.keys())
         std_w_fr_list = [std_w_frs[el] for el in std_elements]
         std_at_fr_list = weight_to_atomic_fr(std_w_fr_list, std_elements, verbose=False)

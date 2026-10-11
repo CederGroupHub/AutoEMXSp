@@ -322,14 +322,13 @@ def fit_and_quantify_spectrum_from_ledger(
     if els_substrate is None:
         els_substrate = []
 
-    # Weight fractions of a standard: from the sample config, otherwise from the experimental standard config
+    # Weight fractions of a standard, stored in the sample config
     if els_w_frs is None and is_standard:
-        exp_stds_cfg = getattr(ledger.configs.measurement_cfg, "exp_stds_cfg", None)
-        els_w_frs = sample_cfg.w_frs or getattr(exp_stds_cfg, "w_frs", None)
+        els_w_frs = sample_cfg.w_frs
         if els_w_frs is None:
             raise ValueError(
                 f"No 'w_frs' (element weight fractions) found for standard '{sample_ID}' in the ledger "
-                f"(sample_cfg or measurement_cfg.exp_stds_cfg). Pass 'els_w_frs' directly, or add 'w_frs' to the ledger."
+                f"(sample_cfg). Pass 'els_w_frs' directly, or add 'w_frs' to the ledger."
             )
 
     quantifier = fit_and_quantify_spectrum(

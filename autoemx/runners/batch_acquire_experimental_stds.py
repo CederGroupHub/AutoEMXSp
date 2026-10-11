@@ -227,7 +227,7 @@ def batch_acquire_experimental_stds(
     if max_XSp_acquisition_time is None:
         max_XSp_acquisition_time = target_Xsp_counts / 10000 * 5
     if els_substrate is None:
-        els_substrate = list(dflt.substrate_els_without_identification)
+        els_substrate = list(dflts.substrate_els_without_identification)
     
     # --- Configuration objects
     microscope_cfg = MicroscopeConfig(
@@ -303,13 +303,16 @@ def batch_acquire_experimental_stds(
         )
         
         
-        if exp_stds_cfg.w_frs is None:
+        # The composition of the standard, from its formula, is kept fixed during fits
+        w_frs = exp_stds_cfg.formula_w_frs()
+        if w_frs is None:
             raise ValueError(
-                f"Experimental standards configuration for '{sample_ID}' is missing 'w_frs'."
+                f"Experimental standards configuration for '{sample_ID}' is missing the formula of the standard."
             )
-        elements = list(exp_stds_cfg.w_frs.keys())
+        elements = list(w_frs.keys())
         sample_cfg = SampleConfig(
             elements=elements,
+            w_frs=w_frs,
             type=sample_type,
             center_pos=center_pos,
             half_width_mm=sample_halfwidth

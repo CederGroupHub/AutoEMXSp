@@ -1606,7 +1606,7 @@ class EMXSp_Composition_Analyzer:
                 background_vals=background,
                 els_sample=self.all_els_sample,
                 els_substrate=self.detectable_els_substrate,
-                els_w_fr=self.exp_stds_cfg.w_frs,
+                els_w_fr=self.sample_cfg.w_frs,
                 is_particle=self._apply_geom_factors,
                 sp_collection_time=sp_collection_time,
                 max_undetectable_w_fr=self.undetectable_an_er,
@@ -3037,11 +3037,6 @@ class EMXSp_Composition_Analyzer:
 
     def _get_forced_mass_fractions(self) -> Optional[Dict[str, float]]:
         """Return forced elemental mass fractions for the active run, if any."""
-        if getattr(self.exp_stds_cfg, "is_exp_std_measurement", False):
-            forced = getattr(self.exp_stds_cfg, "w_frs", None)
-            if isinstance(forced, dict) and forced:
-                return {str(el): float(fr) for el, fr in forced.items()}
-
         forced = getattr(self.sample_cfg, "w_frs", None)
         if isinstance(forced, dict) and forced:
             return {str(el): float(fr) for el, fr in forced.items()}
@@ -3876,9 +3871,7 @@ class EMXSp_Composition_Analyzer:
                         'all_els_sample': list(self.all_els_sample),
                         'detectable_els_substrate': list(self.detectable_els_substrate),
                         'sample_w_frs': (
-                            dict(self.exp_stds_cfg.w_frs)
-                            if self.exp_stds_cfg.w_frs is not None
-                            else dict(self.sample_cfg.w_frs)
+                            dict(self.sample_cfg.w_frs)
                             if self.sample_cfg.w_frs is not None
                             else None
                         ),
@@ -3994,7 +3987,7 @@ class EMXSp_Composition_Analyzer:
                                     (getattr(peak, 'element', None), getattr(peak, 'line', None), getattr(peak, 'pb_ratio', None))
                                     for peak in fitted_peaks.values()
                                 ),
-                                standard_elements=getattr(getattr(self, 'exp_stds_cfg', None), 'w_frs', None),
+                                standard_elements=self.sample_cfg.w_frs,
                             )
                             if pb_lines:
                                 lines.append("  Measured PB:")
@@ -4802,8 +4795,8 @@ class EMXSp_Composition_Analyzer:
         ValueError
             If `self.exp_stds_cfg.is_exp_std_measurement` is not set to True.
         KeyError
-            If any element in `self.sample_cfg.elements` is missing from 
-            `self.exp_stds_cfg.w_frs`.
+            If any element in `self.sample_cfg.elements` is missing from
+            `self.sample_cfg.w_frs` (the composition of the standard).
         """
     
         if not self.exp_stds_cfg.is_exp_std_measurement:
@@ -4812,8 +4805,8 @@ class EMXSp_Composition_Analyzer:
                 "Set `self.exp_stds_cfg.is_exp_std_measurement = True` before running."
             )
         
-        # Ensure all elemental fractions are defined in the experimental standard configuration
-        missing = [el for el in self.sample_cfg.elements if el not in self.exp_stds_cfg.w_frs]
+        # Ensure all elemental fractions of the standard are defined
+        missing = [el for el in self.sample_cfg.elements if el not in (self.sample_cfg.w_frs or {})]
         if missing:
             raise KeyError(
                 f"The following elements are missing from `exp_stds_cfg.formula`: "

@@ -44,6 +44,38 @@ class LedgerConfigs(BaseModel):
             return cleaned
         return data
 
+    @model_validator(mode="before")
+    @classmethod
+    def move_legacy_exp_std_w_frs(cls, data: Any) -> Any:
+        """Legacy compatibility: move the standard's mass fractions from exp_stds_cfg to sample_cfg.
+
+        Old ledgers stored them in measurement_cfg.exp_stds_cfg.w_frs.
+        """
+        if not isinstance(data, dict):
+            return data
+        measurement_cfg = data.get("measurement_cfg")
+        sample_cfg = data.get("sample_cfg")
+        if not isinstance(measurement_cfg, dict) or not isinstance(sample_cfg, dict):
+            return data
+        exp_stds_cfg = measurement_cfg.get("exp_stds_cfg")
+        if not isinstance(exp_stds_cfg, dict):
+            return data
+
+        exp_stds_cfg = dict(exp_stds_cfg)
+        legacy_w_frs = exp_stds_cfg.pop("w_frs", None)
+        if legacy_w_frs and exp_stds_cfg.get("is_exp_std_measurement") and not sample_cfg.get("w_frs"):
+            sample_cfg = {**sample_cfg, "w_frs": legacy_w_frs}
+        measurement_cfg = {**measurement_cfg, "exp_stds_cfg": exp_stds_cfg}
+        return {**data, "measurement_cfg": measurement_cfg, "sample_cfg": sample_cfg}
+
+    @model_validator(mode="after")
+    def set_exp_std_w_frs(self) -> "LedgerConfigs":
+        """Set the composition of an experimental standard from its formula, when not stored yet."""
+        exp_stds_cfg = self.measurement_cfg.exp_stds_cfg
+        if exp_stds_cfg is not None and exp_stds_cfg.is_exp_std_measurement and not self.sample_cfg.w_frs:
+            self.sample_cfg.w_frs = exp_stds_cfg.formula_w_frs()
+        return self
+
     @property
     def powder_meas_cfg(self) -> Optional[PowderMeasurementConfig]:
         return self.measurement_cfg.powder_meas_cfg

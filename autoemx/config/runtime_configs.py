@@ -120,8 +120,8 @@ class SampleConfig(BaseModel):
             - bulk: Expects a flat, continuous surface, sampled in a grid. Does not apply geometrical factors.
             - bulk_rough: Expects a continuous surface, sampled in a grid. Applies geometrical factors.
             - film: NOT IMPLEMENTED YET
-        w_frs (Dict[str,float]): Dict of elemental mass fractions to be kept fixed (e.g., {'Fe': 0.4, 'O': 0.6}).
-            Normally not used
+        w_frs (Dict[str,float]): Known elemental mass fractions, kept fixed during fits (e.g., {'Fe': 0.4, 'O': 0.6}).
+            Set automatically for experimental standards from their formula (ExpStandardsConfig.formula_w_frs).
         center_pos (Tuple[float, float]): (x, y) center position of the sample on the stage, in mm.
         half_width_mm (float): Half-width of the sample in millimeters.
 
@@ -571,10 +571,6 @@ class ExpStandardsConfig(BaseModel):
             See the user documentation page "Quantification flags (quant_flag)" for the meaning of each value.
             Common defaults are ``[0]`` (experimental standards) or ``[0, -1]`` (analysis workflows).
 
-        w_frs (Optional[Dict[str, float]]):
-            Dictionary of element symbols and their corresponding weight fractions (computed via pymatgen)
-            if `is_exp_std_measurement` is True and `formula` is valid; otherwise None.
-
     Raises:
         ValueError:
             If `is_exp_std_measurement` is True but `formula` is missing or invalid.
@@ -586,9 +582,17 @@ class ExpStandardsConfig(BaseModel):
     generate_separate_std_dict: bool = False
     min_acceptable_PB_ratio: float = 10
     quant_flags_accepted: List[int] = Field(default_factory=lambda: [0])
-    w_frs: Optional[Dict[str, float]] = None
 
     model_config = ConfigDict(extra="forbid")
+
+    def formula_w_frs(self) -> Optional[Dict[str, float]]:
+        """Mass fractions of the standard computed from its formula, or None if no formula is set.
+
+        The standard's composition is stored in SampleConfig.w_frs, which is set from this value.
+        """
+        if not self.formula:
+            return None
+        return composition_as_weight_dict(Composition(self.formula))
 
     @model_validator(mode="before")
     @classmethod
@@ -603,6 +607,9 @@ class ExpStandardsConfig(BaseModel):
                     data["els_to_use_for_mean_PB_calc"] = None
             # Remove legacy key if present
             data.pop("use_for_mean_PB_calc", None)
+            # Legacy compatibility: the standard's mass fractions are now stored in SampleConfig.w_frs
+            # (moved there by LedgerConfigs when a ledger is loaded)
+            data.pop("w_frs", None)
         return data
 
     @model_validator(mode="after")
@@ -626,8 +633,7 @@ class ExpStandardsConfig(BaseModel):
             if not self.formula:
                 raise ValueError("Formula must be provided when is_exp_std_measurement is True.")
             try:
-                comp = Composition(self.formula)
-                self.w_frs = composition_as_weight_dict(comp)
+                Composition(self.formula)
             except Exception as e:
                 raise ValueError(f"Invalid chemical formula '{self.formula}': {e}")
         return self

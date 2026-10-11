@@ -260,7 +260,7 @@ def batch_fit_experimental_stds(
             continue
 
         if els_w_frs is not None and len(els_w_frs) > 0:
-            exp_stds_cfg.w_frs = els_w_frs
+            sample_cfg.w_frs = els_w_frs
 
         if min_bckgrnd_cnts is not None:
             clustering_cfg.min_bckgrnd_cnts = min_bckgrnd_cnts
