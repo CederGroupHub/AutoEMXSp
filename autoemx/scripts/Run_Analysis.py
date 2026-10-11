@@ -84,6 +84,7 @@ do_matrix_decomposition = True
 # Spectral Filtering options
 # =============================================================================
 max_analytical_error_percent = 5 # w%
+min_bckgrnd_cnts = None # Minimum background counts under the reference peaks (quant_flag 8). None keeps the saved value. Applied with no need to requantify
 quant_flags_accepted = [0, -1] #8 #, 4, 5, 6, 7, 8]  # See docs: Quantification flags (quant_flag).
 
 # =============================================================================
@@ -121,6 +122,7 @@ comp_analyzer = analyze_sample(
     k_finding_method = k_finding_method,
     do_matrix_decomposition = do_matrix_decomposition,
     max_analytical_error_percent=max_analytical_error_percent,
+    min_bckgrnd_cnts=min_bckgrnd_cnts,
     quant_flags_accepted=quant_flags_accepted,
     plot_custom_plots=plot_custom_plots,
     show_unused_compositions_cluster_plot=show_unused_compositions_cluster_plot,

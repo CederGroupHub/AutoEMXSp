@@ -66,8 +66,7 @@ def batch_fit_experimental_stds(
         Whether to use instrument background files during fitting.
     min_bckgrnd_cnts : float, optional
         Minimum background counts required for a spectrum not to be filtered out
-        (QuantificationOptionsConfig.min_bckgrnd_cnts). If None (default), keeps the value of the standard's
-        active quantification run.
+        (ClusteringConfig.min_bckgrnd_cnts). If None (default), keeps the value of the standard's active analysis.
     update_std_library : bool, optional
         If True, the experimental standard library will be updated with the newly fitted PB ratios.
     force_refitting : bool, optional
@@ -209,7 +208,7 @@ def batch_fit_experimental_stds(
             sample_cfg.w_frs = els_w_frs
 
         if min_bckgrnd_cnts is not None:
-            quant_cfg.min_bckgrnd_cnts = min_bckgrnd_cnts
+            clustering_cfg.min_bckgrnd_cnts = min_bckgrnd_cnts
         if use_instrument_background is not None:
             quant_cfg.use_instrument_background = use_instrument_background
         if spectrum_lims is not None:

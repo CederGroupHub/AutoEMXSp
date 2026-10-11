@@ -161,18 +161,18 @@ but require re-quantification:
   fraction of ``target_acquisition_counts`` (default ``0.9`` = 90%). Spectra
   below this threshold are flagged (``quant_flag = 2``). Lower this to quantify
   shorter acquisitions; ``0`` disables the check.
-- ``min_bckgrnd_cnts``: Minimum counts required under a reference peak for acceptance.
-
-  - Spectra failing this criterion are flagged (``quant_flag = 8``).
-  - If ``interrupt_fits_bad_spectra = False``, they are quantified but filtered
-    later.
-  - If too many spectra end up being flagged, consider decreasing ``min_bckgrnd_cnts`` 
-    or increasing ``target_Xsp_counts`` in your following measurements.
-  - You can also change ``min_bckgrnd_cnts`` and requantify the spectra (Step 8).
-    This creates a new quantification run, in which all spectra are requantified
-    (previous runs are kept in the ledger).
 
 The following parameters require only re-analysis of compositions:
+
+- ``min_bckgrnd_cnts``: Minimum counts required under a reference peak for acceptance.
+
+  - Spectra failing this criterion are flagged (``quant_flag = 8``) and filtered
+    out during clustering, unless ``8`` is in ``quant_flags_accepted``.
+  - If too many spectra end up being flagged, consider decreasing ``min_bckgrnd_cnts``
+    or increasing ``target_Xsp_counts`` in your following measurements.
+  - When re-analysing, the spectra are re-flagged from the background counts stored
+    with their quantification. Spectra quantified by AutoEMX versions that did not
+    store them keep their flag: requantify them first to apply a new value.
 
 - ``max_analytical_error_percent``: Sets the maximum acceptable analytical error
   for filtering compositions during clustering. Compositions exceeding this

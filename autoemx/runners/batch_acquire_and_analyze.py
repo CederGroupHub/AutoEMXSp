@@ -185,7 +185,7 @@ def batch_acquire_and_analyze(
         Default is `5` (ClusteringConfig.max_analytical_error_percent).
     min_bckgrnd_cnts : float, optional
         Minimum background counts required for a spectrum not to be filtered out.
-        Default is `5` (QuantificationOptionsConfig.min_bckgrnd_cnts).
+        Default is `5` (ClusteringConfig.min_bckgrnd_cnts).
     quant_flags_accepted : list of int, optional
         List of acceptable quantification flags; others are filtered out before clustering.
         Default is `[0, -1]` (ClusteringConfig.quant_flags_accepted).
@@ -362,7 +362,6 @@ def batch_acquire_and_analyze(
         spectrum_lims=spectrum_lims,
         use_instrument_background=use_instrument_background,
         use_project_specific_std_dict = use_project_specific_std_dict,
-        min_bckgrnd_cnts=min_bckgrnd_cnts,
         is_known_phase_mixture=is_known_phase_mixture,
     )
 
@@ -474,6 +473,7 @@ def batch_acquire_and_analyze(
             max_k=max_n_clusters,
             ref_formulae=ref_formulae,
             max_analytical_error_percent=max_analytical_error_percent,
+            min_bckgrnd_cnts=min_bckgrnd_cnts,
             quant_flags_accepted=quant_flags_accepted
         )
 

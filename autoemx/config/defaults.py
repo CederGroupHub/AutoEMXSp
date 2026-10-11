@@ -36,16 +36,20 @@ min_total_counts_fraction : float
     Minimum accepted total spectrum counts as a fraction of ``target_acquisition_counts``.
     Default is `0.9` (QuantificationOptionsConfig.min_total_counts_fraction).
 min_bckgrnd_cnts : float
-    Minimum background counts: spectra whose low-energy background (quant_flag 3) or background under the reference
-    peaks (quant_flag 8) is lower are flagged. Default is `5.0` (QuantificationOptionsConfig.min_bckgrnd_cnts).
+    Minimum background counts under the reference peaks: spectra below are flagged (quant_flag 8). A filter of the
+    analysis, re-evaluated from the stored background counts of each spectrum. Default is `5.0`
+    (ClusteringConfig.min_bckgrnd_cnts).
 
 Quality checks of spectra and quantifications (quant_flag values, see the user documentation page "Quantification
 flags"). Fixed thresholds, not settings.
 
 prefit_bckgrnd_max_energy_keV : float
     quant_flag 3: the background is checked on the spectrum below this energy. Default is `2` keV.
+prefit_min_bckgrnd_cnts : float
+    quant_flag 3: minimum background counts of the spectrum below prefit_bckgrnd_max_energy_keV. Default is `5.0`.
 prefit_bckgrnd_n_points : int
-    quant_flag 3: number of lowest (smoothed) spectrum points that must all be below min_bckgrnd_cnts. Default is `20`.
+    quant_flag 3: number of lowest (smoothed) spectrum points that must all be below prefit_min_bckgrnd_cnts.
+    Default is `20`.
 prefit_bckgrnd_smoothing_channels : int
     quant_flag 3: width of the moving average applied to the spectrum before the check, in channels. Default is `3`.
 max_redchi_percent_total_counts : float
@@ -160,6 +164,7 @@ min_bckgrnd_cnts: float = 5.0
 
 # Quality checks of spectra and quantifications (fixed thresholds, see the module docstring)
 prefit_bckgrnd_max_energy_keV: float = 2
+prefit_min_bckgrnd_cnts: float = 5.0
 prefit_bckgrnd_n_points: int = 20
 prefit_bckgrnd_smoothing_channels: int = 3
 max_redchi_percent_total_counts: float = 0.16

@@ -152,7 +152,7 @@ def batch_acquire_experimental_stds(
         Default is `False` (QuantificationOptionsConfig.use_instrument_background).
     min_bckgrnd_cnts : float, optional
         Minimum background counts required for a spectrum not to be filtered out.  
-        Default is `5` (QuantificationOptionsConfig.min_bckgrnd_cnts).
+        Default is `5` (ClusteringConfig.min_bckgrnd_cnts).
     fit_during_collection : bool, optional
         If True, fit spectra during acquisition; otherwise fit later.  
         Default is `True`.
@@ -243,10 +243,9 @@ def batch_acquire_experimental_stds(
     quant_cfg = QuantificationOptionsConfig(
         spectrum_lims=spectrum_lims,
         use_instrument_background=use_instrument_background,
-        min_bckgrnd_cnts=min_bckgrnd_cnts,
     )
 
-    clustering_cfg = ClusteringConfig()
+    clustering_cfg = ClusteringConfig(min_bckgrnd_cnts=min_bckgrnd_cnts)
 
     if powder_meas_cfg_kwargs:
         powder_meas_cfg = PowderMeasurementConfig(**powder_meas_cfg_kwargs)

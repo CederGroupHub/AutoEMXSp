@@ -90,7 +90,7 @@ is_known_phase_mixture = False # If True, samples are mixtures of known phases (
 interrupt_fits_bad_spectra = True # Whether to interrupt the quantification of spectra expected to lead to gross quantification errors. Tested extensively. Speeds up quantification.
 
 max_analytical_error_percent = 5 # Maximum analytical error to employ to filter out compositions during clustering. Can be modified later. Does not influence quantification
-min_bckgrnd_cnts = 5 # Minimum number of counts under a reference peak necessary for a spectrum to be accepted for clustering. Can be modified later, but requires re-running quantification.
+min_bckgrnd_cnts = 5 # Minimum number of counts under a reference peak necessary for a spectrum to be accepted for clustering. Can be modified later in Run_Analysis.py, with no need to requantify.
 quant_flags_accepted = [0, -1] # Quantification flags accepted during clustering (see docs: Quantification flags). Can be modified later. Does not influence quantification.
 
 max_n_clusters = 6 # Max number of clusters. Can be modified later. Does not influence quantification

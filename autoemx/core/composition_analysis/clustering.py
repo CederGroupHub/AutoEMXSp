@@ -4,7 +4,7 @@
 
 import os
 import warnings
-from typing import Tuple
+from typing import Any, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,7 +17,55 @@ import autoemx.utils.constants as cnst
 from autoemx.utils.helper import print_single_separator
 
 from autoemx._logging import get_logger
+import autoemx.config.defaults as dflt
 logger = get_logger(__name__)
+
+
+def quantification_min_bckgrnd_cnts(analyzer: Any) -> Optional[float]:
+    """min_bckgrnd_cnts used when the active quantification run was quantified (its first clustering analysis)."""
+    quant_config = getattr(analyzer, "current_quant_config", None)
+    analyses = getattr(quant_config, "clustering_analyses", None) or []
+    if analyses:
+        return analyses[0].config.min_bckgrnd_cnts
+    return dflt.min_bckgrnd_cnts
+
+
+def effective_quant_flag(record: Any, analyzer: Any) -> Tuple[Optional[int], Optional[str]]:
+    """quant_flag and comment of a quantification result for the min_bckgrnd_cnts of the analysis.
+
+    quant_flag 8 (background counts under the reference peaks too low) is assigned during quantification with the
+    min_bckgrnd_cnts in use then. If the analysis uses another value, it is re-evaluated from the background counts
+    stored with the result (no re-quantification): only between 0/-1 and 8, since other flags take precedence.
+    Results without the stored background counts (older AutoEMX versions) keep their flag.
+    """
+    flag, comment = record.quant_flag, record.comment
+    min_bckgrnd_cnts = analyzer.clustering_cfg.min_bckgrnd_cnts
+    if min_bckgrnd_cnts == quantification_min_bckgrnd_cnts(analyzer):
+        return flag, comment
+    diagnostics = getattr(record, "diagnostics", None)
+    min_bckgrnd_ref_lines = getattr(diagnostics, "min_background_ref_lines", None)
+    if flag not in (0, -1, 8) or record.composition_atomic_fractions is None or min_bckgrnd_ref_lines is None:
+        return flag, comment
+    if min_bckgrnd_cnts is not None and min_bckgrnd_ref_lines < min_bckgrnd_cnts:
+        return 8, f"Reference background counts too low ({min_bckgrnd_ref_lines:.1f} < {min_bckgrnd_cnts})"
+    if flag == 8:
+        if getattr(diagnostics, "converged", None) is False:
+            return -1, "Quantification did not converge."
+        return 0, ""
+    return flag, comment
+
+
+def count_results_without_bckgrnd_cnts(analyzer: Any) -> int:
+    """Number of results to which a changed min_bckgrnd_cnts cannot be applied (no stored background counts)."""
+    if analyzer.clustering_cfg.min_bckgrnd_cnts == quantification_min_bckgrnd_cnts(analyzer):
+        return 0
+    return sum(
+        1 for record in analyzer.spectra_quant_records
+        if record is not None
+        and record.quant_flag in (0, -1, 8)
+        and record.composition_atomic_fractions is not None
+        and getattr(getattr(record, "diagnostics", None), "min_background_ref_lines", None) is None
+    )
 
 
 class ClusteringModule:
@@ -1027,7 +1075,7 @@ class ClusteringModule:
                 spectrum_quant_result_at = dict(record.composition_atomic_fractions)
                 spectrum_quant_result_w = dict(record.composition_weight_fractions)
                 analytical_error = float(record.analytical_error)
-                quant_flag = record.quant_flag
+                quant_flag, _ = effective_quant_flag(record, self)
 
                 # Check if composition was flagged as bad during quantification
                 if quant_flag not in self.clustering_cfg.quant_flags_accepted:

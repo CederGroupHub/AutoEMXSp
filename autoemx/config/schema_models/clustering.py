@@ -342,6 +342,9 @@ class ClusteringConfig(BaseModel):
     ref_formulae: List[str] = Field(default_factory=list)
     do_matrix_decomposition: bool = True
     max_analytical_error_percent: Optional[float] = dflt.max_analytical_error_percent
+    # Minimum background counts under the reference peaks: spectra below are flagged (quant_flag 8). Applied from
+    # the background counts stored with each quantification result, so changing it needs no re-quantification.
+    min_bckgrnd_cnts: Optional[float] = dflt.min_bckgrnd_cnts
     quant_flags_accepted: List[int] = Field(
         default_factory=lambda: [0, -1],
         description=(
@@ -359,18 +362,6 @@ class ClusteringConfig(BaseModel):
     mixture: MixtureParams = Field(default_factory=MixtureParams)
 
     model_config = ConfigDict(extra="forbid")
-
-    @model_validator(mode="before")
-    @classmethod
-    def drop_legacy_min_bckgrnd_cnts(cls, data: Any) -> Any:
-        """Legacy compatibility: min_bckgrnd_cnts is a quantification setting (QuantificationOptionsConfig).
-
-        Its value in old clustering configs is moved to their quantification run by QuantificationConfig.
-        """
-        if isinstance(data, dict) and "min_bckgrnd_cnts" in data:
-            data = dict(data)
-            data.pop("min_bckgrnd_cnts")
-        return data
 
     @field_validator("clustering_id", mode="before")
     @classmethod
@@ -444,6 +435,13 @@ class ClusteringConfig(BaseModel):
             raise ValueError("max_analytical_error_percent must be finite when provided")
         return value
 
+    @field_validator("min_bckgrnd_cnts")
+    @classmethod
+    def validate_min_bckgrnd_cnts(cls, value: Optional[float]) -> Optional[float]:
+        if value is not None and (not np.isfinite(value) or value < 0):
+            raise ValueError("min_bckgrnd_cnts must be a finite non-negative value or None")
+        return value
+
     @field_validator("ref_formulae")
     @classmethod
     def validate_ref_formulae(cls, values: List[str]) -> List[str]:
@@ -480,6 +478,7 @@ class ClusteringConfig(BaseModel):
             "ref_formulae": sorted(self.ref_formulae),
             "do_matrix_decomposition": self.do_matrix_decomposition,
             "max_analytical_error_percent": self.max_analytical_error_percent,
+            "min_bckgrnd_cnts": self.min_bckgrnd_cnts,
             "quant_flags_accepted": sorted(self.quant_flags_accepted),
         }
         # Only fold method-specific params into the fingerprint when they are

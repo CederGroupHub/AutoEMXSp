@@ -132,7 +132,10 @@ def _saved_quant_options(cfgs: Dict[str, Any], active: Optional[Dict[str, Any]])
     """Values of the quantification-form options saved for a sample (keys of QUANT_SPECS)."""
     defaults = QuantificationOptionsConfig()
     opts = dict((active or {}).get("options") or {})
-    min_cnts = opts.get("min_bckgrnd_cnts", defaults.min_bckgrnd_cnts)
+    analyses = (active or {}).get("clustering_analyses") or []
+    idx = (active or {}).get("active_clustering_analysis_index")
+    cluster_cfg = (analyses[idx] if idx is not None and idx < len(analyses) else (analyses[-1] if analyses else {}))
+    min_cnts = (cluster_cfg.get("config") or {}).get("min_bckgrnd_cnts", ClusteringConfig().min_bckgrnd_cnts)
     lims = opts.get("spectrum_lims", defaults.spectrum_lims)
     return {
         "quant.min_bckgrnd_cnts": min_cnts,
@@ -515,6 +518,7 @@ _HELP: Dict[str, str] = {
     # Filtering
     "filter.max_analytical_error_percent": "Spectra whose analytical error exceeds this value (w%) are excluded from clustering. Empty disables the check.",
     "filter.quant_flags_accepted": "Quantification flags kept for clustering.",
+    "filter.min_bckgrnd_cnts": "Spectra with fewer background counts under the reference peaks are flagged (quant_flag 8). Applied without re-quantifying; empty keeps the saved value.",
     # Clustering
     "clust.method": "Clustering algorithm.",
     "clust.geometry": "'aitchison' clusters log-ratios (CLR) of compositions; 'auto' chooses per sample.",
@@ -621,6 +625,7 @@ def build_param_specs() -> List[ParamSpec]:
     specs: List[ParamSpec] = [
         ParamSpec("filter", "max_analytical_error_percent", "max analytical error (w%)", "float_opt", 5.0,
                   placeholder="none"),
+        ParamSpec("filter", "min_bckgrnd_cnts", "min background counts", "float_opt", 5.0, placeholder="saved"),
         ParamSpec("filter", "quant_flags_accepted", "accepted quant flags", "flags", [0, -1],
                   choices=list(QUANT_FLAG_MEANINGS)),
     ]
@@ -869,6 +874,7 @@ def sample_param_values(info: SampleInfo, analysis: Optional[AnalysisRef] = None
     cfg = analysis.config if analysis is not None else ClusteringConfig()
     values["filter.max_analytical_error_percent"] = cfg.max_analytical_error_percent
     values["filter.quant_flags_accepted"] = list(cfg.quant_flags_accepted)
+    values["filter.min_bckgrnd_cnts"] = cfg.min_bckgrnd_cnts
     for name in ("method", "geometry", "features", "k_forced", "max_k",
                  "auto_merge_clusters", "ref_formulae", "do_matrix_decomposition"):
         values[f"clust.{name}"] = getattr(cfg, name)
@@ -1114,6 +1120,7 @@ def analysis_kwargs(values: Dict[str, Any]) -> Dict[str, Any]:
         mixture_params=_section_dict(values, "mixture"),
         max_analytical_error_percent=values["filter.max_analytical_error_percent"],
         quant_flags_accepted=values["filter.quant_flags_accepted"],
+        min_bckgrnd_cnts=values["filter.min_bckgrnd_cnts"],
         els_to_plot=values["plot.els_to_plot"],
         els_excluded_clust_plot=values["plot.els_excluded_clust_plot"],
         show_unused_compositions_cluster_plot=values["plot.show_unused_comps_clust"],
@@ -1530,8 +1537,8 @@ def _run_fit(sample_dir: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     )
     if quantifier is None or getattr(quantifier, "fit_result", None) is None:
         raise RuntimeError("Fit failed. See the log for details.")
-    active_q = _active_quant_config(info.ledger)
-    min_cnts = active_q.options.get("min_bckgrnd_cnts") if active_q else QuantificationOptionsConfig().min_bckgrnd_cnts
+    active = info.active_analysis
+    min_cnts = active.config.min_bckgrnd_cnts if active else ClusteringConfig().min_bckgrnd_cnts
     flag = _ledger_quant_flag(quantifier, info.elements, info.substrate, min_cnts)
     return {"spectrum_id": payload["spectrum_id"], **_fit_payload(quantifier, flag)}
 
@@ -1591,10 +1598,9 @@ def _run_single(sample_dir: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         extra = {"beam_energy_kV": info.ledger.configs.measurement_cfg.beam_energy_keV}
     if quantifier is None or getattr(quantifier, "fit_result", None) is None:
         raise RuntimeError("Fit failed. See the log for details.")
-    min_cnts = QuantificationOptionsConfig().min_bckgrnd_cnts
-    active_q = _active_quant_config(info.ledger) if payload["source"] != "file" else None
-    if active_q is not None:
-        min_cnts = active_q.options.get("min_bckgrnd_cnts")
+    min_cnts = ClusteringConfig().min_bckgrnd_cnts
+    if payload["source"] != "file" and info.active_analysis is not None:
+        min_cnts = info.active_analysis.config.min_bckgrnd_cnts
     flag = (_ledger_quant_flag(quantifier, kw.get("els_sample") or [], kw.get("els_substrate") or [], min_cnts)
             if quantify else None)
     return {**_fit_payload(quantifier, flag), **extra, "quantified": bool(quantify)}

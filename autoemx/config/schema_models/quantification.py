@@ -215,28 +215,25 @@ class QuantificationConfig(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def migrate_legacy_min_bckgrnd_cnts(cls, data: Any) -> Any:
-        """Legacy compatibility: min_bckgrnd_cnts used to be stored in the clustering configs.
+    def move_options_min_bckgrnd_cnts(cls, data: Any) -> Any:
+        """Legacy compatibility: runs saved by AutoEMX 1.4.1 stored min_bckgrnd_cnts in their options.
 
-        Runs saved before it became a quantification setting take the value of their first clustering analysis,
-        the one in use when they were quantified, so that their fingerprint is unchanged (no new quantification).
+        It is a clustering setting (ClusteringConfig.min_bckgrnd_cnts): the value is moved to the clustering configs
+        of the run that do not store it, so that their fingerprint is unchanged.
         """
-        if not isinstance(data, dict):
+        if not isinstance(data, dict) or not isinstance(data.get("options"), dict):
             return data
-        options = data.get("options")
-        if not isinstance(options, dict) or "min_bckgrnd_cnts" in options:
+        if "min_bckgrnd_cnts" not in data["options"]:
             return data
-        min_bckgrnd_cnts = dflt.min_bckgrnd_cnts
-        clustering_analyses = data.get("clustering_analyses") or []
-        if clustering_analyses:
-            first_analysis = clustering_analyses[0]
-            first_config = (
-                first_analysis.get("config") if isinstance(first_analysis, dict)
-                else getattr(first_analysis, "config", None)
-            )
-            if isinstance(first_config, dict) and "min_bckgrnd_cnts" in first_config:
-                min_bckgrnd_cnts = first_config["min_bckgrnd_cnts"]
-        return {**data, "options": {**options, "min_bckgrnd_cnts": min_bckgrnd_cnts}}
+        options = dict(data["options"])
+        min_bckgrnd_cnts = options.pop("min_bckgrnd_cnts")
+        clustering_analyses = []
+        for analysis in data.get("clustering_analyses") or []:
+            if isinstance(analysis, dict) and isinstance(analysis.get("config"), dict):
+                if "min_bckgrnd_cnts" not in analysis["config"]:
+                    analysis = {**analysis, "config": {**analysis["config"], "min_bckgrnd_cnts": min_bckgrnd_cnts}}
+            clustering_analyses.append(analysis)
+        return {**data, "options": options, "clustering_analyses": clustering_analyses}
 
     @field_validator("options")
     @classmethod
@@ -289,12 +286,6 @@ class QuantificationConfig(BaseModel):
                 "options['min_total_counts_fraction'] must be a finite value in [0, 1]"
             )
         normalized["min_total_counts_fraction"] = fraction
-        min_bckgrnd_cnts = normalized.get("min_bckgrnd_cnts", dflt.min_bckgrnd_cnts)
-        if min_bckgrnd_cnts is not None:
-            min_bckgrnd_cnts = float(min_bckgrnd_cnts)
-            if not np.isfinite(min_bckgrnd_cnts) or min_bckgrnd_cnts < 0:
-                raise ValueError("options['min_bckgrnd_cnts'] must be a finite non-negative value or None")
-        normalized["min_bckgrnd_cnts"] = min_bckgrnd_cnts
         normalized["is_known_phase_mixture"] = bool(normalized.get("is_known_phase_mixture", False))
         # Old ledgers predate the identification of missing elements: it was off (not the current default)
         normalized["identify_missing_elements"] = bool(normalized.get("identify_missing_elements", False))

@@ -207,7 +207,8 @@ def analyze_sample(
         Accepted quantification flags. See the user documentation page
         "Quantification flags (quant_flag)".
     min_bckgrnd_cnts : float, optional
-        Deprecated and ignored: min_bckgrnd_cnts is a quantification setting. Re-run quantification to change it.
+        Minimum background counts under the reference peaks: spectra below are flagged (quant_flag 8), with no need to
+        re-quantify (ClusteringConfig.min_bckgrnd_cnts). If None, the saved value is kept.
     plot_custom_plots : bool, optional
         Whether to use custom plots.
     show_unused_compositions_cluster_plot : bool, optional
@@ -317,10 +318,7 @@ def analyze_sample(
     if max_k is not None:
         clustering_cfg.max_k = ClusteringConfig.validate_max_k(int(max_k))
     if min_bckgrnd_cnts is not None:
-        logging.warning(
-            "⚠️ min_bckgrnd_cnts is ignored: it is a quantification setting. "
-            "Re-run quantification (e.g. Run_Quantification.py) to change it."
-        )
+        clustering_cfg.min_bckgrnd_cnts = ClusteringConfig.validate_min_bckgrnd_cnts(float(min_bckgrnd_cnts))
     if do_matrix_decomposition is not None:
         clustering_cfg.do_matrix_decomposition = do_matrix_decomposition
     if auto_merge_clusters is not None:

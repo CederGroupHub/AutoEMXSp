@@ -268,7 +268,6 @@ def quantify_external_spectra(
         method=quantification_method,
         use_project_specific_std_dict=use_project_specific_std_dict,
         use_instrument_background=use_instrument_background,
-        min_bckgrnd_cnts=min_bckgrnd_cnts,
     )
     plot_cfg = PlotConfig(show_unused_comps_clust=show_unused_comps_clust)
     powder_meas_cfg = PowderMeasurementConfig(**(powder_meas_cfg_kwargs or {}))
@@ -373,6 +372,7 @@ def quantify_external_spectra(
             max_k=max_n_clusters,
             ref_formulae=ref_formulae,
             max_analytical_error_percent=max_analytical_error_percent,
+            min_bckgrnd_cnts=min_bckgrnd_cnts,
             quant_flags_accepted=quant_flags_accepted,
         )
 

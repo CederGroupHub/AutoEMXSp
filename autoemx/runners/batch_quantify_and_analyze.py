@@ -111,8 +111,9 @@ def batch_quantify_and_analyze(
     results_path : str, optional
         Base directory where results are stored. Default: autoemx/Results
     min_bckgrnd_cnts : float, optional
-        Minimum background counts below which spectra are flagged (QuantificationOptionsConfig.min_bckgrnd_cnts).
-        If None, keeps the value of the sample's active quantification run. Default: None
+        Minimum background counts under the reference peaks: spectra below are flagged (quant_flag 8)
+        (ClusteringConfig.min_bckgrnd_cnts). Changing it needs no re-quantification.
+        If None, keeps the value of the sample's active analysis. Default: None
     min_total_counts_fraction : float, optional
         Minimum accepted total spectrum counts as a fraction of ``target_acquisition_counts``.
         Spectra below this threshold are flagged ``quant_flag = 2`` ("Total counts too low").
@@ -266,7 +267,7 @@ def batch_quantify_and_analyze(
 
         
         if min_bckgrnd_cnts is not None:
-            quant_cfg.min_bckgrnd_cnts = min_bckgrnd_cnts
+            clustering_cfg.min_bckgrnd_cnts = min_bckgrnd_cnts
         if min_total_counts_fraction is not None:
             quant_cfg.min_total_counts_fraction = min_total_counts_fraction
         if identify_missing_elements is not None:

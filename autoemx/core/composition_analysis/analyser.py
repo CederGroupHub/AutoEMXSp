@@ -120,7 +120,7 @@ from autoemx.config.ledger_io import get_active_quantification_config, ingest_sp
 from autoemx._version import __version__ as AUTOEMX_VERSION
 from autoemx.config.schema_models.clustering import ClusteringAnalysis, ClusteringResult
 from autoemx.config.schema_models.standards import EDSStandardsFile
-from .clustering import ClusteringModule
+from .clustering import ClusteringModule, count_results_without_bckgrnd_cnts, effective_quant_flag
 from autoemx.utils.legacy.ledger_bootstrap import (
     load_or_create_ledger_with_legacy_data_csv,
     resolve_legacy_bootstrap_configs,
@@ -343,7 +343,7 @@ def _quantify_spectrum_worker(worker_payload: Dict[str, Any]) -> tuple[int, Opti
         sp_start=int(worker_payload['sp_start']),
         sp_end=int(worker_payload['sp_end']),
         target_acquisition_counts=int(worker_payload['target_acquisition_counts']),
-        min_bckgrnd_cnts=worker_payload['min_bckgrnd_cnts'],
+        min_bckgrnd_cnts=dflt.prefit_min_bckgrnd_cnts,
         min_total_counts_fraction=float(
             worker_payload.get(
                 'min_total_counts_fraction',
@@ -769,10 +769,9 @@ class EMXSp_Composition_Analyzer:
             # Set a threshold value below which counts are considered to be too low
             # Used to filter "bad" spectra out from clustering analysis. All spectra having less counts than this threshold are filtered out
             # Used also to avoid fitting spectra with excessive absorption, which inevitably lead to large quantification errors
-            if self.quant_cfg.min_bckgrnd_cnts is None:
+            if self.clustering_cfg.min_bckgrnd_cnts is None:
                 min_bckgrnd_cnts = measurement_cfg.target_acquisition_counts / (2 * 10**4)  # empirical value
-                # Copy, since quant_cfg may be shared (e.g. the default argument)
-                self.quant_cfg = self.quant_cfg.model_copy(update={"min_bckgrnd_cnts": int(round(min_bckgrnd_cnts))})
+                self.clustering_cfg.min_bckgrnd_cnts = int(round(min_bckgrnd_cnts))
 
         # --- Clustering
         if is_XSp_measurement:
@@ -1198,10 +1197,6 @@ class EMXSp_Composition_Analyzer:
             "  Min total counts     : "
             f"{_format_min_total_counts_percent(min_total_counts_fraction_used)} of target"
         )
-        min_bckgrnd_cnts_used = active_options.get("min_bckgrnd_cnts", getattr(q, "min_bckgrnd_cnts", None))
-        lines.append(
-            f"  Min background counts: {min_bckgrnd_cnts_used if min_bckgrnd_cnts_used is not None else 'disabled'}"
-        )
         lines.append(f"  Beam energy (keV)    : {beam_energy_used:.4f}")
         lines.append(
             f"  Emergence angle (deg): {emergence_angle_used:.4f}"
@@ -1248,6 +1243,9 @@ class EMXSp_Composition_Analyzer:
         if getattr(cc, "k_resolved", None) is not None:
             lines.append(f"  k (resolved)         : {cc.k_resolved}")
         lines.append(f"  Max analytical error : {cc.max_analytical_error_percent} w%")
+        lines.append(
+            f"  Min background counts: {cc.min_bckgrnd_cnts if cc.min_bckgrnd_cnts is not None else 'disabled'}"
+        )
         lines.append(f"  Accepted quant flags : {cc.quant_flags_accepted}")
         if getattr(cc, "method", "kmeans") == "kmeans":
             lines.append(f"  Merge clusters       : {'yes' if getattr(cc, 'auto_merge_clusters', False) else 'no'}")
@@ -2658,7 +2656,6 @@ class EMXSp_Composition_Analyzer:
             "det_ch_offset": float(self.det_ch_offset),
             "det_ch_width": float(self.det_ch_width),
             "min_total_counts_fraction": self._min_total_counts_fraction(),
-            "min_bckgrnd_cnts": getattr(self.quant_cfg, "min_bckgrnd_cnts", dflt.min_bckgrnd_cnts),
             "is_known_phase_mixture": bool(getattr(self.quant_cfg, "is_known_phase_mixture", False)),
             "identify_missing_elements": bool(getattr(self.quant_cfg, "identify_missing_elements", dflt.identify_missing_elements)),
             "identification_seed_spectra": int(
@@ -2914,6 +2911,7 @@ class EMXSp_Composition_Analyzer:
             ref_formulae=list(self.clustering_cfg.ref_formulae),
             do_matrix_decomposition=self.clustering_cfg.do_matrix_decomposition,
             max_analytical_error_percent=self.clustering_cfg.max_analytical_error_percent,
+            min_bckgrnd_cnts=self.clustering_cfg.min_bckgrnd_cnts,
             quant_flags_accepted=list(self.clustering_cfg.quant_flags_accepted),
             dbscan=self.clustering_cfg.dbscan.model_copy(deep=True),
             geometry=self.clustering_cfg.geometry,
@@ -3204,7 +3202,7 @@ class EMXSp_Composition_Analyzer:
             quantifier=quantifier,
             min_bckgrnd_ref_lines=min_bckgrnd_ref_lines,
             detectable_els_substrate=self.detectable_els_substrate,
-            min_bckgrnd_cnts=self.quant_cfg.min_bckgrnd_cnts,
+            min_bckgrnd_cnts=self.clustering_cfg.min_bckgrnd_cnts,
         )
         if self.verbose and is_quant_fit_valid and quant_flag in (4, 5, 6, 7, 8):
             logger.warning(f"⚠️ Flagged: {comment}. This is likely to lead to large quantification errors.")
@@ -3319,7 +3317,7 @@ class EMXSp_Composition_Analyzer:
             sp_start=self.sp_start,
             sp_end=self.sp_end,
             target_acquisition_counts=int(self.measurement_cfg.target_acquisition_counts),
-            min_bckgrnd_cnts=self.quant_cfg.min_bckgrnd_cnts,
+            min_bckgrnd_cnts=dflt.prefit_min_bckgrnd_cnts,
             min_total_counts_fraction=self._min_total_counts_fraction(),
         )
 
@@ -3360,7 +3358,7 @@ class EMXSp_Composition_Analyzer:
         elif prefit_quant_flag == 3 and self.verbose:
             n_vals_considered = dflt.prefit_bckgrnd_n_points
             en_threshold = dflt.prefit_bckgrnd_max_energy_keV
-            min_background_threshold = self.quant_cfg.min_bckgrnd_cnts
+            min_background_threshold = dflt.prefit_min_bckgrnd_cnts
             if _should_interrupt_prefit_issue(prefit_quant_flag, interrupt_fits_bad_spectra):
                 logger.info(
                     f"⏭️ Quantification skipped due to at least {n_vals_considered} spectrum "
@@ -3441,7 +3439,7 @@ class EMXSp_Composition_Analyzer:
             min_bckgrnd_ref_lines=min_bckgrnd_ref_lines,
             quantifier=quantifier,
             detectable_els_substrate=self.detectable_els_substrate,
-            min_bckgrnd_cnts=self.quant_cfg.min_bckgrnd_cnts,
+            min_bckgrnd_cnts=self.clustering_cfg.min_bckgrnd_cnts,
         )
         if self.verbose and not is_spectrum_valid:
             logger.warning(f"⚠️ Flagged: {comment}. This is likely to lead to large quantification errors.")
@@ -3803,7 +3801,7 @@ class EMXSp_Composition_Analyzer:
                         'sp_start': int(self.sp_start),
                         'sp_end': int(self.sp_end),
                         'target_acquisition_counts': int(self.measurement_cfg.target_acquisition_counts),
-                        'min_bckgrnd_cnts': self.quant_cfg.min_bckgrnd_cnts,
+                        'min_bckgrnd_cnts': self.clustering_cfg.min_bckgrnd_cnts,
                         'min_total_counts_fraction': self._min_total_counts_fraction(),
                         'microscope_id': self.microscope_cfg.ID,
                         'measurement_type': self.measurement_cfg.type,
@@ -3872,7 +3870,7 @@ class EMXSp_Composition_Analyzer:
                         'sp_start': int(self.sp_start),
                         'sp_end': int(self.sp_end),
                         'target_acquisition_counts': int(self.measurement_cfg.target_acquisition_counts),
-                        'min_bckgrnd_cnts': self.quant_cfg.min_bckgrnd_cnts,
+                        'min_bckgrnd_cnts': self.clustering_cfg.min_bckgrnd_cnts,
                         'min_total_counts_fraction': self._min_total_counts_fraction(),
                         'microscope_id': self.microscope_cfg.ID,
                         'measurement_type': self.measurement_cfg.type,
@@ -4187,6 +4185,15 @@ class EMXSp_Composition_Analyzer:
             if tot > 0:
                 self._ensure_quant_tracking_length(tot)
                 self._sync_existing_quantification_from_ledger()
+
+        # A changed min_bckgrnd_cnts is applied from the background counts stored with each result
+        n_without_bckgrnd_cnts = count_results_without_bckgrnd_cnts(self)
+        if n_without_bckgrnd_cnts > 0:
+            logger.warning(
+                f"⚠️ min_bckgrnd_cnts = {self.clustering_cfg.min_bckgrnd_cnts} cannot be applied to "
+                f"{n_without_bckgrnd_cnts} spectra quantified by an older AutoEMX version, which did not store their "
+                "background counts: they keep their quant_flag. You should requantify first to apply this parameter."
+            )
 
         # Elements found and quantified by the identification of missing elements become additional elements of the
         # analysis (zero in the spectra without them), so that particles containing them can form their own clusters
@@ -5038,8 +5045,10 @@ class EMXSp_Composition_Analyzer:
             
             # Add comment and quantification flag columns when a quantification record exists.
             if record is not None:
-                data_row[cnst.COMMENTS_DF_KEY] = record.comment
-                data_row[cnst.QUANT_FLAG_DF_KEY] = record.quant_flag
+                # Flag for the min_bckgrnd_cnts of this analysis (quant_flag 8 re-evaluated if it changed)
+                quant_flag, comment = effective_quant_flag(record, self)
+                data_row[cnst.COMMENTS_DF_KEY] = comment
+                data_row[cnst.QUANT_FLAG_DF_KEY] = quant_flag
                 # Results of the identification of missing elements (only when the check was run)
                 diag = getattr(record, 'diagnostics', None)
                 if diag is not None and getattr(diag, 'added_elements', None) is not None:
@@ -5225,7 +5234,7 @@ class EMXSp_Composition_Analyzer:
         if self.n_sp_too_low_counts > 0:
             logger.info(
                 f"  • {self.n_sp_too_low_counts} spectra were discarded due to insufficient total counts, "
-                f"background counts below the threshold ({self.quant_cfg.min_bckgrnd_cnts}), "
+                f"background counts below the threshold ({self.clustering_cfg.min_bckgrnd_cnts}), "
                 "or errors during spectrum collection/fitting."
             )
     

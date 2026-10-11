@@ -315,10 +315,6 @@ class QuantificationOptionsConfig(BaseModel):
             ``target_acquisition_counts``. Spectra below this threshold are flagged
             ``quant_flag = 2`` ("Total counts too low"). Default is ``0.9`` (90%).
             Lower this to quantify shorter acquisitions; ``0`` disables the check.
-        min_bckgrnd_cnts (Optional[float]): Minimum background counts. Spectra whose low-energy background
-            (``quant_flag = 3``) or background under the reference peaks (``quant_flag = 8``) is lower are flagged.
-            Default is ``5.0`` (defaults.min_bckgrnd_cnts). If None, it is set from the target acquisition counts
-            (target counts / 20000).
         is_known_phase_mixture (bool): Whether the sample is a mixture of known phases (the candidate phases). If True,
             spectra are quantified with the reference P/B values of the standards of these phases, and the analysis
             characterizes their intermixing. Default is False. Not part of the quantification fingerprint, since the
@@ -342,7 +338,6 @@ class QuantificationOptionsConfig(BaseModel):
     use_instrument_background: bool = dflt.use_instrument_background
     use_project_specific_std_dict: bool = False
     min_total_counts_fraction: float = dflt.min_total_counts_fraction
-    min_bckgrnd_cnts: Optional[float] = dflt.min_bckgrnd_cnts
     is_known_phase_mixture: bool = False
     identify_missing_elements: bool = dflt.identify_missing_elements
     identification_seed_spectra: int = dflt.identification_seed_spectra
@@ -359,6 +354,7 @@ class QuantificationOptionsConfig(BaseModel):
         if isinstance(data, dict):
             cleaned = dict(data)
             cleaned.pop("interrupt_fits_bad_spectra", None)
+            cleaned.pop("min_bckgrnd_cnts", None)  # A clustering setting (ClusteringConfig.min_bckgrnd_cnts)
             cleaned.pop("is_particle", None)
             cleaned.pop("beam_energy_keV", None)
             cleaned.pop("emergence_angle", None)
@@ -378,8 +374,6 @@ class QuantificationOptionsConfig(BaseModel):
         if not np.isfinite(fraction) or fraction < 0 or fraction > 1:
             raise ValueError("min_total_counts_fraction must be a finite value in [0, 1]")
         self.min_total_counts_fraction = fraction
-        if self.min_bckgrnd_cnts is not None and (not np.isfinite(self.min_bckgrnd_cnts) or self.min_bckgrnd_cnts < 0):
-            raise ValueError("min_bckgrnd_cnts must be a finite non-negative value or None")
         if int(self.identification_seed_spectra) < 0:
             raise ValueError("identification_seed_spectra must be non-negative")
         self.identification_seed_spectra = int(self.identification_seed_spectra)

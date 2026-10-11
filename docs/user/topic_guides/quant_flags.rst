@@ -43,6 +43,7 @@ Flag    Meaning
 ``7``   Excessive substrate contamination (a substrate-element peak intensity
         above 10% of total counts).
 ``8``   Background counts under a reference peak are too low (i.e. below ``min_bckgrnd_cnts``).
+        Re-evaluated at the analysis stage if ``min_bckgrnd_cnts`` is changed.
 ``9``   Fit interrupted for an unknown reason.
 ``10``  Experimental-standards measurements only: a required reference peak is
         missing.

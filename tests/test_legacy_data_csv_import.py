@@ -48,9 +48,9 @@ def test_legacy_results_converted_to_ledger(sample_dir: Path):
     assert ledger.active_quant == quant_config.quantification_id == 0
     assert quant_config.autoemx_version == LEGACY_VERSION
     assert quant_config.options["fit_tolerance"] == 0.001
-    assert quant_config.options["min_bckgrnd_cnts"] == 5.0  # stored in the legacy quant_cfg
     assert quant_config.options["is_known_phase_mixture"] is False  # stored in the legacy powder settings
     clustering_config = quant_config.clustering_analyses[0].config
+    assert clustering_config.min_bckgrnd_cnts == 5.0  # stored in the legacy quant_cfg
     assert clustering_config.ref_formulae == ["PbMoO4"]
     assert clustering_config.geometry == "euclidean" and clustering_config.auto_merge_clusters is False
 
