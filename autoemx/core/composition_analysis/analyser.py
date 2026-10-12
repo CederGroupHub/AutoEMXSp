@@ -51,12 +51,11 @@ Created on Mon Jul 22 17:43:35 2024
 import os
 import re
 import time
-import shutil
 import warnings
 from pathlib import Path
 from datetime import datetime
 from dataclasses import asdict
-from typing import Any, Optional, Tuple, List, Dict, Iterable, Sequence, Union
+from typing import Any, Optional, Tuple, List, Dict, Sequence, Union
 from joblib import Parallel, delayed
 
 #TODO remove in future versions
@@ -1289,19 +1288,6 @@ class EMXSp_Composition_Analyzer:
         return int(quant_config.quantification_id), int(active_clustering_analysis.config.clustering_id)
 
 
-    @staticmethod
-    def _clear_directory_contents(dir_path: str) -> None:
-        """Remove all files/subdirectories from a directory while keeping the directory itself."""
-        try:
-            for entry in os.scandir(dir_path):
-                if entry.is_dir(follow_symlinks=False):
-                    shutil.rmtree(entry.path)
-                else:
-                    os.remove(entry.path)
-        except Exception as e:
-            raise OSError(f"Could not clear existing analysis directory '{dir_path}': {e}") from e
-    
-    
     def _initialise_std_dict(self) -> None:
         """
         Initialise the dictionary of X-ray standards for quantification.
@@ -1522,144 +1508,6 @@ class EMXSp_Composition_Analyzer:
         return int(np.round(np.sum(counts_arr)))
     
     
-    def _fit_quantify_spectrum(
-        self,
-        spectrum: Iterable,
-        background: Optional[Iterable] = None,
-        sp_collection_time: float = None,
-        sp_id: str = '',
-        spectrum_index: Optional[int] = None,
-        interrupt_fits_bad_spectra: bool = True,
-        verbose: bool = True
-    ) -> Tuple[Optional[Dict[str, Any]], QuantificationResult, Optional[float]]:
-        """
-        Quantify a single X-ray spectrum.
-    
-        This method checks if the spectrum is valid for fitting, runs the quantification,
-        flags the result as necessary, and appends comments and quantification flags to
-        the spectral data attributes.
-    
-        Parameters
-        ----------
-        spectrum : Iterable
-            The spectrum data to be quantified.
-        background : Iterable, optional
-            The background data associated with the spectrum.
-        sp_collection_time : float, optional
-            The collection time for the spectrum.
-        sp_id: str, optional
-            The spectrum ID, used as label for printing
-        verbose : bool, optional
-            If True, enables verbose output (default: True).
-    
-        Returns
-        -------
-        Tuple[Optional[Dict[str, Any]], QuantificationResult, Optional[float]]
-            Runtime quantifier payload (or None), persisted schema result, and elapsed quantification time.
-    
-        Notes
-        -----
-        - Filtering flags are appended through function _check_fit_quant_validity().
-        """
-        quantification_time = None
-        if verbose:
-            if sp_id != '':
-                sp_id_str = " #" + sp_id
-            else:
-                sp_id_str = '...'
-            print_single_separator('🔬 Quantifying spectrum' + sp_id_str)
-            start_quant_time = time.time()
-                            
-        is_sp_valid_for_fitting, prefit_quant_flag, prefit_comment = self._resolve_prefit_spectrum_gate(
-            spectrum,
-            background,
-            interrupt_fits_bad_spectra=interrupt_fits_bad_spectra,
-        )
-        if not is_sp_valid_for_fitting:
-            quant_record = QuantificationResult(
-                quantification_id=self.current_quantification_id,
-                quant_flag=prefit_quant_flag,
-                comment=prefit_comment,
-                diagnostics=QuantificationDiagnostics(
-                    converged=False,
-                    interrupted=True,
-                ),
-            )
-            if verbose:
-                quantification_time = time.time() - start_quant_time
-            return None, quant_record, quantification_time
-
-        # Initialize class to quantify spectrum
-        quantifier = XSp_Quantifier(
-            spectrum_vals=spectrum,
-            spectrum_lims=(self.sp_start, self.sp_end),
-            microscope_ID=self.microscope_cfg.ID,
-            meas_type=self.measurement_cfg.type,
-            meas_mode=self.measurement_cfg.mode,
-            det_ch_offset=self.det_ch_offset,
-            det_ch_width=self.det_ch_width,
-            beam_e=self.measurement_cfg.beam_energy_keV,
-            emergence_angle=self.measurement_cfg.emergence_angle,
-            energy_vals=None,
-            background_vals=background,
-            els_sample=self.all_els_sample,
-            els_substrate=self.detectable_els_substrate,
-            els_w_fr=self.sample_cfg.w_frs,
-            is_particle=self._apply_geom_factors,
-            sp_collection_time=sp_collection_time,
-            max_undetectable_w_fr=self.undetectable_an_er,
-            fit_tol=self.quant_cfg.fit_tolerance,
-            standards_dict=self.standards_dict,
-            verbose=False,
-            fitting_verbose=False
-        )
-        
-        try:
-            # Returns dictionary containing calculated composition in atomic fractions + analytical error
-            quant_result, min_bckgrnd_ref_lines, bad_quant_flag = quantifier.quantify_spectrum(
-                print_result=False,
-                interrupt_fits_bad_spectra=interrupt_fits_bad_spectra
-            )
-            is_quant_fit_valid = True if quant_result is not None else False
-        except Exception as e:
-            logger.error(f"❌ {type(e).__name__}: {e}")
-            is_quant_fit_valid = False
-            quant_flag, comment = self._check_fit_quant_validity(
-                is_quant_fit_valid,
-                None,
-                None,
-                None,
-            )
-            quant_record = quantifier.export_quantification_result(
-                quantification_id=self.current_quantification_id,
-                quant_result=None,
-                quant_flag=quant_flag,
-                comment=comment,
-            )
-            if verbose:
-                quantification_time = time.time() - start_quant_time
-            return None, quant_record, quantification_time
-        else:
-            quant_flag, comment = self._check_fit_quant_validity(is_quant_fit_valid, bad_quant_flag, quantifier, min_bckgrnd_ref_lines)
-            quant_flag, comment = _merge_prefit_quant_flag(
-                quant_flag,
-                comment,
-                prefit_quant_flag,
-                prefit_comment,
-            )
-            quant_record = quantifier.export_quantification_result(
-                quantification_id=self.current_quantification_id,
-                quant_result=quant_result,
-                quant_flag=quant_flag,
-                comment=comment,
-            )
-
-        if verbose:
-            quantification_time = time.time() - start_quant_time
-
-        return quant_result, quant_record, quantification_time
-
-
     def _get_ledger_path(self) -> str:
         """Return the ledger path for the current sample result directory."""
         return os.path.join(self.sample_result_dir, cnst.LEDGER_FILENAME + cnst.LEDGER_FILEEXT)
@@ -3189,70 +3037,6 @@ class EMXSp_Composition_Analyzer:
         )
         return not should_interrupt, prefit_quant_flag, prefit_comment
 
-    def _is_spectrum_valid_for_fitting(
-        self, 
-        spectrum: np.ndarray, 
-        background: Optional[np.ndarray] = None,
-        interrupt_fits_bad_spectra: bool = True,
-    ) -> tuple[bool, Optional[int], Optional[str]]:
-        """
-        Check if a spectrum should proceed to fitting based on pre-fit validation.
-
-        Flags 2 and 3 only skip fitting when ``interrupt_fits_bad_spectra`` is True.
-        """
-        return self._resolve_prefit_spectrum_gate(
-            spectrum,
-            background,
-            interrupt_fits_bad_spectra=interrupt_fits_bad_spectra,
-        )
-    
-    
-    def _flag_spectrum_for_clustering(
-        self,
-        min_bckgrnd_ref_lines: float,
-        quantifier: Any,
-    ) -> tuple[bool, int, str]:
-        """
-        Check spectrum validity for clustering based on substrate peak intensities and background counts.
-    
-        This method:
-          - Flags spectra where any substrate element has a peak intensity larger than a set percentage
-            of total counts.
-          - Flags spectra where the minimum background counts under reference peaks are too low.
-          - Appends comments and quantification flags to `self.spectral_data` using keys from `cnst`.
-          - Prints warnings if `self.verbose` is True.
-    
-        Parameters
-        ----------
-        min_bckgrnd_ref_lines : float
-            Minimum average counts under reference peaks in the spectrum.
-        quantifier : Any
-            The quantification object containing fitting information.
-    
-        Returns
-        -------
-        is_spectrum_valid : bool
-            True if the spectrum passes all checks, False otherwise.
-        quant_flag : int
-            Numerical flag representing the spectrum quality after fit/quantification.
-        comment : str
-            Human-readable comment describing the outcome or issue detected.
-    
-        Notes
-        -----
-        - Assumes all class attributes and keys are correctly initialized.
-        """
-        is_spectrum_valid, quant_flag, comment = _worker_flag_spectrum_for_clustering(
-            min_bckgrnd_ref_lines=min_bckgrnd_ref_lines,
-            quantifier=quantifier,
-            detectable_els_substrate=self.detectable_els_substrate,
-            min_bckgrnd_cnts=self.clustering_cfg.min_bckgrnd_cnts,
-        )
-        if self.verbose and not is_spectrum_valid:
-            logger.warning(f"⚠️ Flagged: {comment}. This is likely to lead to large quantification errors.")
-        return is_spectrum_valid, quant_flag, comment
-    
-    
     #%% Spectra acquisition and quantification routines
     # ============================================================================= 
     def _collect_spectra(

@@ -422,10 +422,6 @@ class StandardsModule:
         mean_z = StandardMeanZ.model_validate(mean_z_payload) if mean_z_payload is not None else None
         return StandardsFitResults.model_validate({"lines": fit_lines, "mean_z": mean_z})
 
-    def _load_xsp_standards(self: Any) -> Tuple[EDSStandardsFile, str]:
-        """Backward-compatible alias returning typed standards model."""
-        return StandardsModule._load_standards(self)
-
     def _load_standards(self: Any) -> Tuple[EDSStandardsFile, str]:
         """Load standards as structured schema model for internal processing."""
         meas_mode = self.measurement_cfg.mode

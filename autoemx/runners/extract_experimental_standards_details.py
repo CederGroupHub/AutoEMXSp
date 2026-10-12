@@ -23,7 +23,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import autoemx.config.defaults as dflt
 import autoemx.utils.constants as cnst
 import autoemx._paths as paths
-from pymatgen.core import Element
 
 
 # Configure logging
@@ -124,17 +123,6 @@ def _to_float_or_none(value: Any) -> Optional[float]:
         return float(value)
     except (TypeError, ValueError):
         return None
-
-
-def _sort_elements_by_atomic_number(elements: List[str]) -> List[str]:
-    """Sort element symbols by atomic number using pymatgen."""
-    def _sort_key(symbol: str) -> Tuple[int, str]:
-        try:
-            return Element(symbol).Z, symbol
-        except Exception:
-            return 10**9, symbol
-
-    return sorted(elements, key=_sort_key)
 
 
 def extract_experimental_standards_details(

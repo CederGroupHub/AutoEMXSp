@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Utility Functions for EDS Spectrum Analysis and Data Handling
@@ -870,10 +870,6 @@ class Prompt_User:
 
 class RefLineError(Exception):
     """Exception raised for errors related to reference lines."""
-    pass
-
-class MissingHintError(Exception):
-    """Exception raised when a required hint is missing."""
     pass
 
 class EMError(Exception):

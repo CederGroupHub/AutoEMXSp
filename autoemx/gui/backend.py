@@ -1880,9 +1880,6 @@ class JobManager:
             self._jobs[job_id] = job
             return job
 
-    def running(self, kinds: Optional[set] = None) -> List[Job]:
-        return [j for j in self._jobs.values() if j.is_running() and (kinds is None or j.kind in kinds)]
-
     def get(self, job_id: Optional[str]) -> Optional[Job]:
         return self._jobs.get(job_id) if job_id else None
 

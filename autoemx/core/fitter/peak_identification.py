@@ -741,24 +741,6 @@ def filtered_gain(y: np.ndarray, model_without: np.ndarray, model_with: np.ndarr
     return float(np.sum((r0 ** 2 - r1 ** 2) / var_f[ok]))
 
 
-def background_ratio(y: np.ndarray, energy_vals: np.ndarray, outcome: FitOutcome, min_energy: float = 1.0,
-                     exclude: Optional[np.ndarray] = None) -> Optional[float]:
-    """
-    Ratio of data to model in channels without significant peaks (above `min_energy`): 1 for a good background.
-
-    Channels with significant fitted peaks are excluded, as well as those in `exclude` (e.g. around unexplained
-    peaks of the data, so that a missing element is not mistaken for a background deficit).
-    """
-    if outcome.background is None:
-        return None
-    peaks = sum(outcome.components.values()) if outcome.components else np.zeros_like(y)
-    mask = (energy_vals > min_energy) & (peaks < 0.1 * np.maximum(outcome.background, 1.0))
-    if exclude is not None:
-        mask &= ~exclude
-    model_sum = float(outcome.model[mask].sum())
-    return float(y[mask].sum()) / model_sum if model_sum > 0 else None
-
-
 def _residual_peak_check(el: str, outcome_without: FitOutcome, y: np.ndarray, energy_vals: np.ndarray,
                          F: np.ndarray, sigma_fn: Callable, beam_energy: float,
                          settings: PeakIDSettings) -> Tuple[float, bool]:
@@ -788,7 +770,7 @@ def background_band_ratios(y: np.ndarray, energy_vals: np.ndarray, outcome: FitO
                            bands: Sequence[Tuple[float, float]], exclude: Optional[np.ndarray] = None,
                            min_model_counts: float = 50.0) -> List[Tuple[Tuple[float, float], float]]:
     """
-    Ratio of data to model in each energy band, in channels without significant peaks (see background_ratio).
+    Ratio of data to model in each energy band, in channels without significant peaks (excluded with `exclude`).
     Bands whose peak-free model counts are below `min_model_counts` are skipped.
     """
     if outcome.background is None:
