@@ -398,7 +398,7 @@ def analyze_sample(
         plot_cfg.show_legend_clustering = bool(show_legend_clustering)
     _ensure_custom_plot_file(sample_dir, plot_cfg)
 
-    # Spectral source resolution is delegated to analyser._load_or_create_ledger():
+    # Spectral source resolution is delegated to LedgerModule._load_or_create_ledger:
     # --- Run Composition Analysis or Spectral Acquisition
     comp_analyzer = EMXSp_Composition_Analyzer(
         microscope_cfg=microscope_cfg,

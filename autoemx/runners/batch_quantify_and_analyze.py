@@ -52,6 +52,7 @@ import autoemx.utils.constants as cnst
 import autoemx.config.defaults as dflt
 from autoemx.config.ledger_io import ledger_runtime_configs, load_sample_ledger
 from autoemx.core.composition_analysis import EMXSp_Composition_Analyzer
+from autoemx.core.composition_analysis.ledger import LedgerModule
 
 # Configure logging
 logging.basicConfig(
@@ -345,7 +346,7 @@ def batch_quantify_and_analyze(
         total_process_time = (time.time() - sample_processing_time_start) / 60
         print_double_separator(f"Sample '{sample_ID}' successfully quantified in {total_process_time:.1f} min.")
         try:
-            quantified_spectra = len(comp_analyzer._load_or_create_ledger().spectra)
+            quantified_spectra = len(LedgerModule._load_or_create_ledger(comp_analyzer).spectra)
         except Exception:
             quantified_spectra = len(comp_analyzer.spectra_quant_records)
         logging.info(f"{quantified_spectra} spectra have been quantified and saved for '{sample_ID}'.")

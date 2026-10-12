@@ -26,6 +26,7 @@ from autoemx.config.runtime_configs import (
 )
 from autoemx.config.schema_models.clustering import ClusteringResult
 from autoemx.core.composition_analysis.analyser import EMXSp_Composition_Analyzer
+from autoemx.core.composition_analysis.ledger import LedgerModule
 import autoemx.utils.constants as cnst
 
 
@@ -110,7 +111,7 @@ def test_duplicate_particle_ids_rejected(outputs_dir: Path):
 
 def test_eq_diameter_from_area():
     area = math.pi  # diameter 2
-    assert EMXSp_Composition_Analyzer._eq_diameter_um_from_area(area) == pytest.approx(2.0)
+    assert LedgerModule._eq_diameter_um_from_area(area) == pytest.approx(2.0)
 
 
 def test_composition_string_template():
@@ -128,7 +129,7 @@ def test_composition_string_template():
             [],
         ],
     )
-    text = EMXSp_Composition_Analyzer._format_particle_composition_string([0, 1], result)
+    text = LedgerModule._format_particle_composition_string([0, 1], result)
     assert text == (
         "Candidate phases: PbMoO4 (CScnd: 0.90), PbMoO3 (CScnd: 0.50); "
         "candidate mixtures: PbMoO4+SiO2 (CSmix: 0.80)"

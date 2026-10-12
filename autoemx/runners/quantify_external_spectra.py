@@ -28,10 +28,11 @@ import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import autoemx.calibrations as calibs
 import autoemx.config.defaults as dflt
 import autoemx.utils.constants as cnst
 from autoemx.config.ledger_io import ingest_spectra, load_sample_ledger
-from autoemx.config.ledger_schemas import ClusteringConfig, SampleLedger  # type: ignore
+from autoemx.config.ledger_schemas import ClusteringConfig, LedgerConfigs, SampleLedger  # type: ignore
 from autoemx.config.runtime_configs import (
     BulkMeasurementConfig,
     MeasurementConfig,
@@ -256,6 +257,7 @@ def quantify_external_spectra(
         type=measurement_type,
         mode=measurement_mode,
         beam_energy_keV=beam_energy,
+        emergence_angle=calibs.load_detector_model(microscope_ID).emergence_angle,  # Fixed by instrument geometry
     )
     sample_substrate_cfg = SampleSubstrateConfig(
         elements=els_substrate,
@@ -376,32 +378,6 @@ def quantify_external_spectra(
             quant_flags_accepted=quant_flags_accepted,
         )
 
-        # ---- Instantiate analyzer (non-acquisition mode) ----
-        try:
-            comp_analyzer = EMXSp_Composition_Analyzer(
-                microscope_cfg=sample_microscope_cfg,
-                sample_id=sample_id,
-                sample_cfg=sample_cfg,
-                measurement_cfg=measurement_cfg,
-                sample_substrate_cfg=sample_substrate_cfg,
-                quant_cfg=quant_cfg,
-                initial_clustering_cfg=clustering_cfg,
-                powder_meas_cfg=powder_meas_cfg,
-                bulk_meas_cfg=bulk_meas_cfg,
-                plot_cfg=plot_cfg,
-                is_acquisition=False,
-                standards_dict=standards_dict,
-                verbose=verbose,
-                results_dir=sample_dir,
-            )
-        except Exception as exc:
-            logging.warning(
-                "Could not initialise analyzer for '%s': %s. Skipping.",
-                sample_id, exc,
-            )
-            traceback.print_exc()
-            continue
-
         # ---- Build and persist ledger ----
         # As at the start of an acquisition: a new ledger with the sample configs, then every
         # spectrum_* file of spectra/ is ingested. An existing ledger keeps its quantification history.
@@ -412,7 +388,15 @@ def quantify_external_spectra(
                 ledger = SampleLedger(
                     sample_id=sample_id,
                     sample_path=os.path.abspath(sample_dir),
-                    configs=comp_analyzer._build_ledger_configs(),
+                    configs=LedgerConfigs(
+                        microscope_cfg=sample_microscope_cfg,
+                        sample_cfg=sample_cfg,
+                        measurement_cfg=measurement_cfg.model_copy(
+                            update={"powder_meas_cfg": powder_meas_cfg, "bulk_meas_cfg": bulk_meas_cfg}
+                        ),
+                        sample_substrate_cfg=sample_substrate_cfg,
+                        plot_cfg=plot_cfg,
+                    ),
                     spectra=[],
                     quantifications=[],
                     active_quant=None,

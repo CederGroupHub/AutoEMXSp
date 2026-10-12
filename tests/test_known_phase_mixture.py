@@ -13,7 +13,7 @@ import pytest
 
 from autoemx.config.ledger_schemas import SampleLedger
 from autoemx.config.schema_models.quantification import QuantificationConfig
-from autoemx.core.composition_analysis.analyser import EMXSp_Composition_Analyzer
+from autoemx.core.composition_analysis.ledger import LedgerModule
 from autoemx.core.composition_analysis.reference_matching import (
     _draw_intermixing_violin_plots,
     _is_known_phase_mixture,
@@ -48,7 +48,7 @@ def test_known_phase_mixture_not_in_fingerprint():
 def test_reused_run_stores_current_value():
     reused = QuantificationConfig(quantification_id=0, options={**OPTIONS, "is_known_phase_mixture": False})
     candidate = QuantificationConfig(quantification_id=0, options={**OPTIONS, "is_known_phase_mixture": True})
-    EMXSp_Composition_Analyzer._update_non_fingerprint_options(reused, candidate)
+    LedgerModule._update_non_fingerprint_options(reused, candidate)
     assert reused.options["is_known_phase_mixture"] is True
 
 

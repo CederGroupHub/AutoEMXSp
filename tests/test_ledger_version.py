@@ -14,6 +14,7 @@ import autoemx
 from autoemx._version import LEGACY_VERSION
 from autoemx.config.ledger_schemas import LedgerVersionError, SampleLedger
 from autoemx.core.composition_analysis.analyser import EMXSp_Composition_Analyzer
+from autoemx.core.composition_analysis.ledger import LedgerModule
 import autoemx.utils.constants as cnst
 
 from ci_paths import INPUTS_DIR, K412_CLUSTER_MINI_ID
@@ -75,4 +76,4 @@ def test_analyser_does_not_replace_newer_ledger(ledger_path: Path):
     analyzer = EMXSp_Composition_Analyzer.__new__(EMXSp_Composition_Analyzer)
     analyzer.sample_result_dir = str(ledger_path.parent)
     with pytest.raises(LedgerVersionError):
-        analyzer._load_existing_ledger()
+        LedgerModule._load_existing_ledger(analyzer)

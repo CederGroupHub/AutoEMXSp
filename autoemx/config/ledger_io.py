@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """Convenience I/O helpers for sample ledgers."""
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, cast
@@ -14,6 +15,7 @@ from autoemx.config.ledger_schemas import (  # type: ignore
     ClusteringConfig,
     LedgerConfigs,
     QuantificationConfig,
+    QuantificationResult,
     SampleLedger,
     SpectrumEntry,
 )
@@ -43,7 +45,11 @@ def _extract_spectrum_id(pointer_file: Path) -> str:
 
 
 def _list_spectrum_pointer_files(spectra_dir: Path) -> List[Path]:
-    """List spectrum pointer files in deterministic order."""
+    """
+    List the spectrum files of a spectra folder (``spectrum_<id>.<ext>``), one per spectrum id, in deterministic
+    order (numeric ids first). Files of other names, and manufacturer background files, are ignored. When a spectrum
+    has files of several formats, the one of highest priority (SPECTRUM_POINTER_EXT_PRIORITY) is used.
+    """
     if not spectra_dir.exists():
         return []
 
@@ -53,6 +59,8 @@ def _list_spectrum_pointer_files(spectra_dir: Path) -> List[Path]:
 
     for path in spectra_dir.iterdir():
         if not path.is_file() or path.suffix.lower() not in allowed_ext:
+            continue
+        if not path.stem.startswith(cnst.SPECTRUM_FILENAME_PREFIX) or path.stem.endswith(cnst.SPECTRUM_MAN_BACKGROUND_SUFFIX):
             continue
 
         spectrum_id = _extract_spectrum_id(path)
@@ -73,6 +81,12 @@ def _list_spectrum_pointer_files(spectra_dir: Path) -> List[Path]:
         return (1, spectrum_id.lower(), path.name)
 
     return sorted(selected_by_id.values(), key=_sort_key)
+
+
+def _background_relpath(spectrum_id: str) -> str:
+    """Relative path of the manufacturer background vector file of a spectrum."""
+    return str(Path(cnst.SPECTRA_DIR, f"{cnst.SPECTRUM_FILENAME_PREFIX}{spectrum_id}"
+                                     f"{cnst.SPECTRUM_MAN_BACKGROUND_SUFFIX}{cnst.VECTOR_FILEEXT}"))
 
 
 def _load_realtime_from_pointer_file(pointer_path: Path) -> Optional[float]:
@@ -98,10 +112,21 @@ def _load_realtime_from_pointer_file(pointer_path: Path) -> Optional[float]:
     return None
 
 
-def _build_spectrum_entry(sample_root: Path, pointer_file: Path) -> SpectrumEntry:
-    """Build one minimal spectrum ledger entry from a pointer file."""
+def _build_spectrum_entry(
+    sample_root: Path,
+    pointer_file: Path,
+    acquisition_details: Optional[AcquisitionDetails] = None,
+    quantification_results: Optional[List[QuantificationResult]] = None,
+) -> SpectrumEntry:
+    """
+    Build the ledger entry of a spectrum file of ``<sample_root>/spectra``.
+
+    The live time is read from the file header (1.0 s if missing or not positive), and the manufacturer background
+    vector file of the spectrum is referenced if it exists.
+    """
     spectrum_id = _extract_spectrum_id(pointer_file)
-    pointer_relpath = str(pointer_file.resolve().relative_to(sample_root.resolve()).as_posix())
+    sample_root = sample_root.resolve()
+    pointer_relpath = str(pointer_file.resolve().relative_to(sample_root).as_posix())
 
     try:
         counts = SampleLedger._load_counts_from_pointer_file(pointer_file.resolve())
@@ -110,15 +135,20 @@ def _build_spectrum_entry(sample_root: Path, pointer_file: Path) -> SpectrumEntr
         total_counts = 0
 
     live_time = _load_realtime_from_pointer_file(pointer_file)
+    if live_time is not None and not (math.isfinite(live_time) and live_time > 0):
+        live_time = None
+
+    background_path = sample_root / _background_relpath(spectrum_id)
+    background_relpath = background_path.relative_to(sample_root).as_posix() if background_path.exists() else None
 
     return SpectrumEntry(
         spectrum_id=spectrum_id,
         total_counts=total_counts,
         live_acquisition_time=live_time if live_time is not None else 1.0,
-        acquisition_details=AcquisitionDetails(frame_id=None, particle_id=None, spot_coordinates=None),
+        acquisition_details=acquisition_details or AcquisitionDetails(frame_id=None, particle_id=None, spot_coordinates=None),
         spectrum_relpath=pointer_relpath,
-        instrument_background_relpath=None,
-        quantification_results=[],
+        instrument_background_relpath=background_relpath,
+        quantification_results=list(quantification_results or []),
     )
 
 

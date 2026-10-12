@@ -107,28 +107,25 @@ from autoemx.config.ledger_schemas import (
     ClusteringConfig as LedgerClusteringConfig,
     Coordinate2D,
     LedgerConfigs,
-    LedgerVersionError,
     ParticleInfo,
     QuantificationConfig,
     QuantificationDiagnostics,
     QuantificationResult,
     SampleLedger,
-    SpotCoordinates,
     SpectrumEntry,
 )
-from autoemx.config.ledger_io import get_active_quantification_config, ingest_spectra
+from autoemx.config.ledger_io import (
+    _build_spectrum_entry,
+    _list_spectrum_pointer_files,
+    get_active_quantification_config,
+)
 from autoemx._version import __version__ as AUTOEMX_VERSION
 from autoemx.config.schema_models.clustering import ClusteringAnalysis, ClusteringResult
 from autoemx.config.schema_models.standards import EDSStandardsFile
 from .clustering import ClusteringModule, count_results_without_bckgrnd_cnts, effective_quant_flag
-from autoemx.utils.legacy.ledger_bootstrap import (
-    load_or_create_ledger_with_legacy_data_csv,
-    resolve_legacy_bootstrap_configs,
-)
-from autoemx.utils.legacy.legacy_config_loader import has_legacy_data_csv
+from .ledger import LedgerModule
 from .plotting import PlottingModule
 from .reference_matching import ReferenceMatchingModule
-from autoemx.utils.legacy.spectrum_pointer_writer import load_vendor_msa_template_lines, write_spectrum_pointer_file
 from .standards import StandardsModule
 
 from autoemx._logging import get_logger
@@ -332,7 +329,7 @@ def _quantify_spectrum_worker(worker_payload: Dict[str, Any]) -> tuple[int, Opti
     background_abs = worker_payload.get('background_abs')
     if background_abs:
         try:
-            background = EMXSp_Composition_Analyzer._load_background_vector_from_file(Path(background_abs))
+            background = LedgerModule._load_background_vector_from_file(Path(background_abs))
         except Exception:
             background = None
 
@@ -510,19 +507,6 @@ class EMXSp_Composition_Analyzer:
     TO COMPLETE
     """
     #TODO
-    @staticmethod
-    def _coerce_optional_finite_float(value: Any) -> Optional[float]:
-        """Return a finite float or None when the input is missing/non-finite."""
-        if value is None:
-            return None
-        try:
-            numeric_value = float(value)
-        except (TypeError, ValueError):
-            return None
-        if not np.isfinite(numeric_value):
-            return None
-        return numeric_value
-
     @staticmethod
     def _to_finite_float(value: Any, default: float = 0.0) -> float:
         """Return a finite float, falling back to default for NaN/inf/unparseable values."""
@@ -923,7 +907,7 @@ class EMXSp_Composition_Analyzer:
     
         # Initialise instrument controller — configs are read from the ledger bundle
         self.EM_controller = EM_Controller(
-            self._build_ledger_configs(),
+            LedgerModule._build_ledger_configs(self),
             sample_id=self.sample_id,
             results_dir=EM_images_dir,
             verbose=self.verbose,
@@ -971,8 +955,8 @@ class EMXSp_Composition_Analyzer:
             Keys: ``tot_n_spectra``, ``next_spectrum_id``, ``particle_id_offset``,
             ``had_ledger_before``, and ``acquisition_needed``.
         """
-        _had_ledger_before = self._load_existing_ledger() is not None
-        _existing_ledger = self._load_or_create_ledger()
+        _had_ledger_before = LedgerModule._load_existing_ledger(self) is not None
+        _existing_ledger = LedgerModule._load_or_create_ledger(self)
         if _existing_ledger is not None and _existing_ledger.spectra:
             tot_n_spectra = len(_existing_ledger.spectra)
             _numeric_ids = [
@@ -1117,7 +1101,7 @@ class EMXSp_Composition_Analyzer:
         qc = self.current_quant_config  # QuantificationConfig from ledger (may be None)
         if qc is None and self.sample_result_dir is not None:
             try:
-                _ledger = self._load_or_create_ledger()
+                _ledger = LedgerModule._load_or_create_ledger(self)
                 qc = self._get_active_quantification_config(_ledger)
             except Exception:
                 pass
@@ -1275,7 +1259,7 @@ class EMXSp_Composition_Analyzer:
         quant_config = self.current_quant_config
 
         if quant_config is None:
-            ledger = self._load_or_create_ledger()
+            ledger = LedgerModule._load_or_create_ledger(self)
             quant_config = self._get_active_quantification_config(ledger)
 
         if quant_config is None:
@@ -1493,7 +1477,7 @@ class EMXSp_Composition_Analyzer:
             logger.info(f"✅ Acquisition took {measured_real_time:.2f} s")
 
         if self.quant_cfg.use_instrument_background and background_data is not None:
-            self._write_manufacturer_background_vector(
+            LedgerModule._write_manufacturer_background_vector(self, 
                 spectrum_id=spectrum_id,
                 background_vals=list(map(float, background_data)),
             )
@@ -1508,199 +1492,6 @@ class EMXSp_Composition_Analyzer:
         return int(np.round(np.sum(counts_arr)))
     
     
-    def _get_ledger_path(self) -> str:
-        """Return the ledger path for the current sample result directory."""
-        return os.path.join(self.sample_result_dir, cnst.LEDGER_FILENAME + cnst.LEDGER_FILEEXT)
-
-
-    def _resolve_or_create_spectrum_pointer(
-        self,
-        spectrum_id: str,
-        spectrum_vals: List[float],
-        *,
-        live_time: Optional[float] = None,
-        real_time: Optional[float] = None,
-    ) -> str:
-        """Return a relative spectrum pointer path and create the spectrum file when missing.
-
-        This is used by ledger reconstruction/update code paths (including legacy
-        Data.csv backfill). If no vendor template file is available in the sample
-        directory, the spectrum is written with the minimal EMSA fallback format.
-        """
-        spectrum_relpath = self._build_spectrum_relpath(spectrum_id)
-        spectrum_pointer_abs_path = os.path.join(self.sample_result_dir, spectrum_relpath)
-
-        if os.path.exists(spectrum_pointer_abs_path):
-            return spectrum_relpath
-
-        if not hasattr(self, "_vendor_msa_template_lines"):
-            setattr(
-                self,
-                "_vendor_msa_template_lines",
-                load_vendor_msa_template_lines(self.sample_result_dir, cnst.MSA_SP_FILENAME),
-            )
-
-        write_spectrum_pointer_file(
-            spectrum_pointer_abs_path,
-            spectrum_vals,
-            self.energy_vals,
-            template_lines=getattr(self, "_vendor_msa_template_lines"),
-            live_time=live_time,
-            real_time=real_time,
-        )
-        return spectrum_relpath
-
-
-    def _build_spectrum_relpath(self, spectrum_id: str) -> str:
-        """Build the relative path for one raw spectrum pointer file."""
-        # Extension of the format used by the EDS software to export spectra, defined by the microscope driver
-        spectrum_ext = dflt.RAW_SPECTRUM_EXT
-        em_controller = getattr(self, "EM_controller", None)
-        if em_controller is not None:
-            try:
-                spectrum_ext = getattr(em_controller.EM_driver, "RAW_SPECTRUM_EXT", spectrum_ext)
-            except Exception:  # No driver loaded
-                pass
-        filename = f"{cnst.SPECTRUM_FILENAME_PREFIX}{spectrum_id}{spectrum_ext}"
-        return os.path.join(cnst.SPECTRA_DIR, filename)
-
-
-    def _build_background_relpath(self, spectrum_id: str) -> str:
-        """Build relative path for one manufacturer background vector file."""
-        filename = (
-            f"{cnst.SPECTRUM_FILENAME_PREFIX}{spectrum_id}"
-            f"{cnst.SPECTRUM_MAN_BACKGROUND_SUFFIX}{cnst.VECTOR_FILEEXT}"
-        )
-        return os.path.join(cnst.SPECTRA_DIR, filename)
-
-
-    def _write_manufacturer_background_vector(self, spectrum_id: str, background_vals: Optional[List[float]]) -> Optional[str]:
-        """Persist manufacturer background counts as a companion vector file when enabled."""
-        if background_vals is None or not self.quant_cfg.use_instrument_background:
-            return None
-
-        background_relpath = self._build_background_relpath(spectrum_id)
-        background_abs_path = os.path.join(self.sample_result_dir, background_relpath)
-        os.makedirs(os.path.dirname(background_abs_path), exist_ok=True)
-        np.save(background_abs_path, np.asarray(list(map(float, background_vals)), dtype=float))
-        return background_relpath
-
-
-    @staticmethod
-    def _load_background_vector_from_file(background_path: Path) -> Optional[np.ndarray]:
-        """Load an instrument background vector from a sidecar file when available."""
-        if not background_path.exists() or background_path.suffix.lower() != cnst.VECTOR_FILEEXT:
-            return None
-        try:
-            background_vals = np.load(background_path, allow_pickle=False)
-        except Exception:
-            return None
-        if background_vals is None:
-            return None
-        return np.asarray(background_vals, dtype=float)
-
-
-    @staticmethod
-    def _load_realtime_from_pointer_file(pointer_path: Path) -> Optional[float]:
-        """Read REALTIME from an EMSA-like header when available."""
-        if pointer_path.suffix.lower() not in cnst.EMSA_SPECTRUM_EXTENSIONS:
-            return None
-
-        try:
-            with pointer_path.open("r", encoding="utf-8") as f:
-                for raw_line in f:
-                    line = raw_line.strip()
-                    if not line.startswith("#") or ":" not in line:
-                        continue
-                    if line.upper().startswith("#SPECTRUM"):
-                        break
-                    key, value = line[1:].split(":", maxsplit=1)
-                    key_norm = key.strip().replace("_", "").replace(" ", "").upper()
-                    if key_norm == "REALTIME":
-                        return float(value.strip())
-        except Exception:
-            return None
-
-        return None
-
-
-    def _load_existing_ledger(self) -> Optional[SampleLedger]:
-        """Load an existing ledger if present and valid."""
-        ledger_path = self._get_ledger_path()
-        if not os.path.exists(ledger_path):
-            return None
-        try:
-            return SampleLedger.from_json_file(ledger_path)
-        except LedgerVersionError:
-            # Never replace a ledger written by a newer AutoEMX version with a new one
-            raise
-        except Exception:
-            return None
-
-
-    def _get_ingested_spectrum_ids(self) -> set[str]:
-        """Return the spectrum ids already ingested for the current sample directory."""
-        cached_sample_dir = getattr(self, "_ingested_spectrum_ids_sample_result_dir", None)
-        ingested_spectrum_ids = getattr(self, "_ingested_spectrum_ids", None)
-
-        if ingested_spectrum_ids is None or cached_sample_dir != self.sample_result_dir:
-            ingested_spectrum_ids = set()
-            ledger = self._load_existing_ledger()
-            if ledger is not None:
-                ingested_spectrum_ids.update(
-                    str(entry.spectrum_id)
-                    for entry in ledger.spectra
-                    if entry.spectrum_id not in (None, "")
-                )
-            self._ingested_spectrum_ids = ingested_spectrum_ids
-            self._ingested_spectrum_ids_sample_result_dir = self.sample_result_dir
-
-        return ingested_spectrum_ids
-
-
-    def _get_spectra_dir(self) -> str:
-        """Return the absolute path to the spectra pointer directory."""
-        return os.path.join(self.sample_result_dir, cnst.SPECTRA_DIR)
-
-
-    def _list_pointer_files_in_spectra_dir(self) -> List[Path]:
-        """List pointer files currently present in the spectra directory."""
-        spectra_dir = Path(self._get_spectra_dir())
-        if not spectra_dir.exists():
-            return []
-
-        allowed_ext = set(cnst.SPECTRUM_POINTER_EXTENSIONS)
-        ext_priority = dict(cnst.SPECTRUM_POINTER_EXT_PRIORITY)
-        files_by_spectrum_id: Dict[str, Path] = {}
-        for path in spectra_dir.iterdir():
-            if not path.is_file() or path.suffix.lower() not in allowed_ext:
-                continue
-            stem = path.stem
-            if not stem.startswith(cnst.SPECTRUM_FILENAME_PREFIX):
-                continue
-            if stem.endswith(cnst.SPECTRUM_MAN_BACKGROUND_SUFFIX):
-                continue
-            spectrum_id = stem[len(cnst.SPECTRUM_FILENAME_PREFIX):]
-            existing = files_by_spectrum_id.get(spectrum_id)
-            if existing is None:
-                files_by_spectrum_id[spectrum_id] = path
-                continue
-
-            existing_priority = ext_priority.get(existing.suffix.lower(), 99)
-            current_priority = ext_priority.get(path.suffix.lower(), 99)
-            if current_priority < existing_priority:
-                files_by_spectrum_id[spectrum_id] = path
-
-        def sort_key(path: Path) -> Tuple[int, Union[int, str], str]:
-            stem = path.stem
-            spectrum_id = stem[len(cnst.SPECTRUM_FILENAME_PREFIX):] if stem.startswith(cnst.SPECTRUM_FILENAME_PREFIX) else stem
-            if spectrum_id.isdigit():
-                return (0, int(spectrum_id), path.name)
-            return (1, spectrum_id.lower(), path.name)
-
-        return sorted(files_by_spectrum_id.values(), key=sort_key)
-
-
     def _infer_max_particle_id_from_saved_images(self) -> Optional[int]:
         """Infer the maximum particle id from saved acquisition image filenames."""
         images_dir = Path(self.sample_result_dir, cnst.IMAGES_DIR)
@@ -1723,216 +1514,6 @@ class EMXSp_Composition_Analyzer:
                 max_particle_id = particle_id
 
         return max_particle_id
-
-
-    @staticmethod
-    def _parse_optional_int(value: Any) -> Optional[int]:
-        if value is None or pd.isna(value) or value == "":
-            return None
-        try:
-            return int(float(value))
-        except Exception:
-            return None
-
-
-    @staticmethod
-    def _parse_optional_float(value: Any) -> Optional[float]:
-        if value is None or pd.isna(value) or value == "":
-            return None
-        try:
-            return float(value)
-        except Exception:
-            return None
-
-
-    def _build_spot_coordinates(
-        self,
-        machine_x: Any = None,
-        machine_y: Any = None,
-        pixel_x: Any = None,
-        pixel_y: Any = None,
-    ) -> Optional[SpotCoordinates]:
-        machine_coords = None
-        pixel_coords = None
-
-        x_pixel = self._parse_optional_float(pixel_x)
-        y_pixel = self._parse_optional_float(pixel_y)
-        if x_pixel is not None and y_pixel is not None:
-            pixel_coords = (int(round(x_pixel)), int(round(y_pixel)))
-
-        if pixel_coords is not None and hasattr(self, "EM_controller"):
-            try:
-                em_driver = self.EM_controller.EM_driver
-                rel_coords = em_driver.frame_pixel_to_rel_coords(
-                    np.asarray([pixel_coords], dtype=float),
-                    int(self.EM_controller.im_width),
-                    int(self.EM_controller.im_height),
-                )
-                machine_coords = Coordinate2D(
-                    x=float(rel_coords[0][0]),
-                    y=float(rel_coords[0][1]),
-                )
-            except Exception:
-                machine_coords = None
-
-        if machine_coords is None:
-            x_machine = self._parse_optional_float(machine_x)
-            y_machine = self._parse_optional_float(machine_y)
-            if x_machine is not None and y_machine is not None:
-                machine_coords = Coordinate2D(x=x_machine, y=y_machine)
-
-        if machine_coords is None and pixel_coords is None:
-            return None
-
-        return SpotCoordinates(
-            machine_coordinates=machine_coords,
-            pixel_coordinates=pixel_coords,
-        )
-
-
-    def _build_spectrum_entry_from_pointer_file(
-        self,
-        pointer_file: Path,
-        existing_results: Optional[List[QuantificationResult]] = None,
-        acquisition_details_by_id: Optional[Dict[str, AcquisitionDetails]] = None,
-        quantification_results_by_id: Optional[Dict[str, List[QuantificationResult]]] = None,
-    ) -> SpectrumEntry:
-        """Build a SpectrumEntry by inspecting one file under sample_path/spectra."""
-        sample_root = Path(self.sample_result_dir).resolve()
-        pointer_abs = pointer_file.resolve()
-        pointer_rel = str(pointer_abs.relative_to(sample_root))
-        stem = pointer_file.stem
-        if stem.startswith(cnst.SPECTRUM_FILENAME_PREFIX):
-            spectrum_id = stem[len(cnst.SPECTRUM_FILENAME_PREFIX):]
-        else:
-            spectrum_id = stem
-
-        try:
-            counts = SampleLedger._load_counts_from_pointer_file(pointer_abs)
-            total_counts = int(round(float(np.sum(counts))))
-        except Exception:
-            total_counts = 0
-
-        acquisition_details = AcquisitionDetails(frame_id=None, particle_id=None, spot_coordinates=None)
-        if acquisition_details_by_id is not None:
-            acquisition_details = acquisition_details_by_id.get(spectrum_id, acquisition_details)
-
-        realtime_from_header = self._coerce_optional_finite_float(self._load_realtime_from_pointer_file(pointer_abs))
-        background_relpath = None
-        candidate_background = Path(
-            self.sample_result_dir,
-            self._build_background_relpath(spectrum_id),
-        )
-        if candidate_background.exists():
-            background_relpath = str(candidate_background.resolve().relative_to(sample_root))
-
-        entry_results = list(existing_results or [])
-        if not entry_results and quantification_results_by_id is not None:
-            entry_results = list(quantification_results_by_id.get(spectrum_id, []))
-
-        return SpectrumEntry(
-            live_acquisition_time=realtime_from_header if realtime_from_header is not None else 1.0,
-            total_counts=total_counts,
-            spectrum_id=spectrum_id,
-            spectrum_relpath=pointer_rel,
-            instrument_background_relpath=background_relpath,
-            acquisition_details=acquisition_details,
-            quantification_results=entry_results,
-        )
-
-
-    def _load_or_create_ledger(self) -> SampleLedger:
-        """Load a ledger, using legacy Data.csv bootstrap only for non-acquisition workflows."""
-        if self.is_acquisition:
-            self._last_acq_ledger_created = False
-            self._last_acq_ledger_ingested_spectra_count = 0
-
-            spectra_dir = self._get_spectra_dir()
-            os.makedirs(spectra_dir, exist_ok=True)
-
-            ledger = self._load_existing_ledger()
-            ledger_changed = False
-            if ledger is None:
-                ledger = SampleLedger(
-                    sample_id=self.sample_id,
-                    sample_path=os.path.abspath(self.sample_result_dir),
-                    configs=self._build_ledger_configs(),
-                    spectra=[],
-                    quantifications=[],
-                    active_quant=None,
-                )
-                self._last_acq_ledger_created = True
-                ledger_changed = True
-
-            n_ingested, n_removed = ingest_spectra(ledger)
-            self._last_acq_ledger_ingested_spectra_count = n_ingested
-            if n_ingested > 0 or n_removed > 0:
-                ledger_changed = True
-
-            if ledger.sample_path != os.path.abspath(self.sample_result_dir):
-                ledger.sample_path = os.path.abspath(self.sample_result_dir)
-                ledger_changed = True
-
-            if ledger_changed:
-                ledger.to_json_file(self._get_ledger_path())
-
-            return ledger
-
-        ledger = self._load_existing_ledger()
-        if ledger is not None:
-            return ledger
-
-        if has_legacy_data_csv(self.sample_result_dir):
-            default_ledger_configs = self._build_ledger_configs()
-            default_ledger_configs, legacy_configs = resolve_legacy_bootstrap_configs(
-                sample_result_dir=self.sample_result_dir,
-                default_ledger_configs=default_ledger_configs,
-            )
-
-            # Keep runtime analyzer configs aligned with recovered legacy values.
-            if legacy_configs is not None:
-                self.microscope_cfg = default_ledger_configs.microscope_cfg
-                self.sample_cfg = default_ledger_configs.sample_cfg
-                self.measurement_cfg = default_ledger_configs.measurement_cfg
-                self.sample_substrate_cfg = default_ledger_configs.sample_substrate_cfg
-                self.powder_meas_cfg = self.measurement_cfg.powder_meas_cfg or PowderMeasurementConfig()
-                self.bulk_meas_cfg = self.measurement_cfg.bulk_meas_cfg or BulkMeasurementConfig()
-                self.exp_stds_cfg = self.measurement_cfg.exp_stds_cfg or ExpStandardsConfig()
-                self.plot_cfg = default_ledger_configs.plot_cfg
-                if legacy_configs.get(cnst.QUANTIFICATION_CFG_KEY) is not None:
-                    self.quant_cfg = legacy_configs[cnst.QUANTIFICATION_CFG_KEY]
-                if legacy_configs.get(cnst.CLUSTERING_CFG_KEY) is not None:
-                    self.clustering_cfg = legacy_configs[cnst.CLUSTERING_CFG_KEY]
-
-                # Recompute energy axis using recovered legacy calibration values.
-                legacy_energy_zero = self._coerce_optional_finite_float(getattr(self.microscope_cfg, "energy_zero", None))
-                legacy_bin_width = self._coerce_optional_finite_float(getattr(self.microscope_cfg, "bin_width", None))
-                self.sp_start, self.sp_end = (
-                    int(round(self.quant_cfg.spectrum_lims[0])),
-                    int(round(self.quant_cfg.spectrum_lims[1])),
-                )
-                if legacy_energy_zero is not None and legacy_bin_width is not None and float(legacy_bin_width) != 0.0:
-                    self.energy_vals = np.array(
-                        [legacy_energy_zero + legacy_bin_width * i for i in range(self.sp_start, self.sp_end)]
-                    )
-                elif not hasattr(self, "energy_vals"):
-                    self.energy_vals = np.array([], dtype=float)
-
-            return load_or_create_ledger_with_legacy_data_csv(
-                sample_result_dir=self.sample_result_dir,
-                sample_id=self.sample_id,
-                microscope_id=self.microscope_cfg.ID,
-                use_instrument_background=bool(self.quant_cfg.use_instrument_background),
-                default_ledger_configs=default_ledger_configs,
-                resolve_or_create_spectrum_pointer=self._resolve_or_create_spectrum_pointer,
-                write_background_pointer=self._write_manufacturer_background_vector,
-            )
-
-        raise FileNotFoundError(
-            f"No ledger.json or Data.csv found for sample '{self.sample_id}' "
-            f"in '{self.sample_result_dir}'. Please ensure the sample directory contains "
-            "either ledger.json or Data.csv."
-        )
 
 
     def _extract_spectrum_info(
@@ -1967,11 +1548,6 @@ class EMXSp_Composition_Analyzer:
         row[cnst.FRAME_ID_DF_KEY] = frame_id
         return row
 
-    @staticmethod
-    def _eq_diameter_um_from_area(area_um: float) -> float:
-        """Equivalent circular diameter in µm for a given area in µm²."""
-        return float(2.0 * np.sqrt(area_um / np.pi))
-
     def _upsert_particle_info(
         self,
         ledger: SampleLedger,
@@ -1983,7 +1559,7 @@ class EMXSp_Composition_Analyzer:
     ) -> None:
         """Create or update the ParticleInfo entry for a particle in the ledger."""
         eq_diameter_um = (
-            self._eq_diameter_um_from_area(area_um) if area_um is not None else None
+            LedgerModule._eq_diameter_um_from_area(area_um) if area_um is not None else None
         )
         for particle in ledger.particles:
             if particle.id == particle_id:
@@ -2007,52 +1583,6 @@ class EMXSp_Composition_Analyzer:
                 image_pixel_size_um=image_pixel_size_um,
             )
         )
-
-    @staticmethod
-    def _format_particle_composition_string(
-        cluster_ids: List[int],
-        clustering_result: ClusteringResult,
-    ) -> Optional[str]:
-        """Build the Candidate phases / mixtures string for a particle's clusters."""
-        phase_parts: List[str] = []
-        mixture_parts: List[str] = []
-        refs_rows = clustering_result.refs_assigned_rows or []
-        mixtures_by_cluster = clustering_result.clusters_assigned_mixtures or []
-
-        for cluster_id in cluster_ids:
-            if cluster_id < 0:
-                continue
-            if cluster_id < len(refs_rows):
-                row = refs_rows[cluster_id] or {}
-                phase_name = row.get(f"{cnst.CND_DF_KEY}1")
-                phase_conf = row.get(f"{cnst.CS_CND_DF_KEY}1")
-                if phase_name:
-                    if phase_conf is None:
-                        phase_parts.append(str(phase_name))
-                    else:
-                        phase_parts.append(f"{phase_name} (CScnd: {float(phase_conf):.2f})")
-
-            if cluster_id < len(mixtures_by_cluster):
-                mixtures = mixtures_by_cluster[cluster_id] or []
-                if mixtures:
-                    top_mix = ReferenceMatchingModule._sort_mixtures(mixtures)[0]
-                    refs = top_mix.get(cnst.REF_NAME_KEY) or []
-                    conf = top_mix.get(cnst.CONF_SCORE_KEY)
-                    if refs:
-                        mix_name = "+".join(str(r) for r in refs)
-                        if conf is None:
-                            mixture_parts.append(mix_name)
-                        else:
-                            mixture_parts.append(f"{mix_name} (CSmix: {float(conf):.2f})")
-
-        sections: List[str] = []
-        if phase_parts:
-            sections.append("Candidate phases: " + ", ".join(phase_parts))
-        if mixture_parts:
-            sections.append("candidate mixtures: " + ", ".join(mixture_parts))
-        if not sections:
-            return None
-        return "; ".join(sections)
 
     def _update_particles_from_clustering(
         self,
@@ -2095,7 +1625,7 @@ class EMXSp_Composition_Analyzer:
         changed = False
         for particle in ledger.particles:
             ordered_clusters = sorted(clusters_by_particle.get(particle.id, []))
-            composition = self._format_particle_composition_string(
+            composition = LedgerModule._format_particle_composition_string(
                 ordered_clusters, clustering_result
             )
             if particle.clusters != ordered_clusters or particle.composition != composition:
@@ -2105,31 +1635,14 @@ class EMXSp_Composition_Analyzer:
         return changed
 
 
-    def _build_ledger_configs(self) -> LedgerConfigs:
-        """Build inline ledger configs from current analyzer configuration objects."""
-        self.measurement_cfg = self.measurement_cfg.model_copy(
-            update={
-                "powder_meas_cfg": self.powder_meas_cfg,
-                "bulk_meas_cfg": self.bulk_meas_cfg,
-                "exp_stds_cfg": self.exp_stds_cfg if self.exp_stds_cfg.is_exp_std_measurement else None,
-            }
-        )
-        return LedgerConfigs(
-            microscope_cfg=self.microscope_cfg,
-            sample_cfg=self.sample_cfg,
-            measurement_cfg=self.measurement_cfg,
-            sample_substrate_cfg=self.sample_substrate_cfg,
-            plot_cfg=self.plot_cfg,
-        )
-
     def _attach_particle_stats_ledger(self) -> None:
         """Create or load a SampleLedger and attach it to the particle finder for PSD."""
-        ledger = self._load_existing_ledger()
+        ledger = LedgerModule._load_existing_ledger(self)
         if ledger is None:
             ledger = SampleLedger(
                 sample_id=self.sample_id,
                 sample_path=os.path.abspath(self.sample_result_dir),
-                configs=self._build_ledger_configs(),
+                configs=LedgerModule._build_ledger_configs(self),
                 spectra=[],
                 particles=[],
                 quantifications=[],
@@ -2138,8 +1651,8 @@ class EMXSp_Composition_Analyzer:
         else:
             # Fresh PSD run replaces prior particle geometry records.
             ledger.particles = []
-            ledger.configs = self._build_ledger_configs()
-        ledger_path = self._get_ledger_path()
+            ledger.configs = LedgerModule._build_ledger_configs(self)
+        ledger_path = LedgerModule._get_ledger_path(self)
         ledger.to_json_file(ledger_path)
 
         particle_finder = None
@@ -2168,7 +1681,7 @@ class EMXSp_Composition_Analyzer:
                 "Particle finder is not available for list particle selection"
             )
 
-        ledger = self._load_or_create_ledger()
+        ledger = LedgerModule._load_or_create_ledger(self)
         particle_finder.set_particle_targets(
             particle_ids=self._particle_ids,
             particle_coords_mm=self._particle_coords_mm,
@@ -2190,11 +1703,11 @@ class EMXSp_Composition_Analyzer:
         force_new : bool
             If True, always create a new quantification config id.
         """
-        existing_ledger = self._load_or_create_ledger()
+        existing_ledger = LedgerModule._load_or_create_ledger(self)
         active_quant_config = self._get_active_quantification_config(existing_ledger)
         active_quant_has_results = (
             active_quant_config is not None
-            and self._ledger_has_quantification_results(
+            and LedgerModule._ledger_has_quantification_results(
                 existing_ledger,
                 int(active_quant_config.quantification_id),
             )
@@ -2208,7 +1721,7 @@ class EMXSp_Composition_Analyzer:
         candidate_id = (
             active_quant_config.quantification_id
             if active_quant_config is not None
-            else self._next_quantification_id(existing_ledger)
+            else LedgerModule._next_quantification_id(existing_ledger)
         )
         candidate_config = self._build_quantification_config(
             quantification_id=candidate_id,
@@ -2221,11 +1734,11 @@ class EMXSp_Composition_Analyzer:
         if (
             not force_new
             and active_quant_config is not None
-            and self._quantification_configs_match(active_quant_config, candidate_config)
+            and LedgerModule._quantification_configs_match(active_quant_config, candidate_config)
         ):
             self.current_quant_config = active_quant_config
             self.current_quantification_id = active_quant_config.quantification_id
-            self._update_non_fingerprint_options(self.current_quant_config, candidate_config)
+            LedgerModule._update_non_fingerprint_options(self.current_quant_config, candidate_config)
             # Even when reusing quantification settings, clustering inputs (e.g., ref_formulae
             # passed via runners as sample['cnd']) may have changed for this run.
             self._ensure_current_clustering_run(
@@ -2239,13 +1752,13 @@ class EMXSp_Composition_Analyzer:
             matching_prior = [
                 config
                 for config in existing_ledger.quantifications
-                if self._quantification_configs_match(config, candidate_config)
+                if LedgerModule._quantification_configs_match(config, candidate_config)
             ]
             if matching_prior:
                 latest_match = max(matching_prior, key=lambda config: config.quantification_id)
                 self.current_quant_config = latest_match
                 self.current_quantification_id = latest_match.quantification_id
-                self._update_non_fingerprint_options(self.current_quant_config, candidate_config)
+                LedgerModule._update_non_fingerprint_options(self.current_quant_config, candidate_config)
                 self._ensure_current_clustering_run(self.current_quant_config)
                 self._apply_active_clustering_config(self.current_quant_config)
                 return
@@ -2253,7 +1766,7 @@ class EMXSp_Composition_Analyzer:
         if not force_new and active_quant_config is not None:
             changes = active_quant_config.fingerprint_differences(candidate_config)
             if changes:
-                changed_summary = self._format_quantification_config_changes(changes)
+                changed_summary = LedgerModule._format_quantification_config_changes(changes)
                 if not active_quant_has_results:
                     logger.info(
                         "🆕 Quantification scientific fingerprint changed; "
@@ -2273,7 +1786,7 @@ class EMXSp_Composition_Analyzer:
                     changed_summary,
                 )
 
-        quantification_id = self._next_quantification_id(existing_ledger)
+        quantification_id = LedgerModule._next_quantification_id(existing_ledger)
         self.current_quant_config = self._build_quantification_config(
             quantification_id=quantification_id,
             sample_elements=current_sample_elements,
@@ -2284,15 +1797,6 @@ class EMXSp_Composition_Analyzer:
         self.current_quantification_id = quantification_id
         self._ensure_current_clustering_run(self.current_quant_config)
         self._apply_active_clustering_config(self.current_quant_config)
-
-
-    @staticmethod
-    def _update_non_fingerprint_options(quant_config: QuantificationConfig, candidate: QuantificationConfig) -> None:
-        """Store the current values of the options that do not affect the results (not in the fingerprint) in a
-        reused quantification run, e.g. is_known_phase_mixture, which the analysis reads."""
-        for key in QuantificationConfig.NON_FINGERPRINT_OPTIONS:
-            if key in candidate.options:
-                quant_config.options[key] = candidate.options[key]
 
 
     def _build_quantification_options(self) -> Dict[str, Any]:
@@ -2491,56 +1995,6 @@ class EMXSp_Composition_Analyzer:
         return dict(sorted(reference_values_by_el_line.items()))
 
 
-    @staticmethod
-    def _quantification_configs_match(left: QuantificationConfig, right: QuantificationConfig) -> bool:
-        """Compare quantification configs by deterministic scientific-input fingerprint."""
-        return left.fingerprint() == right.fingerprint()
-
-    @staticmethod
-    def _clustering_configs_match(left: LedgerClusteringConfig, right: LedgerClusteringConfig) -> bool:
-        """Compare clustering configs by deterministic scientific-input fingerprint."""
-        return left.fingerprint() == right.fingerprint()
-
-    @staticmethod
-    def _format_quantification_config_changes(
-        changes: Dict[str, Dict[str, Any]],
-        max_items: int = 8,
-        max_value_length: int = 80,
-    ) -> str:
-        """Return a concise deterministic summary of config changes, one field per line."""
-        if not changes:
-            return "  • none"
-
-        sorted_items = sorted(changes.items(), key=lambda item: item[0])
-        formatted_entries: List[str] = []
-        for path, change in sorted_items[:max_items]:
-            old_val = EMXSp_Composition_Analyzer._short_repr(change.get("old"), max_value_length)
-            new_val = EMXSp_Composition_Analyzer._short_repr(change.get("new"), max_value_length)
-            formatted_entries.append(f"  • {path}: {old_val} -> {new_val}")
-
-        remaining = len(sorted_items) - len(formatted_entries)
-        if remaining > 0:
-            formatted_entries.append(f"  • ... and {remaining} more")
-
-        return "\n".join(formatted_entries)
-
-    @staticmethod
-    def _short_repr(value: Any, max_length: int) -> str:
-        """Return a stable shortened representation suitable for warning messages."""
-        text = repr(value)
-        if len(text) <= max_length:
-            return text
-        return text[: max_length - 3] + "..."
-
-
-    @staticmethod
-    def _runtime_clustering_cfg_payload(clustering_cfg: LedgerClusteringConfig) -> Dict[str, Any]:
-        """Convert a ledger clustering config to the runtime config payload shape."""
-        payload = clustering_cfg.model_dump(mode="json")
-        payload.pop("clustering_id", None)
-        return payload
-
-
     def _apply_active_clustering_config(self, quant_config: QuantificationConfig) -> None:
         """Load runtime clustering options from the active clustering config of a quantification config."""
         active_clustering_analysis = quant_config.get_active_clustering_analysis()
@@ -2584,12 +2038,12 @@ class EMXSp_Composition_Analyzer:
     ) -> None:
         """Ensure active quantification config tracks clustering run history and active config."""
         candidate_clustering_config = self._build_clustering_config_descriptor(
-            clustering_id=self._next_clustering_config_id(quant_config)
+            clustering_id=LedgerModule._next_clustering_config_id(quant_config)
         )
         matching_index: Optional[int] = None
         runtime_clustering_id = getattr(self.clustering_cfg, "clustering_id", None)
         for idx, analysis in enumerate(quant_config.clustering_analyses):
-            if not self._clustering_configs_match(analysis.config, candidate_clustering_config):
+            if not LedgerModule._clustering_configs_match(analysis.config, candidate_clustering_config):
                 continue
             if runtime_clustering_id is not None and analysis.config.clustering_id == runtime_clustering_id:
                 matching_index = idx
@@ -2608,7 +2062,7 @@ class EMXSp_Composition_Analyzer:
         if active_clustering_config is not None:
             changes = active_clustering_config.fingerprint_differences(candidate_clustering_config)
             if changes:
-                changed_summary = self._format_quantification_config_changes(changes)
+                changed_summary = LedgerModule._format_quantification_config_changes(changes)
                 logger.info(
                     "🆕 Clustering scientific fingerprint changed; "
                     "appending a new clustering config to the active quantification config.\n%s",
@@ -2622,40 +2076,9 @@ class EMXSp_Composition_Analyzer:
 
 
     @staticmethod
-    def _next_clustering_config_id(quant_config: QuantificationConfig) -> int:
-        """Return the next clustering config id local to the provided quantification config."""
-        if not quant_config.clustering_analyses:
-            return 0
-        return max(analysis.config.clustering_id for analysis in quant_config.clustering_analyses) + 1
-
-
-    @staticmethod
     def _get_active_quantification_config(existing_ledger: Optional[SampleLedger]) -> Optional[QuantificationConfig]:
         """Return the active quantification config from the ledger when available."""
         return get_active_quantification_config(existing_ledger)
-
-
-    @staticmethod
-    def _next_quantification_id(existing_ledger: Optional[SampleLedger]) -> int:
-        """Return the next ledger-local integer quantification identifier."""
-        if existing_ledger is None or not existing_ledger.quantifications:
-            return 0
-        return max(config.quantification_id for config in existing_ledger.quantifications) + 1
-
-
-    @staticmethod
-    def _ledger_has_quantification_results(
-        existing_ledger: Optional[SampleLedger],
-        quantification_id: int,
-    ) -> bool:
-        """Return True when at least one spectrum contains results for the given quantification id."""
-        if existing_ledger is None:
-            return False
-        for spectrum in existing_ledger.spectra:
-            for result in spectrum.quantification_results:
-                if result.quantification_id == quantification_id:
-                    return True
-        return False
 
 
     def _build_quantification_config(
@@ -2717,7 +2140,7 @@ class EMXSp_Composition_Analyzer:
         for idx, config in enumerate(ledger.quantifications):
             if (
                 config.quantification_id == self.current_quant_config.quantification_id
-                and self._quantification_configs_match(config, self.current_quant_config)
+                and LedgerModule._quantification_configs_match(config, self.current_quant_config)
             ):
                 ledger.quantifications[idx] = self.current_quant_config
                 self.current_quantification_id = self.current_quant_config.quantification_id
@@ -2746,7 +2169,7 @@ class EMXSp_Composition_Analyzer:
         if self.current_quant_config is None or self.current_quantification_id is None:
             return
 
-        ledger = self._load_or_create_ledger()
+        ledger = LedgerModule._load_or_create_ledger(self)
         self._upsert_current_quantification_config_on_ledger(ledger)
 
         # Ensure the full current config payload (including clustering history/index)
@@ -2757,14 +2180,14 @@ class EMXSp_Composition_Analyzer:
                 break
 
         ledger.active_quant = self.current_quantification_id
-        ledger.to_json_file(self._get_ledger_path())
+        ledger.to_json_file(LedgerModule._get_ledger_path(self))
 
 
     def _sync_existing_quantification_from_ledger(self) -> None:
         """Populate in-memory quantification slots from ledger results with the current id."""
         if self.current_quantification_id is None:
             return
-        existing_ledger = self._load_or_create_ledger()
+        existing_ledger = LedgerModule._load_or_create_ledger(self)
         if existing_ledger is None:
             return
 
@@ -2795,7 +2218,7 @@ class EMXSp_Composition_Analyzer:
             replace it (used for force_requantification, requantify_only_unquantified_spectra,
             and interrupted re-runs).
         """
-        existing_ledger = self._load_or_create_ledger()
+        existing_ledger = LedgerModule._load_or_create_ledger(self)
         ledger = existing_ledger
 
         if self.current_quant_config is None:
@@ -2817,7 +2240,7 @@ class EMXSp_Composition_Analyzer:
                 for r in ledger.spectra[spectrum_index].quantification_results
             ]
 
-        ledger.to_json_file(self._get_ledger_path())
+        ledger.to_json_file(LedgerModule._get_ledger_path(self))
 
 
     def _check_fit_quant_validity(
@@ -3076,11 +2499,11 @@ class EMXSp_Composition_Analyzer:
         - If `quantify` is True, quantification occurs immediately after each collection.
         """
         success = False
-        ingested_spectrum_ids = self._get_ingested_spectrum_ids()
+        ingested_spectrum_ids = LedgerModule._get_ingested_spectrum_ids(self)
 
         # Auto-detect next available spectrum ID if not provided
         if n_tot_sp_collected is None:
-            pointer_files = self._list_pointer_files_in_spectra_dir()
+            pointer_files = _list_spectrum_pointer_files(Path(self.sample_result_dir, cnst.SPECTRA_DIR))
             max_id = -1
             for pf in pointer_files:
                 stem = pf.stem
@@ -3143,7 +2566,7 @@ class EMXSp_Composition_Analyzer:
                 if self.verbose:
                     print_single_separator(f'🔬 Acquiring spectrum #{next_spectrum_id}...')
 
-                spectrum_relpath = self._build_spectrum_relpath(current_spectrum_id)
+                spectrum_relpath = LedgerModule._build_spectrum_relpath(self, current_spectrum_id)
                 manufacturer_msa_path = os.path.join(self.sample_result_dir, spectrum_relpath)
                 os.makedirs(os.path.dirname(manufacturer_msa_path), exist_ok=True)
 
@@ -3165,26 +2588,25 @@ class EMXSp_Composition_Analyzer:
                 acq_details = AcquisitionDetails(
                     frame_id=frame_id_str,
                     particle_id=self.particle_cntr if self.particle_cntr is not None else None,
-                    spot_coordinates=self._build_spot_coordinates(
+                    spot_coordinates=LedgerModule._build_spot_coordinates(self, 
                         pixel_x=xy_center[0],
                         pixel_y=xy_center[1],
                     ),
                 )
-                spectrum_entry = self._build_spectrum_entry_from_pointer_file(
-                    Path(manufacturer_msa_path),
-                    acquisition_details_by_id={current_spectrum_id: acq_details},
+                spectrum_entry = _build_spectrum_entry(
+                    Path(self.sample_result_dir), Path(manufacturer_msa_path), acquisition_details=acq_details
                 )
                 # Load or create ledger
-                ledger_path = self._get_ledger_path()
+                ledger_path = LedgerModule._get_ledger_path(self)
                 try:
-                    ledger = self._load_existing_ledger()
+                    ledger = LedgerModule._load_existing_ledger(self)
                 except Exception:
                     ledger = None
                 if ledger is None:
                     ledger = SampleLedger(
                         sample_id=self.sample_id,
                         sample_path=os.path.abspath(self.sample_result_dir),
-                        configs=self._build_ledger_configs(),
+                        configs=LedgerModule._build_ledger_configs(self),
                         spectra=[],
                         particles=[],
                         quantifications=[],
@@ -3293,7 +2715,7 @@ class EMXSp_Composition_Analyzer:
                 None processes all of them.
             """
             
-            _ledger = self._load_or_create_ledger()
+            _ledger = LedgerModule._load_or_create_ledger(self)
             tot_spectra_collected = len(_ledger.spectra) if _ledger is not None else 0
             _ledger_spectra = list(_ledger.spectra) if _ledger is not None else []
 
@@ -3654,7 +3076,7 @@ class EMXSp_Composition_Analyzer:
                 self._persist_current_quantification_config()
             return
 
-        ledger = self._load_or_create_ledger()
+        ledger = LedgerModule._load_or_create_ledger(self)
         active_quant_config = self._get_active_quantification_config(ledger)
         if active_quant_config is None:
             return
@@ -3667,12 +3089,12 @@ class EMXSp_Composition_Analyzer:
             return
 
         active_clustering_config.k_resolved = resolved_k_int
-        ledger.to_json_file(self._get_ledger_path())
+        ledger.to_json_file(LedgerModule._get_ledger_path(self))
 
 
     def _persist_clustering_result_on_active_analysis(self, clustering_result: ClusteringResult) -> None:
         """Persist the latest clustering result on the active clustering analysis entry."""
-        ledger = self._load_or_create_ledger()
+        ledger = LedgerModule._load_or_create_ledger(self)
         active_quant_config = self._get_active_quantification_config(ledger)
         if active_quant_config is None:
             return
@@ -3689,7 +3111,7 @@ class EMXSp_Composition_Analyzer:
         ):
             self.current_quant_config.set_active_clustering_result(clustering_result.model_copy(deep=True))
 
-        ledger.to_json_file(self._get_ledger_path())
+        ledger.to_json_file(LedgerModule._get_ledger_path(self))
 
 
     #%% Data compositional analysis
@@ -3733,7 +3155,7 @@ class EMXSp_Composition_Analyzer:
         # run_quantification (i.e. analysis-only path): we need the typed
         # QuantificationResult records populated in memory.
         if self.sample_result_dir is not None:
-            existing_ledger = self._load_or_create_ledger()
+            existing_ledger = LedgerModule._load_or_create_ledger(self)
             # Resolve current_quantification_id from the ledger when not already set
             # (analysis-only callers skip run_quantification so it is never assigned).
             if self.current_quantification_id is None and existing_ledger is not None:
@@ -3929,11 +3351,11 @@ class EMXSp_Composition_Analyzer:
         self._persist_clustering_result_on_active_analysis(clustering_artifacts)
 
         # 8b. Back-fill particle cluster/composition summaries when particles exist
-        ledger_for_particles = self._load_or_create_ledger()
+        ledger_for_particles = LedgerModule._load_or_create_ledger(self)
         if self._update_particles_from_clustering(
             ledger_for_particles, labels, df_indices, clustering_artifacts
         ):
-            ledger_for_particles.to_json_file(self._get_ledger_path())
+            ledger_for_particles.to_json_file(LedgerModule._get_ledger_path(self))
     
         # 9. Save plots
         if self.plot_cfg.save_plots:
@@ -4039,7 +3461,7 @@ class EMXSp_Composition_Analyzer:
                 particle_id_offset=_particle_id_offset,
                 interrupt_fits_bad_spectra=interrupt_fits_bad_spectra
             )
-            refreshed_ledger = self._load_or_create_ledger()
+            refreshed_ledger = LedgerModule._load_or_create_ledger(self)
             tot_n_spectra = len(refreshed_ledger.spectra) if refreshed_ledger is not None else 0
             n_spectra_collected_this_session += (tot_n_spectra - n_spectra_before)
     
@@ -4081,7 +3503,7 @@ class EMXSp_Composition_Analyzer:
         logger.info('ℹ️ Sample ID: %s', self.sample_id)
         if self.sample_cfg.is_particle_acquisition:
             if n_spectra_collected_this_session > 0:
-                final_ledger = self._load_or_create_ledger()
+                final_ledger = LedgerModule._load_or_create_ledger(self)
                 n_particles = len({
                     s.acquisition_details.particle_id
                     for s in (final_ledger.spectra if final_ledger is not None else [])
@@ -4562,7 +3984,7 @@ class EMXSp_Composition_Analyzer:
             If the output directory cannot be created or files cannot be written.
         """
     
-        ledger = self._load_or_create_ledger()
+        ledger = LedgerModule._load_or_create_ledger(self)
         ledger_spectra = list(ledger.spectra) if ledger is not None else []
         n_spectra = len(ledger_spectra)
     
@@ -4721,7 +4143,7 @@ class EMXSp_Composition_Analyzer:
     
         # Include dataclasses corresponding to measurement type
         if is_XSp_measurement and not self.exp_stds_cfg.is_exp_std_measurement:
-            cfg_dataclasses[cnst.CLUSTERING_CFG_KEY] = self._runtime_clustering_cfg_payload(self.clustering_cfg)
+            cfg_dataclasses[cnst.CLUSTERING_CFG_KEY] = LedgerModule._runtime_clustering_cfg_payload(self.clustering_cfg)
             cfg_dataclasses[cnst.PLOT_CFG_KEY] = _serialize_config(self.plot_cfg)
 
 
@@ -4739,7 +4161,7 @@ class EMXSp_Composition_Analyzer:
             raise OSError(f"Could not create output directory '{self.sample_result_dir}': {e}")
     
         try:
-            ledger = self._load_or_create_ledger()
+            ledger = LedgerModule._load_or_create_ledger(self)
             ledger.configs = LedgerConfigs.model_validate({
                 cnst.MICROSCOPE_CFG_KEY: spectrum_collection_info[cnst.MICROSCOPE_CFG_KEY],
                 cnst.SAMPLE_CFG_KEY: spectrum_collection_info[cnst.SAMPLE_CFG_KEY],
@@ -4752,7 +4174,7 @@ class EMXSp_Composition_Analyzer:
             # so user-provided clustering inputs (e.g., sample['cnd'] -> ref_formulae)
             # are saved to ledger even before any quantification run is executed.
             if is_XSp_measurement and not self.exp_stds_cfg.is_exp_std_measurement and not ledger.quantifications:
-                quantification_id = self._next_quantification_id(ledger)
+                quantification_id = LedgerModule._next_quantification_id(ledger)
                 self.current_quant_config = self._build_quantification_config(
                     quantification_id=quantification_id,
                     sample_elements=list(self.all_els_sample),
@@ -4765,9 +4187,9 @@ class EMXSp_Composition_Analyzer:
                 ledger.append_quantification_config(self.current_quant_config)
                 ledger.active_quant = quantification_id
 
-            ledger.to_json_file(self._get_ledger_path())
+            ledger.to_json_file(LedgerModule._get_ledger_path(self))
         except Exception as e:
-            raise OSError(f"Could not persist configurations to ledger '{self._get_ledger_path()}': {e}")
+            raise OSError(f"Could not persist configurations to ledger '{LedgerModule._get_ledger_path(self)}': {e}")
             
     #%% Print Results
     # =============================================================================            
