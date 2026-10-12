@@ -15,7 +15,6 @@ import autoemx.calibrations as calibs
 import autoemx.utils.constants as cnst
 from autoemx.config.schema_models import (
     EDSStandardsFile,  # type: ignore
-    ReferenceMean,  # type: ignore
     StandardFitLineResult,  # type: ignore
     StandardsFitResults,  # type: ignore
     StandardLine,  # type: ignore
@@ -516,24 +515,7 @@ class StandardsModule:
                 mean_z=std_mean_z,
             ))
 
-            list_pb_for_mean = [
-                entry.corrected_pb
-                for entry in line_payload.entries
-                if getattr(entry, "use_for_mean_calc", False)
-            ]
-            if len(list_pb_for_mean) > 0:
-                mean_pb = float(np.mean(list_pb_for_mean))
-                stddev_mean_pb = float(np.std(list_pb_for_mean))
-                error_mean_pb = (stddev_mean_pb / mean_pb * 100) if mean_pb else float("nan")
-                line_payload.reference_mean = ReferenceMean.model_validate({
-                    cnst.DATETIME_KEY: now.strftime("%Y-%m-%d %H:%M:%S"),
-                    cnst.COR_PB_DF_KEY: mean_pb,
-                    cnst.STDEV_PB_DF_KEY: stddev_mean_pb,
-                    cnst.REL_ER_PERCENT_PB_DF_KEY: error_mean_pb,
-                    cnst.MEAS_PB_DF_KEY: None,
-                })
-            else:
-                line_payload.reference_mean = None
+            line_payload.reference_mean = line_payload.compute_reference_mean(now.strftime("%Y-%m-%d %H:%M:%S"))
 
         standards.to_json_file(stds_filepath, indent=2)
         if stds_filepath:

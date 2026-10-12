@@ -3,25 +3,33 @@
 """
 Runner: Modify EDS Standards JSON File In-Place
 
-This runner script updates an EDS standards JSON file in place. It supports:
+This runner updates an EDS standards JSON file in place. It supports:
     - Deleting standard entries by ID and el_line (or "all")
+    - Deleting el_lines from all standards
     - Excluding entries from mean calculation by ID and el_line (or "all")
-    - Recomputing the mean values using only entries with Use_for_mean_calc = True
-    - Setting reference_mean to null if no valid entries remain
+    - Recomputing the reference means of the modified el_lines from the entries used for the mean
+      (Use_for_mean_calc = True)
+    - Setting reference_mean to null if no entry used for the mean remains
+
+Before the file is changed, a timestamped backup copy is saved next to it.
 
 How to use:
-    1. Set the variables at the top of this script (file path, delete/exclude lists).
-    2. Run the script directly (as a runner) to apply the changes.
-    3. The script prints a summary of all actions taken (deletions, exclusions, means recomputed, etc).
-
-Intended for use as a command-line runner for standards file maintenance and batch updates.
+    1. Set the variables in scripts/Experimental standards/Modify_EDS_Standards_File.py.
+    2. Run the script to apply the changes.
+    3. A summary of all actions taken (deletions, exclusions, means recomputed, etc.) is printed.
 
 Created on Tue May 19 2026
 @author: Andrea
 """
 
 import json
-import numpy as np
+import shutil
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from autoemx.config.schema_models.standards import EDSStandardsFile
+
 
 def _build_lookup(list_of_dicts):
     lookup = {}
@@ -42,199 +50,182 @@ def _build_lookup(list_of_dicts):
     return lookup
 
 
+def _matches(lookup: Dict[str, Any], entry_id: str, el_line: str) -> bool:
+    return entry_id in lookup and (lookup[entry_id] == "all" or el_line in lookup[entry_id])
+
+
+def _not_found(lookup: Dict[str, Any], all_ids: set, all_el_lines: set) -> List[str]:
+    not_found = []
+    for id_, el_lines in lookup.items():
+        if id_ not in all_ids:
+            not_found.append(id_)
+        elif el_lines != "all":
+            not_found.extend(f"{id_}:{el}" for el in el_lines if el not in all_el_lines)
+    return not_found
+
+
+def _backup_path(file_path: Path) -> Path:
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return file_path.with_name(f"{file_path.stem}_backup_{stamp}{file_path.suffix}")
+
+
 def modify_standards_file(
     file_path,
     delete_std_lines=None,
-    exclude_std_lines_from_mean_calc=None
-):
+    exclude_std_lines_from_mean_calc=None,
+    delete_el_lines: Optional[List[str]] = None,
+    mode: str = "point",
+    backup: bool = True,
+) -> Dict[str, Any]:
+    """
+    Modify an EDS standards JSON file in place.
 
-    with open(file_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+    Parameters
+    ----------
+    file_path : str or Path
+        Path to the standards file (e.g. EDS_Stds_15keV.json).
+    delete_std_lines : list of dict, optional
+        Entries to delete, as {standard ID: el_line(s) or "all"}, e.g. [{"BaSO4": "all"}, {"BaSO4": ["Ba_La1"]}].
+    exclude_std_lines_from_mean_calc : list of dict, optional
+        Entries to exclude from the reference means, in the same format as delete_std_lines.
+    delete_el_lines : list of str, optional
+        El_lines deleted from all standards (entries and reference mean), e.g. ["Mo_La1"].
+    mode : str, optional
+        Measurement mode of the standards to modify (key of standards_by_mode). Default is "point".
+    backup : bool, optional
+        If True (default), a copy of the file is saved as <name>_backup_<date>_<time>.json before it is changed.
+
+    Returns
+    -------
+    dict
+        Summary of the changes: deleted_entries, excluded_entries, deleted_el_lines, means_recomputed,
+        means_removed, not_found_deletions, not_found_exclusions, not_found_el_lines, backup_path, changed.
+    """
+    file_path = Path(file_path)
+    with file_path.open("r", encoding="utf-8") as f:
+        payload = json.load(f)
+    standards_file = EDSStandardsFile.from_payload(
+        payload, meas_type=payload["measurement_type"], beam_energy_keV=payload["beam_energy_keV"]
+    )
+    if mode not in standards_file.standards_by_mode:
+        raise ValueError(
+            f"Mode '{mode}' not found in {file_path.name}. Available modes: {sorted(standards_file.standards_by_mode)}"
+        )
+    standards = standards_file.standards_by_mode[mode]
 
     delete_lookup = _build_lookup(delete_std_lines)
     exclude_lookup = _build_lookup(exclude_std_lines_from_mean_calc)
+    all_el_lines = set(standards)
+    all_ids = {entry.standard_id for line in standards.values() for entry in line.entries}
 
-    standards = data["standards_by_mode"]["point"]
-    el_lines_to_remove = []
-    deleted_entries = []
-    excluded_entries = []
-    not_found_deletions = set()
-    not_found_exclusions = set()
-    means_recomputed = []
-    means_removed = []
+    summary: Dict[str, Any] = {
+        "deleted_entries": [], "excluded_entries": [], "deleted_el_lines": [],
+        "means_recomputed": [], "means_removed": [],
+        "not_found_deletions": _not_found(delete_lookup, all_ids, all_el_lines),
+        "not_found_exclusions": _not_found(exclude_lookup, all_ids, all_el_lines),
+        "not_found_el_lines": [el_line for el_line in (delete_el_lines or []) if el_line not in all_el_lines],
+        "backup_path": None,
+    }
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Track all el_lines and IDs for reporting
-    all_el_lines = set(standards.keys())
-    all_ids = set()
-    for std in standards.values():
-        for entry in std["entries"]:
-            if "ID" in entry:
-                all_ids.add(entry["ID"])
-
-    for el_line, std in list(standards.items()):
-        new_entries = []
-        for entry in std["entries"]:
-            entry_id = entry.get("ID")
-            deleted = False
-            # Deletion
-            if entry_id in delete_lookup:
-                if delete_lookup[entry_id] == "all" or el_line in delete_lookup[entry_id]:
-                    deleted_entries.append((entry_id, el_line))
-                    deleted = True
-            if deleted:
-                continue  # skip (delete)
-            # Exclusion from mean calc
-            if entry_id in exclude_lookup:
-                if exclude_lookup[entry_id] == "all" or el_line in exclude_lookup[entry_id]:
-                    if entry.get("Use_for_mean_calc", True):
-                        excluded_entries.append((entry_id, el_line))
-                    entry["Use_for_mean_calc"] = False
-            new_entries.append(entry)
-        std["entries"] = new_entries
-
-        # If no entries remain, mark for removal
-        if len(std["entries"]) == 0:
-            el_lines_to_remove.append(el_line)
+    for el_line in list(standards):
+        line = standards[el_line]
+        if el_line in (delete_el_lines or []):
+            del standards[el_line]
+            summary["deleted_el_lines"].append(el_line)
             continue
 
-        # Recompute means, but only mark as recomputed if changed
-        mean_fields = [
-            "Corrected_PB", "Stdev_PB", "Rel_stdev_PB (%)", "Measured_PB"
-        ]
-        mean_entry = {k: [] for k in mean_fields}
-        datetimes = []
-        for entry in std["entries"]:
-            if entry.get("Use_for_mean_calc", True):
-                for k in mean_fields:
-                    if k in entry:
-                        mean_entry[k].append(entry[k])
-                if "datetime" in entry:
-                    datetimes.append(entry["datetime"])
-        reference_mean = {}
-        if mean_entry["Corrected_PB"]:
-            new_mean = float(np.mean(mean_entry["Corrected_PB"]))
-            new_stdev = float(np.std(mean_entry["Corrected_PB"]))
-            if new_mean != 0:
-                new_rel_stdev = new_stdev / new_mean * 100
-            else:
-                new_rel_stdev = 0.0
-            new_datetime = datetimes[-1] if datetimes else None
-            reference_mean = {
-                "Corrected_PB": new_mean,
-                "Stdev_PB": new_stdev,
-                "Rel_stdev_PB (%)": new_rel_stdev,
-                "datetime": new_datetime
-            }
-            prev_mean = std.get("reference_mean", {})
-            # Only append to means_recomputed if any value changed
-            mean_changed = (
-                not prev_mean or
-                any(abs(reference_mean.get(k, None) - prev_mean.get(k, None)) > 1e-12 if isinstance(reference_mean.get(k, None), float) else reference_mean.get(k, None) != prev_mean.get(k, None) for k in reference_mean)
-            )
-            std["reference_mean"] = reference_mean
-            if mean_changed:
-                means_recomputed.append(el_line)
+        kept_entries = []
+        is_line_modified = False
+        for entry in line.entries:
+            if _matches(delete_lookup, entry.standard_id, el_line):
+                summary["deleted_entries"].append((entry.standard_id, el_line))
+                is_line_modified = True
+                continue
+            if _matches(exclude_lookup, entry.standard_id, el_line) and entry.use_for_mean_calc:
+                entry.use_for_mean_calc = False
+                summary["excluded_entries"].append((entry.standard_id, el_line))
+                is_line_modified = True
+            kept_entries.append(entry)
+        line.entries = kept_entries
+        if not is_line_modified:
+            # Untouched lines keep their reference mean (recomputing it from the entries, rounded to 0.1, could
+            # differ slightly from the stored one, computed from unrounded values)
+            continue
+
+        if not line.entries:
+            # No entry left for this line
+            del standards[el_line]
+            summary["deleted_el_lines"].append(el_line)
+            continue
+
+        new_mean = line.compute_reference_mean(now)
+        old_mean = line.reference_mean
+        if new_mean is None:
+            if old_mean is not None:
+                line.reference_mean = None
+                summary["means_removed"].append(el_line)
         else:
-            # No valid entries for mean: set reference_mean to null (None in Python)
-            if std.get("reference_mean", None) is not None:
-                means_removed.append(el_line)
-            std["reference_mean"] = None
+            line.reference_mean = new_mean
+            summary["means_recomputed"].append(el_line)
 
-    # Remove el_lines with no entries
-    for el_line in el_lines_to_remove:
-        del standards[el_line]
-
-    # Check for not found deletions/exclusions
-    if delete_lookup:
-        for id_ in delete_lookup:
-            if id_ not in all_ids:
-                not_found_deletions.add(id_)
-            elif delete_lookup[id_] != "all":
-                for el in delete_lookup[id_]:
-                    if el not in all_el_lines:
-                        not_found_deletions.add(f"{id_}:{el}")
-    if exclude_lookup:
-        for id_ in exclude_lookup:
-            if id_ not in all_ids:
-                not_found_exclusions.add(id_)
-            elif exclude_lookup[id_] != "all":
-                for el in exclude_lookup[id_]:
-                    if el not in all_el_lines:
-                        not_found_exclusions.add(f"{id_}:{el}")
-
-    # Validate and serialize using EDSStandardsFile to enforce schema
-    from autoemx.config.schema_models.standards import EDSStandardsFile
-    # Extract required fields for model
-    schema_version = data.get("schema_version", 1)
-    measurement_type = data["measurement_type"]
-    beam_energy_keV = data["beam_energy_keV"]
-    standards_by_mode = data["standards_by_mode"]
-    # Build and validate model
-    model = EDSStandardsFile.from_payload(
-        payload={
-            "schema_version": schema_version,
-            "measurement_type": measurement_type,
-            "beam_energy_keV": beam_energy_keV,
-            "standards_by_mode": standards_by_mode,
-        },
-        meas_type=measurement_type,
-        beam_energy_keV=beam_energy_keV,
+    summary["changed"] = any(
+        summary[key] for key in ("deleted_entries", "excluded_entries", "deleted_el_lines", "means_recomputed",
+                                 "means_removed")
     )
-    # Write back using model's to_json_file (handles sorting and aliases)
-    model.to_json_file(file_path, indent=2)
+    if summary["changed"]:
+        if backup:
+            summary["backup_path"] = str(_backup_path(file_path))
+            shutil.copy2(file_path, summary["backup_path"])
+        standards_file.to_json_file(file_path, indent=2)
 
-    # Print summary
-    has_stds_file_changed = False
+    _print_summary(summary, file_path)
+
+    # Report on the modified standards, saved in the same folder
+    if summary["changed"]:
+        try:
+            from autoemx.runners.extract_experimental_standards_details import extract_experimental_standards_details
+            extract_experimental_standards_details(
+                standards_json_path=str(file_path),
+                report_output_dir=str(file_path.parent),
+                print_report=False,
+            )
+            print(f"Experimental standards details report saved in: {file_path.parent}")
+        except Exception as e:
+            print(f"[Warning] Could not generate standards details report: {e}")
+
+    return summary
+
+
+def _print_summary(summary: Dict[str, Any], file_path: Path) -> None:
     print("\n--- EDS Standards Update Summary ---")
-    if deleted_entries:
-        has_stds_file_changed = True
-        print(f"Deleted entries:")
-        for entry_id, el_line in deleted_entries:
-            print(f"  - ID: {entry_id}, el_line: {el_line}")
-    else:
-        print("No entries deleted.")
-    if not_found_deletions:
-        print("Entries requested for deletion not found:")
-        for item in not_found_deletions:
-            print(f"  - {item}")
-    if excluded_entries:
-        has_stds_file_changed = True
-        print(f"Excluded from mean calculation:")
-        for entry_id, el_line in excluded_entries:
-            print(f"  - ID: {entry_id}, el_line: {el_line}")
-    else:
-        print("No entries excluded from mean calculation.")
-    if not_found_exclusions:
-        print("Entries requested for exclusion not found:")
-        for item in not_found_exclusions:
-            print(f"  - {item}")
-    if el_lines_to_remove:
-        print(f"Removed el_lines with no remaining entries:")
-        for el_line in el_lines_to_remove:
-            print(f"  - {el_line}")
-    if means_recomputed:
-        print(f"Recomputed means for el_lines:")
-        for el_line in means_recomputed:
-            print(f"  - {el_line}")
-    if means_removed:
-        print(f"Removed reference_mean for el_lines (no valid entries):")
-        for el_line in means_removed:
-            print(f"  - {el_line}")
+    sections = [
+        ("deleted_entries", "Deleted entries:", "No entries deleted."),
+        ("excluded_entries", "Excluded from mean calculation:", "No entries excluded from mean calculation."),
+    ]
+    for key, title, empty_message in sections:
+        if summary[key]:
+            print(title)
+            for entry_id, el_line in summary[key]:
+                print(f"  - ID: {entry_id}, el_line: {el_line}")
+        else:
+            print(empty_message)
+    for key, title in (
+        ("not_found_deletions", "Entries requested for deletion not found:"),
+        ("not_found_exclusions", "Entries requested for exclusion not found:"),
+        ("not_found_el_lines", "El_lines requested for deletion not found:"),
+        ("deleted_el_lines", "Removed el_lines (deleted, or with no remaining entries):"),
+        ("means_recomputed", "Recomputed means for el_lines:"),
+        ("means_removed", "Removed reference_mean for el_lines (no entry used for the mean):"),
+    ):
+        if summary[key]:
+            print(title)
+            for item in summary[key]:
+                print(f"  - {item}")
     print("--- End of Summary ---\n")
-
-    # After modifying standards, call extract_experimental_standards_details and save report in same folder
-    try:
-        from autoemx.runners.extract_experimental_standards_details import extract_experimental_standards_details
-        from pathlib import Path
-        standards_dir = str(Path(file_path).parent)
-        extract_experimental_standards_details(
-            standards_json_path=file_path,
-            report_output_dir=standards_dir,
-            print_report=False
-        )
-        print(f"Experimental standards details report saved in: {standards_dir}")
-    except Exception as e:
-        print(f"[Warning] Could not generate standards details report: {e}")
-
-    if has_stds_file_changed:
+    if summary["changed"]:
+        if summary["backup_path"]:
+            print(f"Backup of the previous file: {summary['backup_path']}")
         print(f"Updated standards file: {file_path}")
+    else:
+        print(f"No changes: {file_path} was not modified.")

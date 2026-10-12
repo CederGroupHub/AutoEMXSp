@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 import autoemx.utils.constants as cnst
@@ -112,6 +113,21 @@ class StandardLine(BaseModel):
     reference_mean: Optional[ReferenceMean] = None
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    def compute_reference_mean(self, datetime: Optional[str]) -> Optional[ReferenceMean]:
+        """Reference mean of the corrected P/B ratios of the entries used for the mean (None if there are none)."""
+        corrected_pbs = [entry.corrected_pb for entry in self.entries if entry.use_for_mean_calc]
+        if not corrected_pbs:
+            return None
+        mean_pb = float(np.mean(corrected_pbs))
+        stdev_pb = float(np.std(corrected_pbs))
+        return ReferenceMean.model_validate({
+            cnst.DATETIME_KEY: datetime,
+            cnst.COR_PB_DF_KEY: mean_pb,
+            cnst.STDEV_PB_DF_KEY: stdev_pb,
+            cnst.REL_ER_PERCENT_PB_DF_KEY: (stdev_pb / mean_pb * 100) if mean_pb else float("nan"),
+            cnst.MEAS_PB_DF_KEY: None,
+        })
 
 
 class StandardFitLineResult(StandardPbSummary):
