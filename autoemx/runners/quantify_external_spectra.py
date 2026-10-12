@@ -39,11 +39,11 @@ from autoemx.config.runtime_configs import (
     MicroscopeConfig,
     PlotConfig,
     PowderMeasurementConfig,
-    QuantificationOptionsConfig,
     SampleConfig,
     SampleSubstrateConfig,
 )
 from autoemx.core.composition_analysis import EMXSp_Composition_Analyzer
+from autoemx.runners.analyze_sample import analyze_sample
 from autoemx.runners.batch_quantify_and_analyze import batch_quantify_and_analyze
 from autoemx.utils import load_msa, print_double_separator
 
@@ -237,8 +237,8 @@ def quantify_external_spectra(
     Returns
     -------
     list of EMXSp_Composition_Analyzer
-        One analyzer per successfully processed sample (from
-        :func:`batch_quantify_and_analyze`).
+        One analyzer per successfully quantified sample: from :func:`analyze_sample` if analysed, otherwise from
+        :func:`batch_quantify_and_analyze`.
     """
     if els_substrate is None:
         els_substrate = list(dflt.substrate_els)
@@ -266,11 +266,6 @@ def quantify_external_spectra(
         auto_detection=False,
         stub_w_mm=sample_substrate_width_mm,
     )
-    quant_cfg = QuantificationOptionsConfig(
-        method=quantification_method,
-        use_project_specific_std_dict=use_project_specific_std_dict,
-        use_instrument_background=use_instrument_background,
-    )
     plot_cfg = PlotConfig(show_unused_comps_clust=show_unused_comps_clust)
     powder_meas_cfg = PowderMeasurementConfig(**(powder_meas_cfg_kwargs or {}))
     bulk_meas_cfg   = BulkMeasurementConfig(**(bulk_meas_cfg_kwargs or {}))
@@ -279,6 +274,7 @@ def quantify_external_spectra(
     # Phase 1 — Per-sample: copy spectra + build ledger
     # ------------------------------------------------------------------
     ingested_ids: List[str] = []
+    clustering_cfgs: Dict[str, ClusteringConfig] = {}  # Analysis settings of each sample
 
     for sample in samples:
         sample_id: str        = sample["ID"]
@@ -367,7 +363,7 @@ def quantify_external_spectra(
         )
 
         n_els = len(elements)
-        clustering_cfg = ClusteringConfig(
+        clustering_cfgs[sample_id] = ClusteringConfig(
             method="kmeans",
             features=cnst.W_FR_CL_FEAT if n_els <= 2 else cnst.AT_FR_CL_FEAT,
             k_finding_method="calinski_harabasz" if n_els <= 2 else "silhouette",
@@ -426,21 +422,51 @@ def quantify_external_spectra(
         return []
 
     # ------------------------------------------------------------------
-    # Phase 2 — Quantification (and optional analysis) via batch runner
+    # Phase 2 — Quantification via batch runner
     # ------------------------------------------------------------------
     logging.info(
         "Starting quantification for %d sample(s): %s",
         len(ingested_ids), ingested_ids,
     )
-    return batch_quantify_and_analyze(
+    analyzers = batch_quantify_and_analyze(
         sample_IDs=ingested_ids,
         results_path=results_path,
+        quantification_method=quantification_method,
         min_bckgrnd_cnts=min_bckgrnd_cnts,
         use_instrument_background=use_instrument_background,
-        max_analytical_error=max_analytical_error_percent,
         interrupt_fits_bad_spectra=interrupt_fits_bad_spectra,
         num_CPU_cores=num_CPU_cores,
-        run_analysis=run_analysis,
+        run_analysis=False,
         use_project_specific_std_dict=use_project_specific_std_dict,
         standards_dict=standards_dict,
     )
+    if not run_analysis:
+        return analyzers
+
+    # ------------------------------------------------------------------
+    # Phase 3 — Analysis with the clustering settings of each sample (candidate phases, clusters, flags)
+    # ------------------------------------------------------------------
+    analyzed = []
+    for comp_analyzer in analyzers:
+        clustering_cfg = clustering_cfgs[comp_analyzer.sample_id]
+        try:
+            analysis_analyzer = analyze_sample(
+                comp_analyzer.sample_id,
+                results_path=results_path,
+                ref_formulae=clustering_cfg.ref_formulae,
+                clustering_features=clustering_cfg.features,
+                clustering_method=clustering_cfg.method,
+                k_finding_method=clustering_cfg.k_finding_method,
+                max_k=clustering_cfg.max_k,
+                max_analytical_error_percent=max_analytical_error_percent,
+                quant_flags_accepted=clustering_cfg.quant_flags_accepted,
+                min_bckgrnd_cnts=min_bckgrnd_cnts,
+                show_plots=False,
+                show_unused_compositions_cluster_plot=show_unused_comps_clust,
+            )
+        except Exception as exc:
+            logging.exception(f"Error during clustering analysis for '{comp_analyzer.sample_id}'. "
+                              f"Rerun separately if needed: {exc}")
+            analysis_analyzer = None
+        analyzed.append(analysis_analyzer if analysis_analyzer is not None else comp_analyzer)
+    return analyzed
