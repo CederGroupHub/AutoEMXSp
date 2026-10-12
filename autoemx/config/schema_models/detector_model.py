@@ -195,19 +195,21 @@ class DetectorModel(BaseModel):
     )
     F_loss_background: float = Field(description="ICC parameter for background fitting (see R_e_background).")
 
-    # --- Detector noise and peak width: sigma = sqrt(elec_noise**2 + conv_eff * E * F)
+    # --- Detector noise and peak width: sigma = conv_eff * sqrt(elec_noise**2 + E * F / conv_eff), E in keV
     F: float = Field(
         description="(Fixed) Fano factor (dimensionless), characterizing statistical fluctuations in charge "
                     "generation (Ritchie, 2009)."
     )
     elec_noise: float = Field(
-        description="(Fitted) Electronic noise (eV), characterizing the detector's intrinsic noise. elec_noise and "
-                    "conv_eff are calibrated by measuring the sigmas of characteristic peaks at various energies in "
-                    "high-count spectra of bulk standards (lmfit peak sigma parameters), and fitting "
-                    "sigma = sqrt(elec_noise**2 + conv_eff * E * F) as a function of the energy E (keV), e.g. with "
-                    "calculation_pars_peak_fwhm.py. Recalibrate after hardware changes or detector servicing."
+        description="(Fitted) Electronic noise (electrons, rms), characterizing the detector's intrinsic noise. "
+                    "elec_noise and conv_eff are calibrated by fitting "
+                    "sigma = conv_eff * sqrt(elec_noise**2 + E * F / conv_eff) to the sigmas of characteristic peaks "
+                    "at various energies E (keV), fitted in high-count spectra of bulk standards, with "
+                    "Calibrate_Peak_Sigma_Params.py. Recalibrate after hardware changes or detector servicing."
     )
-    conv_eff: float = Field(description="(Fitted) Conversion efficiency (keV), see elec_noise.")
+    conv_eff: float = Field(
+        description="(Fitted) Conversion efficiency: energy per electron-hole pair (keV), see elec_noise."
+    )
 
     # --- Fine-tuning parameters, by EDS mode (see the module docstring)
     weight_Ll_ref_Ka1: Dict[str, float] = Field(
