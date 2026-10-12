@@ -17,8 +17,6 @@ Created on Tue May 12 2026
 @author: Andrea
 """
 
-from pathlib import Path
-
 # =============================================================================
 # Input
 # =============================================================================
@@ -34,8 +32,8 @@ voltage = None
 # standards_json_path = '/absolute/path/to/Results/<sample_ID>/EDS_Stds_15keV.json'
 standards_json_path = None
 
-# Directory where the txt report is saved. Default: this script's directory.
-report_output_dir = str(Path(__file__).resolve().parent)
+# Directory where the txt report is saved. If None, it is saved next to the standards file(s).
+report_output_dir = None
 
 # =============================================================================
 # Run

@@ -27,13 +27,15 @@ def load_microscope_driver(microscope_ID: str) -> None:
     """
     Dynamically load driver parameters and functions for a given microscope.
 
-    This function imports all public attributes from the driver file
-    named '{microscope_ID}.py' (located inside the microscope_drivers directory)
-    and injects them into the current module's namespace.
+    This function imports all public attributes from the driver file of the microscope
+    (located inside the microscope_drivers directory) and injects them into the current module's namespace.
+    The driver file is '{microscope_ID}.py', unless the detector model of the microscope
+    (autoemx/calibrations/<microscope_ID>/detector_model.json) names another driver, shared by
+    instruments of the same model.
 
     Args
     ----
-        microscope_ID (str): The name of the microscope (must match a .py file in the microscope_drivers directory).
+        microscope_ID (str): The name of the microscope.
 
     Raises
     ------
@@ -44,17 +46,21 @@ def load_microscope_driver(microscope_ID: str) -> None:
         This function injects variables and functions into the module namespace.
         Use with care to avoid name collisions.
     """
+    from autoemx.calibrations import microscope_driver_name
+
     # Build the path to the driver file
+    driver_name = microscope_driver_name(microscope_ID)
     drivers_dir = os.path.join(os.path.dirname(__file__))
-    driver_file = os.path.join(drivers_dir, f"{microscope_ID}.py")
+    driver_file = os.path.join(drivers_dir, f"{driver_name}.py")
     if not os.path.isfile(driver_file):
         raise ValueError(
             f"Could not find the microscope driver file at '{driver_file}'.\n"
-            f"Please ensure microscope_ID ('{microscope_ID}') matches a .py file in 'microscope_drivers'."
+            f"Please ensure the driver of microscope '{microscope_ID}' ('{driver_name}') matches a .py file in "
+            "'microscope_drivers' (the driver is the microscope ID, unless set as 'driver' in its detector_model.json)."
         )
 
     # Import the driver module dynamically
-    module_name = f"autoemx.microscope_drivers.{microscope_ID}"
+    module_name = f"autoemx.microscope_drivers.{driver_name}"
     pkg = __package__ if __package__ else __name__
     try:
         mod = importlib.import_module(module_name, package=pkg)

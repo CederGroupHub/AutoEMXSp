@@ -105,3 +105,43 @@ def test_detector_response_cached_per_model(monkeypatch: pytest.MonkeyPatch):
     DetectorResponseFunction.setup_detector_response_vars(offset, width, (14, 1100), MICROSCOPE_ID, verbose=False)
     assert len(n_computed) == 2
     assert np.array_equal(DetectorResponseFunction.det_response_op.toarray(), computed_op)
+
+
+@pytest.fixture
+def lab_instrument(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
+    """Package with a second PhenomXL instrument, 'PhenomXL_LabB', with its own detector model and no driver of its own."""
+    import shutil
+
+    calibrations = tmp_path / "calibrations"
+    shutil.copytree(paths.package_calibration_dir(MICROSCOPE_ID), calibrations / MICROSCOPE_ID)
+    shutil.copytree(paths.package_calibration_dir(MICROSCOPE_ID), calibrations / "PhenomXL_LabB")
+    model = _package_model().model_copy(update={"driver": MICROSCOPE_ID, "elec_noise": 5.1})
+    model.to_json_file(calibrations / "PhenomXL_LabB" / cnst.DETECTOR_MODEL_FILENAME)
+    monkeypatch.setattr(paths, "PACKAGE_CALIBRATIONS_DIR", calibrations)
+    return "PhenomXL_LabB"
+
+
+def test_instrument_shares_driver_of_its_model(lab_instrument: str):
+    from autoemx import microscope_drivers as EM_driver
+
+    assert calibs.microscope_driver_name(lab_instrument) == MICROSCOPE_ID
+    assert calibs.microscope_driver_name(MICROSCOPE_ID) == MICROSCOPE_ID
+    EM_driver.load_microscope_driver(lab_instrument)
+    assert EM_driver.get_active_driver_module().__name__ == f"autoemx.microscope_drivers.{MICROSCOPE_ID}"
+
+    calibs.load_microscope_calibrations(lab_instrument, "point")
+    assert calibs.elec_noise == 5.1
+
+
+def test_driver_not_in_fingerprint():
+    model = _package_model()
+    assert model.model_copy(update={"driver": "Other"}).fingerprint() == model.fingerprint()
+
+
+def test_missing_driver(lab_instrument: str):
+    from autoemx import microscope_drivers as EM_driver
+
+    model = _package_model().model_copy(update={"driver": "NoSuchDriver"})
+    model.to_json_file(paths.package_calibration_dir(lab_instrument) / cnst.DETECTOR_MODEL_FILENAME)
+    with pytest.raises(ValueError, match="'NoSuchDriver'"):
+        EM_driver.load_microscope_driver(lab_instrument)

@@ -140,7 +140,7 @@ AutoEMX/
 │   ├── scripts/                # Scripts to run acquisition, quantification, etc. (see full list below)
 │   ├── web/                    # Streamlit app of the online single-spectrum demo
 │   ├── gui/                    # Local GUI: acquisition, quantification, analysis, single spectrum (`python -m autoemx.gui`)
-│   ├── calibrations/             # X-ray spectral calibrations (⚠️ adapt to your own instrument for optimal accuracy)
+│   ├── calibrations/             # Detector models of supported microscopes (your instrument's calibrations are kept in ~/.autoemx)
 │   ├── utils/                  # Utility functions and strings employed by the program
 │
 ├── examples/                  # Example scripts for fitting, quantification and compositional analysis of example data
@@ -163,18 +163,23 @@ This repository includes a collection of scripts that streamline the use of **Au
 - **Run_Acquisition.py** — Acquire X-ray spectra from the microscope (supports automated and manual modes).
 - **Run_Quantification.py** — Quantify acquired spectra (single or multiple samples) and perform machine-learning analysis.
 - **Run_Analysis.py** — Launch customized machine-learning analysis on previously quantified data.
+- **Set_Active_Analysis.py** — Choose which quantification run and analysis of a sample are active (reused by later runs, shown in the GUI).
 - **Fit_Quant_Single_AutoEMX_Spectrum.py** — Fit and optionally quantify a single spectrum measured with AutoEMX. Prints fitting parameters and plots fitted spectrum for detailed inspection of model performance.
 - **Fit_Quant_Single_MSA_Spectrum.py** — Fit and optionally quantify a single spectrum exported by proprietary software.
-- **Quantify_External_Spectra.py** — Quantify spectra acquired outside AutoEMX (e.g., from other SEM-EDS systems).
+- **quantify_external_spectra.py** — Quantify spectra acquired outside AutoEMX (e.g., from other SEM-EDS systems).
+- **Annotate_Particle_Images.py** — Draw the positions of the measured spectra on the particle images of a sample.
 - **Online demo** — upload `.msa` / `.emsa` and test quantification at https://autoemx-singlespectrum.streamlit.app, without installing AutoEMX. Locally, use the Single spectrum tab of the AutoEMX GUI.
 
 ### 📊 Particle Size Distribution Measurements
-- **collect_particle_statistics.py** - Analyse sample, collecting particle size statistics and distribution.
-- **process_particle_stats_files.py** - Process acquired particle size data and recompute.
+- **Collect_Particle_Statistics.py** — Analyse sample, collecting particle size statistics and distribution.
+- **Process_Particle_Stats_Files.py** — Filter out particles from acquired particle size data and recompute the statistics.
 
-### 🛠️ Miscellaneous
-- **run_experimental_standard_collection.py** — Acquire and fit experimental standards.  
-- **run_sdd_calibration.py** — Perform calibration of the SDD detector.
+### 🛠️ Calibration of Your Instrument
+- **Run_SDD_Calibration.py** — Calibrate the energy scale of the SDD detector.
+- **Run_Experimental_Standard_Collection.py** — Acquire and fit experimental standards, to obtain reference P/B values.
+- **Refit_Experimental_Standards.py** — Refit previously acquired experimental standards.
+- **Modify_EDS_Standards_File.py** — Delete standards, or exclude them from the reference P/B values.
+- **Extract_Experimental_Standards_Details.py** — Summarize the available standards (elements, peaks, P/B values).
 
 ### ⚗️ Characterize Extent of Intermixing in Known Powder Mixtures  
 *(see [Chem. Mater. 2025, 37, 6807−6822](https://pubs.acs.org/doi/10.1021/acs.chemmater.5c01573) for example)*  

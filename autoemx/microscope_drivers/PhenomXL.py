@@ -336,8 +336,8 @@ def set_beam_current(current: float) -> None:
     Beam current is passed via:
         `autoemx/config/runtime_configs.py`, within `MeasurementConfig.beam_current`,  
         or predefined in:
-        `XSp_calibs/Microscopes/YOUR_MICROSCOPE/Detector_channel_params_calibs/DATE_detector_channel_params_calibs.json`  
-        using key `tools.constants.BEAM_CURRENT_KEY`.
+        `~/.autoemx/calibrations/YOUR_MICROSCOPE/Detector_channel_params_calibs/DATE_detector_channel_params_calibs.json`  
+        using key `autoemx.utils.constants.BEAM_CURRENT_KEY`.
     """
     phenom.SetSemSpotSize(current)
 

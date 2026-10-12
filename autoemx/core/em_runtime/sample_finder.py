@@ -170,8 +170,8 @@ class EM_Sample_Finder:
         for attr in required_attrs:
             if not hasattr(self.EM_driver, attr):
                 raise AttributeError(
-                    f"Microscope calibration file at {self.EM_driver.microscope_calib_dir} "
-                    f"is missing required attribute '{attr}'"
+                    f"The driver of microscope '{self.microscope_ID}' is missing the required navigation camera "
+                    f"calibration attribute '{attr}'"
                 )
         
         # Calculate pixel size

@@ -3,10 +3,14 @@
 """
 Detector model of a microscope: the physical and empirical parameters used to model its X-ray spectra.
 
-The values of each microscope model are saved in ``autoemx/calibrations/<microscope_ID>/detector_model.json``, next to
-its detector efficiency (detector_efficiency.msa). To add a microscope model, add a folder with these two files (and
-a driver in autoemx/microscope_drivers). The functional forms (sigmoids for the peak shape, modified Duncumb model for
-the background) are defined here; the file holds their coefficients.
+The values of each microscope are saved in ``autoemx/calibrations/<microscope_ID>/detector_model.json``, next to its
+detector efficiency (detector_efficiency.msa). The functional forms (sigmoids for the peak shape, modified Duncumb
+model for the background) are defined here; the file holds their coefficients.
+
+To add a microscope, add a folder with these two files, named with its microscope ID, and its driver in
+autoemx/microscope_drivers. The driver is the file named as the microscope ID, unless ``driver`` names another one:
+instruments of the same model, each with its own calibrated detector model (e.g. 'PhenomXL_LabB'), share the driver
+of that model (driver 'PhenomXL').
 
 This model replaces the module XS_calibrations.py of each microscope (AutoEMX <= 1.4.1).
 
@@ -45,7 +49,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import sympy as sp
@@ -165,6 +169,10 @@ class DetectorModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: int = DETECTOR_MODEL_SCHEMA_VERSION
+    driver: Optional[str] = Field(
+        default=None,
+        description="Microscope driver (autoemx/microscope_drivers/<driver>.py). Default: the microscope ID.",
+    )
 
     # --- EDS detector physical characteristics
     Si_density: float = Field(description="Silicon density at detector operating temperature (235 K), in g/cm^3.")
@@ -249,8 +257,8 @@ class DetectorModel(BaseModel):
             handle.write("\n")
 
     def fingerprint(self) -> str:
-        """Short hash of all values, identifying the model (e.g. for caches of quantities computed from it)."""
-        payload = json.dumps(self.model_dump(mode="json"), sort_keys=True)
+        """Short hash of all values of the detector model (not the driver), e.g. for caches of quantities computed from it."""
+        payload = json.dumps(self.model_dump(mode="json", exclude={"driver"}), sort_keys=True)
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
 
     def get_calibrated_peak_shape_params(self, E, meas_mode: str):

@@ -90,6 +90,16 @@ def load_detector_model(microscope_ID: str) -> DetectorModel:
         raise ValueError(f"Could not load the detector model of microscope '{microscope_ID}' at '{model_path}':\n{e}") from e
 
 
+def microscope_driver_name(microscope_ID: str) -> str:
+    """Driver of the microscope: 'driver' in its detector model if set, otherwise the microscope ID."""
+    model_path = paths.package_calibration_dir(microscope_ID) / cnst.DETECTOR_MODEL_FILENAME
+    if model_path.exists():
+        driver = load_detector_model(microscope_ID).driver
+        if driver:
+            return driver
+    return microscope_ID
+
+
 def load_microscope_calibrations(
     microscope_ID: str,
     meas_mode: Optional[str] = None,
