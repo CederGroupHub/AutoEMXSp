@@ -17,8 +17,8 @@ Choosing the standards
 
 - Use **bulk, polished** standards: pure metals when available, otherwise simple binary or ternary compounds
   (in the paper: GaN, BaSO\ :sub:`4`, MgO, CaF\ :sub:`2`, NaCl, InP, KBr, LaB\ :sub:`6`).
-- Collect them at the beam energy used for your measurements (15 keV in the paper, for which the reference values
-  of the Phenom XL are shipped with `AutoEMX`).
+- Collect them at the acceleration voltage of your measurements: a standards file is required for every
+  acceleration voltage used (``EDS_Stds_<voltage>keV.json``).
 - For accurate reference values, average many high-count spectra: in the paper, fifteen spectra of 250,000 counts
   per standard.
 
@@ -61,11 +61,11 @@ Where the reference values are saved
 ------------------------------------
 
 The reference values belong to your instrument, and are kept in its local calibration folder,
-``~/.autoemx/calibrations/<microscope_ID>/EDS_Stds_<beam energy>keV.json``. For each X-ray line, the file lists the
+``~/.autoemx/calibrations/<microscope_ID>/EDS_Stds_<voltage>keV.json``. For each X-ray line, the file lists the
 P/B value of each standard, and their mean used for quantification.
 
 A summary of the standards available (elements, lines, P/B values) is written next to the file,
-``experimental_standards_details_<beam energy>keV.txt``, every time the standards are updated.
+``experimental_standards_details_<voltage>keV.txt``, every time the standards are updated.
 
 The first time `AutoEMX` runs on a computer, the standards shipped with the package for the microscope are copied
 to this folder. After that, `AutoEMX` only reads and updates the local file.

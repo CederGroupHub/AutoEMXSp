@@ -19,7 +19,8 @@ Purpose
 IMPORTANT
 ---------
 If replacing with another API:
-    - Change name of this module so that it corresponds with the employed MicroscopeConfig.ID (autoemx/config/runtime_configs.py)
+    - Change name of this module so that it corresponds with the employed MicroscopeConfig.ID (autoemx/config/runtime_configs.py),
+      or set it as "driver" in the detector_model.json of the microscopes sharing it (autoemx/calibrations/<ID>/)
     - Maintain function signatures and returned value formats for compatibility.
     - Units in parameters/returns must be consistent across implementations.
     - Error handling should remain explicit and informative (raise `EMError`).

@@ -65,7 +65,8 @@ and repeat the sequence until the values no longer change significantly.
 2. **Spectra of standards.** Acquire high-count spectra of bulk, polished standards, ideally pure elements, spanning
    the energy range of the X-ray lines (peak shape) and the atomic numbers of your samples (background), e.g. with
    ``Run_Experimental_Standard_Collection.py`` and ``update_std_library = False`` (:ref:`advanced_new_exp_stds`).
-   The paper used ten to fifteen spectra of 250,000 counts per standard, at 15 keV.
+   The paper used ten to fifteen spectra of 250,000 counts per standard. Acquire them at the acceleration voltage of
+   your measurements: the background functions, β in particular, are expected to depend on it.
 
 3. **Peak width**: ``Calibrate_Peak_Sigma_Params.py`` (below).
 
