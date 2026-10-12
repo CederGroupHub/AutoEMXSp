@@ -279,8 +279,7 @@ def batch_acquire_experimental_stds(
 
         print("\n \n")
         print_double_separator()
-        print_double_separator()
-        logging.info(f"Sample '{sample_ID}'")
+        print_double_separator(f"Sample '{sample_ID}'")
 
         exp_stds_kwargs = dict(exp_stds_meas_cfg_kwargs) if exp_stds_meas_cfg_kwargs else {}
         if els_to_use_for_mean_PB_calc is not None:

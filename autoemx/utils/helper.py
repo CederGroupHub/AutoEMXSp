@@ -356,19 +356,19 @@ def _safe_autoemx_log_info(msg: str) -> None:
 
 
 def print_single_separator(message: Optional[str] = None):
-    """Log a single-line separator and optionally print a message right below it."""
+    """Log a single-line separator and optionally a message right below it."""
     _safe_autoemx_log_info('-' * 50)
     if message:
-        print(message)
+        _safe_autoemx_log_info(message)
 
 
 
 
 def print_double_separator(message: Optional[str] = None):
-    """Log a double-line separator (50 equals signs) for visual clarity."""
+    """Log a double-line separator (50 equals signs) for visual clarity, and optionally a message right below it."""
     _safe_autoemx_log_info('=' * 50)
     if message:
-        print(message)
+        _safe_autoemx_log_info(message)
 
 
 class AlphabetMapper:

@@ -69,25 +69,15 @@ Instantiate `XSp_Fitter` with your data and settings, then call `fit_spectrum()`
 # =============================================================================
 # Standard library imports
 # =============================================================================
-import os
-import re
 import time
-import json
-import sys
 import warnings
-from itertools import combinations
 
 # =============================================================================
 # Third-party library imports
 # =============================================================================
 import numpy as np
 from pathlib import Path
-import sympy as sp
 import matplotlib.pyplot as plt
-from scipy.special import erfc
-from scipy.signal import find_peaks, peak_prominences
-from scipy.integrate import quad, trapezoid
-from scipy.optimize import root_scalar
 from pymatgen.core import Element
 
 # =============================================================================
@@ -149,22 +139,15 @@ def patch_lmfit_fast_mode(verbose = False):
 
 patch_lmfit_fast_mode()
 
-from lmfit import Model, Parameters, Parameter
-from lmfit.models import GaussianModel
+from lmfit import Parameters
 
 # =============================================================================
 # Package imports
 # =============================================================================
-from autoemx.utils.helper import (
-    RefLineError, print_single_separator, print_double_separator,
-    weight_to_atomic_fr, load_msa
-)
-import autoemx.utils.constants as cnst
+from autoemx.utils.helper import RefLineError, print_single_separator, print_double_separator
 import autoemx.config.defaults as dflt
 import autoemx.calibrations as calibs 
 from autoemx.data.Xray_lines import get_el_xray_lines
-from autoemx.data.Xray_absorption_coeffs import xray_mass_absorption_coeff
-from autoemx.data.mean_ionization_potentials import J_df
 
 # Import fitting submodule components
 from .detector_response import DetectorResponseFunction
@@ -779,8 +762,7 @@ class XSp_Fitter:
             print_double_separator()
             if n_iter:
                 logger.debug(f"  ▶️ Iteration #{n_iter}")
-            print_single_separator()
-            logger.info('🔬 Fitting spectrum...')
+            print_single_separator('🔬 Fitting spectrum...')
             start_time = time.time()
     
         if initial_par_vals:

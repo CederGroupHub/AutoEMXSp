@@ -178,8 +178,7 @@ def collect_particle_statistics(
         sample_ID = sample['ID']
         center_pos = sample['pos']
         
-        print_double_separator()
-        logging.info(f"Sample '{sample_ID}'")
+        print_double_separator(f"Sample '{sample_ID}'")
         
         sample_cfg = SampleConfig(
             elements=[],

@@ -418,8 +418,7 @@ def batch_acquire_and_analyze(
                 "powder_meas_cfg.par_selection_mode='list'."
             )
         
-        print_double_separator()
-        logging.info(f"Sample '{sample_ID}'")
+        print_double_separator(f"Sample '{sample_ID}'")
         
         sample_cfg = SampleConfig(
             elements=elements,

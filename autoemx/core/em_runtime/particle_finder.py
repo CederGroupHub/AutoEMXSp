@@ -1685,8 +1685,7 @@ class EM_Particle_Finder:
             for band_idx, (d_lo, d_hi) in enumerate(bands):
                 fw_mm = self._apply_size_band(d_lo, d_hi)
                 if self.verbose:
-                    print_double_separator()
-                    logger.info(
+                    print_double_separator(
                         f"Size band {band_idx + 1}/{len(bands)}: "
                         f"{d_lo:.4g}–{d_hi:.4g} µm "
                         f"(FOV {fw_mm * 1000:.3g} µm)"
@@ -1808,8 +1807,7 @@ class EM_Particle_Finder:
         )
 
         if self.verbose:
-            print_double_separator()
-            logger.info("📊 Computed statistics:")
+            print_double_separator("📊 Computed statistics:")
             logger.info(stats_df.T.to_string(header=False))
 
         self._save_particle_size_histogram(

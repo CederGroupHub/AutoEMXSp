@@ -29,7 +29,6 @@ Created on Fri Aug 20 09:34:34 2025
 import os
 import logging
 import pandas as pd
-from datetime import datetime
 from typing import List, Optional
 
 import autoemx.utils.constants as cnst
@@ -121,14 +120,12 @@ def batch_fit_spectra(sample_IDs,
     if samples_path is None:
         samples_path = os.path.join(os.getcwd(), cnst.RESULTS_DIR)
     
-    print_double_separator()
-    logging.info("Starting batch fitting process...")
+    print_double_separator("Starting batch fitting process...")
     logging.info(f"Results path: {samples_path}")
     
     extracted_par_vals = {}
     for sample_ID in sample_IDs:
-        print_double_separator()
-        logging.info(f"Processing sample '{sample_ID}'...")
+        print_double_separator(f"Processing sample '{sample_ID}'...")
         try:
             sample_dir = get_sample_dir(samples_path, sample_ID)
         except Exception as e:
@@ -156,8 +153,7 @@ def batch_fit_spectra(sample_IDs,
         
         sample_fit_results = []
         for sp_id in spectra_to_process:
-            print_double_separator()
-            logging.info(f"Fitting Sample '{sample_ID}', Spectrum {sp_id} (fit only, no quantification)")
+            print_double_separator(f"Fitting Sample '{sample_ID}', Spectrum {sp_id} (fit only, no quantification)")
             try:
                 quantifier = fit_and_quantify_spectrum_from_ledger(
                     sample_ID=sample_ID,

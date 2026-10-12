@@ -158,8 +158,7 @@ def fit_and_quantify_spectrum_from_ledger(
     ledger_path = os.path.join(sample_dir, f"{cnst.LEDGER_FILENAME}{cnst.LEDGER_FILEEXT}")
     spectral_info_f_path = ledger_path
     
-    utils.print_double_separator()
-    logging.info(f"Sample '{sample_ID}', spectrum {spectrum_ID}")
+    utils.print_double_separator(f"Sample '{sample_ID}', spectrum {spectrum_ID}")
     
     try:
         if ledger is None:

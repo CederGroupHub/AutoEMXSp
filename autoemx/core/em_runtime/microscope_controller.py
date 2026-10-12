@@ -97,8 +97,7 @@ class MicroscopeController:
             If an error occurs during SEM activation or configuration.
         """
         if self.verbose:
-            print_single_separator()
-            logger.info("▶️ Activating SEM, and setting up...")
+            print_single_separator("▶️ Activating SEM, and setting up...")
         
         try:
             # Wake up SEM if necessary
@@ -139,8 +138,7 @@ class MicroscopeController:
             
             # Adjust focus, brightness, and contrast
             if self.verbose:
-                print_single_separator()
-                logger.info("🔬 Adjusting contrast, brightness, and focus.")
+                print_single_separator("🔬 Adjusting contrast, brightness, and focus.")
             
             self.adjust_BCF()
             

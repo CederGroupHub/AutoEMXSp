@@ -217,8 +217,7 @@ def get_latest_detector_channel_params(verbose: bool = True) -> None:
         detector_channel_params = json.load(file)
         
     if verbose:
-        print_single_separator()
-        logger.info(f"ℹ️ Using detector calibration file '{calib_file}'")
+        print_single_separator(f"ℹ️ Using detector calibration file '{calib_file}'")
         
 
 def update_detector_channel_params(meas_mode, new_offset, new_scale, verbose: bool = True):
@@ -270,8 +269,7 @@ def update_detector_channel_params(meas_mode, new_offset, new_scale, verbose: bo
         json.dump(new_detector_channel_params, f, indent=4)
 
     if verbose:
-        print_single_separator()
-        logger.info(f"✅ Calibration saved to: {output_file_path}")
+        print_single_separator(f"✅ Calibration saved to: {output_file_path}")
 
         
 

@@ -206,8 +206,7 @@ class ClusteringModule:
                 f"(threshold {cfg.auto_max_near_zero_fraction:.0%})"
             )
         if self.verbose:
-            print_single_separator()
-            logger.info(f"ℹ️ Automatic geometry selection: {resolved} ({reason}).")
+            print_single_separator(f"ℹ️ Automatic geometry selection: {resolved} ({reason}).")
         if self.clustering_cfg.method == 'dbscan' and self.clustering_cfg.dbscan.eps is not None:
             logger.warning(
                 f"⚠️ geometry='auto' with DBSCAN and an explicit eps={self.clustering_cfg.dbscan.eps:g}: eps is "
@@ -228,8 +227,7 @@ class ClusteringModule:
             geometry = ClusteringModule._resolve_geometry(self, compositions_df)
         if geometry == 'aitchison':
             if self.verbose:
-                print_single_separator()
-                logger.info("ℹ️ Clustering in Aitchison geometry (CLR-transformed compositions).")
+                print_single_separator("ℹ️ Clustering in Aitchison geometry (CLR-transformed compositions).")
             return ClusteringModule._clr_transform(
                 compositions_df, self.clustering_cfg.aitchison.detection_limit_percent / 100
             )
@@ -332,8 +330,7 @@ class ClusteringModule:
                     verbose=self.verbose
                 )
         elif self.verbose:
-            print_single_separator()
-            logger.info(f"ℹ️ Number of clusters was forced to be {k}")
+            print_single_separator(f"ℹ️ Number of clusters was forced to be {k}")
         return k
     
     
@@ -388,8 +385,7 @@ class ClusteringModule:
             raise ValueError("Not enough data points to determine clusters (need at least 2).")
     
         if verbose:
-            print_single_separator()
-            logger.info("📊 Computing number of clusters k...")
+            print_single_separator("📊 Computing number of clusters k...")
     
         k_found = []
         k = None
@@ -592,8 +588,7 @@ class ClusteringModule:
         import numpy as np
     
         if verbose:
-            print_single_separator()
-            logger.info('📊 Checking if more than 1 cluster is present...')
+            print_single_separator('📊 Checking if more than 1 cluster is present...')
     
         # Fit k-means for k=1
         kmeans_1 = KMeans(n_clusters=1, random_state=0, n_init='auto')

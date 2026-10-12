@@ -229,8 +229,7 @@ def analyze_sample(
     if results_path is None:
         results_path = os.path.join(os.getcwd(), cnst.RESULTS_DIR)
         
-    utils.print_double_separator()
-    logging.info(f"Sample '{sample_ID}'")
+    utils.print_double_separator(f"Sample '{sample_ID}'")
     
     sample_dir = utils.get_sample_dir(results_path, sample_ID)
     ledger_path = os.path.join(sample_dir, f"{cnst.LEDGER_FILENAME}{cnst.LEDGER_FILEEXT}")
@@ -384,11 +383,9 @@ def analyze_sample(
     
     if analysis_successful:
         comp_analyzer.print_results()
-        utils.print_single_separator()
-        logging.info(f"Sample '{sample_ID}' successfully analysed in {total_process_time:.1f} sec.")
+        utils.print_single_separator(f"Sample '{sample_ID}' successfully analysed in {total_process_time:.1f} sec.")
     else:
-        utils.print_single_separator()
-        logging.info(f"Analysis was not successful for '{sample_ID}'.")
+        utils.print_single_separator(f"Analysis was not successful for '{sample_ID}'.")
         comp_analyzer._warn_peak_overlaps()
     
     return comp_analyzer

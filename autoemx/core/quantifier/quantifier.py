@@ -63,21 +63,17 @@ The XSp_Fitter module must be installed and available for spectral fitting and d
 # =============================================================================
 # Standard library imports
 # =============================================================================
-import os
 import re
 import warnings
 import traceback
-from typing import Any, Optional, Dict, Iterable, Tuple, Sequence, List, Union
+from typing import Any, Optional, Dict, Iterable, Tuple, List, Union
 
 # =============================================================================
 # Third-party library imports
 # =============================================================================
 import numpy as np
-import pandas as pd
-import sympy as sp
 import matplotlib.pyplot as plt
 import lmfit
-from pymatgen.core import Element
 
 # =============================================================================
 # Local application/library imports
@@ -91,11 +87,8 @@ from autoemx.utils.helper import (
     print_double_separator,
     EDSError,
     weight_to_atomic_fr,
-    atomic_to_weight_fr
 )
 from autoemx.data.Xray_lines import get_el_xray_lines
-from autoemx.data.Xray_absorption_coeffs import xray_mass_absorption_coeff
-from autoemx.data.mean_ionization_potentials import J_df
 from autoemx.core.fitter import (
     XSp_Fitter,
     Background_Model,
@@ -612,8 +605,7 @@ class XSp_Quantifier:
         high_energy_indices = self.energy_vals > en_thresh
     
         if self.fitting_verbose:
-            print_double_separator()
-            logger.info(f"🔬 Fit of spectrum above {en_thresh} keV to get initial background scaling factor K...")
+            print_double_separator(f"🔬 Fit of spectrum above {en_thresh} keV to get initial background scaling factor K...")
             logger.info("ℹ️ Turned off particle morphology parameters to avoid affecting value of K.")
     
         if any(high_energy_indices):
@@ -1758,8 +1750,7 @@ class XSp_Quantifier:
         self.are_w_fr_norm = False
     
         if self.verbose:
-            print_double_separator()
-            logger.info('🔬 Quantification with ZAF correction:')
+            print_double_separator('🔬 Quantification with ZAF correction:')
             print_single_separator()
             print_nice_1d_row('', self.fitted_els_quant)
             print_nice_1d_row('Initial W_fr', k_ratios)
@@ -1787,8 +1778,7 @@ class XSp_Quantifier:
             print_single_separator()
             logger.warning(f'⚠️ ZAF correction did not converge within {max_iter} iterations.')
         elif self.verbose:
-            print_single_separator()
-            logger.info(f"✅ ZAF correction converged in {ZAF_cntr} steps.")
+            print_single_separator(f"✅ ZAF correction converged in {ZAF_cntr} steps.")
     
         return weight_fractions, sample_Z
 
@@ -2016,9 +2006,7 @@ class XSp_Quantifier:
         """
         # Print a double separator for visual clarity
         print_double_separator()
-        print_double_separator()
-        
-        logger.info('📊 Fit result:')
+        print_double_separator('📊 Fit result:')
         
         logger.info(f"  Reduced Chi-square: {quant_result[cnst.REDCHI_SQ_KEY]:.2f}")
         logger.info(f"  R-squared: {quant_result[cnst.R_SQ_KEY]:.5f}")

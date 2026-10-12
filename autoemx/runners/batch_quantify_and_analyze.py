@@ -218,8 +218,7 @@ def batch_quantify_and_analyze(
         
         print("\n \n")
         print_double_separator()
-        print_double_separator()
-        logging.info(f"Sample '{sample_ID}'")
+        print_double_separator(f"Sample '{sample_ID}'")
         
         try:
             ledger = load_sample_ledger(ledger_path)
@@ -344,8 +343,7 @@ def batch_quantify_and_analyze(
                 comp_analyzer._warn_peak_overlaps()
 
         total_process_time = (time.time() - sample_processing_time_start) / 60
-        print_double_separator()
-        logging.info(f"Sample '{sample_ID}' successfully quantified in {total_process_time:.1f} min.")
+        print_double_separator(f"Sample '{sample_ID}' successfully quantified in {total_process_time:.1f} min.")
         try:
             quantified_spectra = len(comp_analyzer._load_or_create_ledger().spectra)
         except Exception:
@@ -358,10 +356,11 @@ def batch_quantify_and_analyze(
     # Elements found in the batch
     checked = [a for a in quant_results if a._identify_missing_elements()]
     if len(checked) > 1:
-        print_double_separator()
-        logging.info("Element identification — batch summary:\n" + "\n".join(
-            EMXSp_Composition_Analyzer.format_element_identification_summary(a.element_identification_summary(), a.sample_cfg.ID)
-            for a in checked
-        ))
+        print_double_separator(
+            "Element identification — batch summary:\n" + "\n".join(
+                EMXSp_Composition_Analyzer.format_element_identification_summary(a.element_identification_summary(), a.sample_cfg.ID)
+                for a in checked
+            )
+        )
 
     return quant_results

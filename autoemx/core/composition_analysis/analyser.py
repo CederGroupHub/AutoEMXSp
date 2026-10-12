@@ -632,8 +632,7 @@ class EMXSp_Composition_Analyzer:
         # --- Record process time
         self.start_process_time = time.time()
         if verbose:
-            print_double_separator()
-            logger.info(f"▶️ Starting compositional analysis of sample {self.sample_id}")
+            print_double_separator(f"▶️ Starting compositional analysis of sample {self.sample_id}")
             
             
         # --- Define use of class instance
@@ -1567,8 +1566,7 @@ class EMXSp_Composition_Analyzer:
                 sp_id_str = " #" + sp_id
             else:
                 sp_id_str = '...'
-            print_single_separator()
-            logger.info('🔬 Fitting spectrum' + sp_id_str)
+            print_single_separator('🔬 Fitting spectrum' + sp_id_str)
             start_quant_time = time.time()
                             
         # Check if spectrum is worth fitting
@@ -1758,8 +1756,7 @@ class EMXSp_Composition_Analyzer:
                 sp_id_str = " #" + sp_id
             else:
                 sp_id_str = '...'
-            print_single_separator()
-            logger.info('🔬 Quantifying spectrum' + sp_id_str)
+            print_single_separator('🔬 Quantifying spectrum' + sp_id_str)
             start_quant_time = time.time()
                             
         is_sp_valid_for_fitting, prefit_quant_flag, prefit_comment = self._resolve_prefit_spectrum_gate(
@@ -3286,8 +3283,7 @@ class EMXSp_Composition_Analyzer:
         """Log the elements found in the sample and write them to Element_identification_report.txt in the analysis folder."""
         summary = self.element_identification_summary()
         text = self.format_element_identification_summary(summary, getattr(self.sample_cfg, 'ID', ''))
-        print_double_separator()
-        logger.info(text)
+        print_double_separator(text)
         try:
             if getattr(self, 'analysis_dir', None):
                 with open(os.path.join(self.analysis_dir, 'Element_identification_report.txt'), 'w', encoding='utf-8') as file:
@@ -3550,8 +3546,7 @@ class EMXSp_Composition_Analyzer:
                     continue
 
                 if self.verbose:
-                    print_single_separator()
-                    logger.info(f'🔬 Acquiring spectrum #{next_spectrum_id}...')
+                    print_single_separator(f'🔬 Acquiring spectrum #{next_spectrum_id}...')
 
                 spectrum_relpath = self._build_spectrum_relpath(current_spectrum_id)
                 manufacturer_msa_path = os.path.join(self.sample_result_dir, spectrum_relpath)
@@ -3843,8 +3838,7 @@ class EMXSp_Composition_Analyzer:
                     if i not in indices_to_process_set and self.spectra_quant_records[i] is not None
                 )
                 if self.verbose and n_already_quantified > 0 and not force_requantification:
-                    print_single_separator()
-                    logger.info(f"⏭️ {n_already_quantified} spectra already quantified. Skipping them...")
+                    print_single_separator(f"⏭️ {n_already_quantified} spectra already quantified. Skipping them...")
                 for i in range(tot_spectra_collected):
                     if i not in indices_to_process_set:
                         continue
@@ -4223,8 +4217,7 @@ class EMXSp_Composition_Analyzer:
             return False, 0, 0  # zeroes are placeholders
     
         if self.verbose:
-            print_single_separator()
-            logger.info('ℹ️ Spectra selection:')
+            print_single_separator('ℹ️ Spectra selection:')
             logger.info(f"ℹ️ {n_datapts_used} data points are used, out of {n_datapts} collected spectra.")
             self._report_n_discarded_spectra(n_datapts, max_analytical_error)
 
@@ -4263,8 +4256,7 @@ class EMXSp_Composition_Analyzer:
                 labels, k_merged = ClusteringModule._merge_connected_clusters(self, clustering_df, labels)
                 if k_merged < k:
                     if self.verbose:
-                        print_single_separator()
-                        logger.info(f"ℹ️ Clusters merged: {k} -> {k_merged} (auto_merge_clusters).")
+                        print_single_separator(f"ℹ️ Clusters merged: {k} -> {k_merged} (auto_merge_clusters).")
                     k = k_merged
                     self._persist_resolved_k_on_active_clustering_config(k)
                     # The k-means model no longer describes the clusters
@@ -4434,15 +4426,13 @@ class EMXSp_Composition_Analyzer:
 
         
         if self.verbose:
-            print_double_separator()
-            logger.info(f"▶️ Starting acquisition{quant_str} of {tot_spectra_to_collect} spectra.")
+            print_double_separator(f"▶️ Starting acquisition{quant_str} of {tot_spectra_to_collect} spectra.")
         if is_spectral_quant:
             self._warn_peak_overlaps()
         
         while tot_n_spectra < self.max_n_spectra:
             if self.verbose:
-                print_double_separator()
-                logger.info(f"🔬 Collecting{quant_verb_str} {n_spectra_to_collect} spectra...")
+                print_double_separator(f"🔬 Collecting{quant_verb_str} {n_spectra_to_collect} spectra...")
     
             # Collect the next batch of spectra (and quantify if requested)
             n_spectra_before = tot_n_spectra
@@ -4458,8 +4448,7 @@ class EMXSp_Composition_Analyzer:
             n_spectra_collected_this_session += (tot_n_spectra - n_spectra_before)
     
             if self.verbose:
-                print_single_separator()
-                logger.info(f"✅ {tot_n_spectra} total spectra collected.")
+                print_single_separator(f"✅ {tot_n_spectra} total spectra collected.")
             
             if quantify and tot_n_spectra > 0:
                 if is_exp_std_measurement:
@@ -4573,8 +4562,7 @@ class EMXSp_Composition_Analyzer:
         """
     
         if self.verbose:
-            print_double_separator()
-            logger.info(f"📊 Analysing phases after collection of {tot_n_spectra} spectra...")
+            print_double_separator(f"📊 Analysing phases after collection of {tot_n_spectra} spectra...")
     
         try:
             is_analysis_successful, max_cl_rmsdist, min_conf = self.analyse_data(
@@ -4589,8 +4577,7 @@ class EMXSp_Composition_Analyzer:
     
         if is_analysis_successful:
             if self.verbose:
-                print_double_separator()
-                logger.info("✅ Clustering analysis performed")
+                print_double_separator("✅ Clustering analysis performed")
     
             # Check whether phase identification converged
             try:
@@ -4766,8 +4753,7 @@ class EMXSp_Composition_Analyzer:
             )
         
         if self.verbose:
-            print_double_separator()
-            logger.info(f"🔬 Experimental standard acquisition of {self.sample_id}")
+            print_double_separator(f"🔬 Experimental standard acquisition of {self.sample_id}")
         
         # Run collection and quantification (fitting optionally performed during collection)
         self._th_peak_energies = {} # Initialise
@@ -5226,8 +5212,7 @@ class EMXSp_Composition_Analyzer:
         if not (self.verbose and n_datapts > 0 and is_any_spectrum_discarded):
             return
     
-        print_single_separator()
-        logger.info("📊 Summary of Discarded Spectra")
+        print_single_separator("📊 Summary of Discarded Spectra")
         logger.info("  → For details, see the 'Comments' column in Compositions.csv.")
     
         # Discarded due to low counts, insufficient background, or acquisition/fitting errors
@@ -5294,8 +5279,7 @@ class EMXSp_Composition_Analyzer:
             If expected keys are missing from clustering_info or clusters_df.
         """
         # Print clustering info
-        print_double_separator()
-        logger.info(f"📊 Compositional analysis results for sample {self.sample_id}:")
+        print_double_separator(f"📊 Compositional analysis results for sample {self.sample_id}:")
         print_single_separator()
         try:
             logger.info('  Clustering method: %s', self.clustering_cfg.method)

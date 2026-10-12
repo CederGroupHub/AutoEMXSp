@@ -152,8 +152,7 @@ def batch_fit_experimental_stds(
 
         print("\n \n")
         print_double_separator()
-        print_double_separator()
-        logging.info(f"Standard '{std_id}'")
+        print_double_separator(f"Standard '{std_id}'")
 
         try:
             ledger = load_sample_ledger(ledger_path)
@@ -260,10 +259,7 @@ def batch_fit_experimental_stds(
             continue
 
         total_process_time = (time.time() - sample_processing_time_start) / 60
-        print_double_separator()
-        logging.info(
-            f"Sample '{std_id}' successfully fitted in {total_process_time:.1f} min."
-        )
+        print_double_separator(f"Sample '{std_id}' successfully fitted in {total_process_time:.1f} min.")
 
     # Generate a standards-coverage report only when standards library was updated.
     if update_std_library and last_microscope_ID is not None \

@@ -16,7 +16,6 @@ import autoemx.utils.constants as cnst
 from autoemx.config.schema_models import (
     EDSStandardsFile,  # type: ignore
     ReferenceMean,  # type: ignore
-    StandardEntry,  # type: ignore
     StandardFitLineResult,  # type: ignore
     StandardsFitResults,  # type: ignore
     StandardLine,  # type: ignore
@@ -290,18 +289,16 @@ class StandardsModule:
         num_valid_spectra = 0
         
         if self.verbose:
-            print_double_separator()
-            logger.info(f"🔬 Fitting after collection of {tot_n_spectra} spectra...")
+            print_double_separator(f"🔬 Fitting after collection of {tot_n_spectra} spectra...")
 
         fit_results = StandardsModule._fit_stds_and_save_results(self)
         if fit_results is not None and fit_results.lines:
             is_fit_successful = True
             num_valid_spectra = int(np.min([line.n_spectra_used for line in fit_results.lines.values()]))
-            print_single_separator()
-            logger.info(f"📈 Acquired {num_valid_spectra} valid spectra out of {self.min_n_spectra} requested")
+            print_single_separator(f"📈 Acquired {num_valid_spectra} valid spectra out of {self.min_n_spectra} requested")
             is_converged = num_valid_spectra >= self.min_n_spectra
             if is_converged:
-                logger.info(f"✅ Convergence reached, acquisition completed.")
+                logger.info("✅ Convergence reached, acquisition completed.")
             else:
                 n_remaining = self.min_n_spectra - num_valid_spectra
                 logger.info(f"⏳ {n_remaining} more valid spectra required.")
@@ -503,7 +500,6 @@ class StandardsModule:
         self: Any,
         fit_results: StandardsFitResults,
     ) -> None:
-        from pymatgen.core.periodic_table import Element as PymatgenElement
         meas_mode = self.measurement_cfg.mode
         if self.standards is not None:
             self.standards = None

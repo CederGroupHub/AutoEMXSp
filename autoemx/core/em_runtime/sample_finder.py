@@ -152,8 +152,7 @@ class EM_Sample_Finder:
             Tuple of (center_pos, sample_hw_mm) if detection successful, else None.
         """
         if self.verbose:
-            print_single_separator()
-            logger.info('🔬 Detecting position of C tape...')
+            print_single_separator('🔬 Detecting position of C tape...')
         
         # Collect NavCam image
         if navcam_im is None:
