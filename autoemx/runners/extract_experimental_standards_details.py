@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import autoemx.config.defaults as dflt
 import autoemx.utils.constants as cnst
+import autoemx._paths as paths
 from pymatgen.core import Element
 
 
@@ -40,8 +41,6 @@ _STD_FILENAME_PATTERN = re.compile(
     rf"^(?P<meas_type>.+)_{re.escape(_STD_FILENAME)}_(?P<beam_kv>\d+)keV\.json$",
     re.IGNORECASE,
 )
-_DETECTOR_PARAMS_DIRNAME = cnst.DETECTOR_CHANNEL_PARAMS_CALIBR_DIR
-_DETECTOR_PARAMS_BASENAME = cnst.DETECTOR_CHANNEL_PARAMS_CALIBR_FILENAME
 _BEAM_CURRENT_KEY = cnst.BEAM_CURRENT_KEY
 _STD_ID_KEY = cnst.STD_ID_KEY
 _STD_MEAN_ID = cnst.STD_MEAN_ID_KEY
@@ -55,18 +54,11 @@ def _extract_file_energy_and_type(std_path: Path) -> Tuple[int, str]:
     return int(match.group("beam_kv")), str(match.group("meas_type")).upper()
 
 
-def _find_latest_detector_params(calib_dir: Path) -> Optional[Dict[str, Dict[str, float]]]:
-    params_dir = calib_dir / _DETECTOR_PARAMS_DIRNAME
-    if not params_dir.exists() or not params_dir.is_dir():
+def _find_latest_detector_params(microscope_ID: str) -> Optional[Dict[str, Dict[str, float]]]:
+    latest = paths.latest_detector_channel_params_file(microscope_ID)
+    if latest is None:
         return None
 
-    candidates = sorted(
-        params_dir.glob(f"*_{_DETECTOR_PARAMS_BASENAME}.json")
-    )
-    if not candidates:
-        return None
-
-    latest = candidates[-1]
     with latest.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
 
@@ -157,7 +149,7 @@ def extract_experimental_standards_details(
 
     Loads standards from either:
     - ``standards_json_path`` when provided, or
-    - ``autoemx/calibrations/<microscope_ID>/*_Stds_*keV.json`` by default.
+    - ``~/.autoemx/calibrations/<microscope_ID>/*_Stds_*keV.json`` (local calibration folder) by default.
 
     Writes a text report and prints it to stdout.
     """
@@ -165,10 +157,9 @@ def extract_experimental_standards_details(
         raise ValueError("microscope_ID cannot be empty")
 
     requested_voltage = _normalize_voltage(voltage)
-    repo_root = Path(__file__).resolve().parents[2]
-    calib_dir = repo_root / "autoemx" / "calibrations" / microscope_ID
+    calib_dir = paths.user_calibration_dir(microscope_ID)
 
-    source_label = "default_calibrations"
+    source_label = "local_calibrations"
     output_dir = calib_dir
 
     if report_output_dir is not None:
@@ -184,11 +175,6 @@ def extract_experimental_standards_details(
         if report_output_dir is None:
             output_dir = std_path.parent
     else:
-        if not calib_dir.exists() or not calib_dir.is_dir():
-            raise FileNotFoundError(
-                f"Could not find calibration directory for microscope '{microscope_ID}' at '{calib_dir}'."
-            )
-
         all_std_files = sorted(calib_dir.glob("*_Stds_*keV.json"))
         if requested_voltage is not None:
             all_std_files = [
@@ -204,7 +190,7 @@ def extract_experimental_standards_details(
             f"No standards file for {requested_voltage} keV was found in '{calib_dir}'."
         )
 
-    detector_params = _find_latest_detector_params(calib_dir)
+    detector_params = _find_latest_detector_params(microscope_ID)
 
     report_lines: List[str] = []
     report_lines.append("=" * 80)

@@ -25,6 +25,7 @@ from autoemx.core.composition_analysis import EMXSp_Composition_Analyzer
 from autoemx.utils.helper import print_double_separator, get_sample_dir
 from autoemx.config.ledger_io import ledger_runtime_configs, load_sample_ledger
 import autoemx.utils.constants as cnst
+import autoemx._paths as paths
 import autoemx.config.defaults as dflts
 from autoemx.config.schema_models.standards import EDSStandardsFile
 from autoemx.config.runtime_configs import ExpStandardsConfig
@@ -302,16 +303,10 @@ def batch_fit_experimental_stds(
                 standards_json_path = Path(standards_dict_path).expanduser().resolve()
                 standards_dir = standards_json_path.parent
             else:
-                standards_dir = (
-                    Path(__file__).resolve().parents[1]
-                    / cnst.CALIBS_DIR
-                    / last_microscope_ID
+                standards_json_path = paths.user_standards_file(
+                    last_microscope_ID, last_measurement_type, last_beam_energy
                 )
-                standards_json_filename = (
-                    f"{last_measurement_type}_{cnst.STD_FILENAME}_"
-                    f"{int(last_beam_energy):d}keV.json"
-                )
-                standards_json_path = standards_dir / standards_json_filename
+                standards_dir = standards_json_path.parent
 
             report_kwargs: Dict[str, Any] = {
                 "microscope_ID": last_microscope_ID,

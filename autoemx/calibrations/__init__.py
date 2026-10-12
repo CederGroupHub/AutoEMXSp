@@ -3,11 +3,13 @@
 """
 Calibration Loader for SEM EDS Analysis
 
-This module provides a function to dynamically load and inject
-microscope-specific calibration parameters and functions into the caller's namespace.
+This module loads the calibrations of a microscope: its detector model, from the package folder of the microscope
+model (autoemx/calibrations/<microscope_ID>/), whose values are set as attributes of this module; and the detector
+channel parameters and experimental standards of the instrument, from its local calibration folder,
+~/.autoemx/calibrations/<microscope_ID>/ (see autoemx._paths).
 
 Usage from other modules:
-    import XSp_calibs as calibs 
+    import autoemx.calibrations as calibs
     calibs.load_microscope_calibrations(microscope_ID ='PhenomXL', meas_mode = 'point', load_detector_channel_params = True)
 
 Author: Andrea Giunto
@@ -16,14 +18,16 @@ Created on: Mon Jan 20 15:40:42 2025
 
 import os
 import sys
-import importlib
+import copy
 import json
 from typing import Any, Optional
 from datetime import datetime
 
 
 import autoemx.utils.constants as cnst
+import autoemx._paths as paths
 from autoemx.config.schema_models import EDSStandardsFile
+from autoemx.config.schema_models.detector_model import DetectorModel
 from autoemx.utils.helper import print_single_separator
 from autoemx.utils.legacy import is_legacy_standards_payload, standards_payload_to_model
 
@@ -50,91 +54,99 @@ def ensure_standards_model(
     )
 
 microscope_calibrations_loaded = False
+loaded_microscope_ID: Optional[str] = None
+detector_model: Optional[DetectorModel] = None
+
+
+def _loaded_microscope_ID() -> str:
+    """ID of the microscope whose calibrations are loaded (needed to locate its local calibration folder)."""
+    if loaded_microscope_ID is None:
+        raise RuntimeError("Microscope calibrations not loaded: call load_microscope_calibrations() first.")
+    return loaded_microscope_ID
+
+
+def load_detector_model(microscope_ID: str) -> DetectorModel:
+    """
+    Detector model of the microscope, from detector_model.json in the package folder of the microscope model
+    (autoemx/calibrations/<microscope_ID>/).
+
+    Raises
+    ------
+    ValueError
+        If the microscope has no calibration folder in the package, or no detector model.
+    """
+    package_dir = paths.package_calibration_dir(microscope_ID)
+    if not package_dir.is_dir():
+        raise ValueError(
+            f"Could not find calibrations for microscope_ID '{microscope_ID}' at '{package_dir}'.\n"
+            f"Please ensure microscope_ID matches a folder in '{paths.PACKAGE_CALIBRATIONS_DIR}'."
+        )
+    model_path = package_dir / cnst.DETECTOR_MODEL_FILENAME
+    if not model_path.exists():
+        raise ValueError(f"Could not find the detector model of microscope '{microscope_ID}' at '{model_path}'.")
+    try:
+        return DetectorModel.from_json_file(model_path)
+    except Exception as e:
+        raise ValueError(f"Could not load the detector model of microscope '{microscope_ID}' at '{model_path}':\n{e}") from e
+
+
 def load_microscope_calibrations(
     microscope_ID: str,
     meas_mode: Optional[str] = None,
     load_detector_channel_params: bool = False
 ) -> None:
     """
-    Dynamically load calibration parameters for a given microscope and EDS mode.
+    Load the calibrations of a given microscope and EDS mode.
 
-    This function imports all public attributes from the calibration module
-    corresponding to the specified microscope_ID and injects them into the
-    current module's namespace.
-    
+    The detector model of the microscope (see load_detector_model) is set as ``detector_model``, and each of its
+    values and calibrated functions is set as an attribute of this module (e.g. ``calibs.elec_noise``,
+    ``calibs.get_calibrated_peak_shape_params``).
+
     Optionally, it also loads the latest detector channel parameters. This is only needed during
     spectra acquisition, not when fitting or quantifying. In the latter cases, the detector channel
-    parameters should be loaded from the measurement files diurectly.
-
+    parameters should be loaded from the measurement files directly.
 
     Parameters
     ----------
     microscope_ID : str
-        The name of the microscope (must match a folder in the calibration directory).
+        The name of the microscope (must match a folder in autoemx/calibrations, with its detector model).
     meas_mode : str, Optional
-        If provided, it checks whether it is included in the available_meas_modes.
-        The EDS mode to use (must be listed in 'available_meas_modes' in the calibration module).
+        If provided, it checks whether it is included in the available_meas_modes of the detector model.
     load_detector_channel_params : bool, optional
         If True, loads the latest detector channel parameters as well (default: False).
 
     Raises
     ------
     ValueError
-        If the calibration directory or module cannot be found, or if the meas_mode is invalid.
-    AttributeError
-        If the calibration module does not define 'available_meas_modes'.
+        If the calibrations or detector model cannot be found, or if the meas_mode is invalid.
     FileNotFoundError
         If no detector channel calibration file is found.
-
-    Warning
-    -------
-    This function injects variables and functions into the module namespace.
-    Use with care to avoid name collisions.
     """
-    # Build the path and check for microscope calibration directory
-    global microscope_calib_dir
-    microscope_calib_dir = os.path.join(
-        os.path.dirname(__file__),
-        microscope_ID
-    )
-    if not os.path.isdir(microscope_calib_dir):
+    global microscope_calib_dir, loaded_microscope_ID, detector_model
+    microscope_calib_dir = str(paths.package_calibration_dir(microscope_ID))
+    model = load_detector_model(microscope_ID)
+
+    # Validate the meas_mode
+    if meas_mode is not None and meas_mode not in model.available_meas_modes:
         raise ValueError(
-            f"Could not find the microscope calibration folder at '{microscope_calib_dir}'.\n"
-            f"Please ensure microscope_ID ('{microscope_ID}') matches a folder in '{os.path.dirname(__file__)}'."
+            f"Entered meas_mode '{meas_mode}' is not valid for microscope '{microscope_ID}'.\n"
+            f"Available modes: {model.available_meas_modes}\n"
+            "Change 'available_meas_modes' in the detector model of the microscope if this is undesired behavior."
         )
 
-    # Build the module name for importlib
-    module_name = f".{microscope_ID}.XS_calibrations"
-    try:
-        mod = importlib.import_module(module_name, package=__name__)
-    except ModuleNotFoundError as e:
-        raise ValueError(
-            f"Could not find the calibration module for microscope_ID '{microscope_ID}'.\n"
-            f"Tried to import: {module_name} (relative to package '{__name__}')."
-        ) from e
-
-    # Inject all public attributes from the calibration module into this module
+    # Values and calibrated functions of the detector model, as attributes of this module
     thismod = sys.modules[__name__]
-    for k in dir(mod):
-        if not k.startswith('_'):
-            setattr(thismod, k, getattr(mod, k))
-    
-    # Validate the meas_mode
-    if meas_mode is not None:
-        if not hasattr(mod, "available_meas_modes"):
-            raise AttributeError(
-                f"The calibration module for '{microscope_ID}' does not define 'available_meas_modes'."
-            )
-        if meas_mode not in mod.available_meas_modes:
-            raise ValueError(
-                f"Entered meas_mode '{meas_mode}' is not valid for microscope '{microscope_ID}'.\n"
-                f"Available modes: {mod.available_meas_modes}\n"
-                "Change values in the microscope calibration file if this is undesired behavior."
-            )
-    
+    for name in DetectorModel.model_fields:
+        if name not in ("schema_version", "peak_shape", "background"):
+            setattr(thismod, name, getattr(model, name))
+    thismod.get_calibrated_peak_shape_params = model.get_calibrated_peak_shape_params
+    thismod.get_calibrated_background_params = model.get_calibrated_background_params
+    detector_model = model
+
     global microscope_calibrations_loaded
     microscope_calibrations_loaded = True
-    
+    loaded_microscope_ID = microscope_ID
+
     # Optionally load detector channel parameters and check for the required meas_mode
     if load_detector_channel_params:
         load_latest_detector_channel_params(meas_mode)
@@ -195,29 +207,27 @@ def get_latest_detector_channel_params(verbose: bool = True) -> None:
 
     These parameters should be recalibrated regularly.
 
+    The most recent file in the local calibration folder of the microscope is used
+    (~/.autoemx/calibrations/<microscope_ID>/Detector_channel_params_calibs).
+
     Raises
     ------
         FileNotFoundError: If no detector channel calibration file is found.
     """
-    import os
-    import json
-    
     global calibration_files_dir
-    calibration_files_dir = os.path.join(microscope_calib_dir, cnst.DETECTOR_CHANNEL_PARAMS_CALIBR_DIR)
-    calibration_files = [f for f in os.listdir(calibration_files_dir) if f'{cnst.DETECTOR_CHANNEL_PARAMS_CALIBR_FILENAME}.json' in f]
-    if not calibration_files:
+    calibration_files_dir = str(paths.user_calibration_dir(_loaded_microscope_ID()) / cnst.DETECTOR_CHANNEL_PARAMS_CALIBR_DIR)
+    calib_file_path = paths.latest_detector_channel_params_file(_loaded_microscope_ID())
+    if calib_file_path is None:
         raise FileNotFoundError(
             f"No detector channel parameter calibration file found in '{calibration_files_dir}'."
         )
-    calib_file = sorted(calibration_files)[-1]
-    calib_file_dir = os.path.join(calibration_files_dir, calib_file)
-    
+
     global detector_channel_params
-    with open(calib_file_dir, 'r') as file:
+    with open(calib_file_path, 'r') as file:
         detector_channel_params = json.load(file)
-        
+
     if verbose:
-        print_single_separator(f"ℹ️ Using detector calibration file '{calib_file}'")
+        print_single_separator(f"ℹ️ Using detector calibration file '{calib_file_path}'")
         
 
 def update_detector_channel_params(meas_mode, new_offset, new_scale, verbose: bool = True):
@@ -226,7 +236,7 @@ def update_detector_channel_params(meas_mode, new_offset, new_scale, verbose: bo
 
     This function retrieves the latest detector channel parameters for the specified
     measurement mode, updates the offset and scale values, and saves the updated
-    parameters to a timestamped JSON file in the calibration directory.
+    parameters to a timestamped JSON file in the local calibration folder of the microscope.
 
     Parameters
     ----------
@@ -253,7 +263,7 @@ def update_detector_channel_params(meas_mode, new_offset, new_scale, verbose: bo
     load_latest_detector_channel_params(meas_mode)
 
     # Create an updated copy of parameters
-    new_detector_channel_params = detector_channel_params.copy()
+    new_detector_channel_params = copy.deepcopy(detector_channel_params)
     new_detector_channel_params[meas_mode][cnst.SCALE_KEY] = round(new_scale, 6)
     new_detector_channel_params[meas_mode][cnst.OFFSET_KEY] = round(new_offset, 6)
 
@@ -310,27 +320,29 @@ def load_standards_model(
         
     Notes
     -----
-    Expects a file named '{meas_type}_{beam_energy}keV.json' in the directory specified
-    by `microscope_calib_dir`.
+    Expects a file named '{meas_type}_Stds_{beam_energy}keV.json' in std_f_dir or, by default, in the local
+    calibration folder of the microscope (~/.autoemx/calibrations/<microscope_ID>/), where the file of the package
+    is copied the first time it is needed.
     beam_energy will be converted to an int for the file name's purpose.
     """
-    std_dict_filename = f'{meas_type}_{cnst.STD_FILENAME}_{int(beam_energy):d}keV.json'
+    std_dict_filename = paths.standards_filename(meas_type, beam_energy)
     global standards_dir # So that it can be loaded from EMXSp_comp_analyser
 
     if std_f_dir is not None:
         standards_dir = os.path.join(std_f_dir, std_dict_filename)
         if not os.path.exists(std_f_dir): # Check if path exists
             logger.warning(f"⚠️ Warning: The provided path for reference standards {std_f_dir} does not exist.")
-            logger.info(f"ℹ️ Using standard reference file at {microscope_calib_dir}")
-            std_f_dir = microscope_calib_dir
+            std_f_dir = None
         elif not os.path.exists(standards_dir): # Check if reference file exists
             logger.warning(f"⚠️ Warning: The reference standards file {standards_dir} does not exist.")
-            logger.info(f"ℹ️ Using standard reference file at {microscope_calib_dir}")
-            std_f_dir = microscope_calib_dir
+            std_f_dir = None
+        if std_f_dir is None:
+            logger.info(f"ℹ️ Using standard reference file at {paths.user_calibration_dir(_loaded_microscope_ID())}")
+
+    if std_f_dir is None:
+        standards_dir = str(paths.user_standards_file(_loaded_microscope_ID(), meas_type, beam_energy))
     else:
-        std_f_dir = microscope_calib_dir
-    
-    standards_dir = os.path.join(std_f_dir, std_dict_filename)
+        standards_dir = os.path.join(std_f_dir, std_dict_filename)
     try:
         with open(standards_dir, "r", encoding="utf-8") as standards_handle:
             standards_payload = json.load(standards_handle)
@@ -343,7 +355,7 @@ def load_standards_model(
         )
 
         if payload_is_legacy:
-            backup_path = f"{standards_dir})OLD"
+            backup_path = f"{standards_dir}_OLD"
             if os.path.exists(backup_path):
                 idx = 1
                 while os.path.exists(f"{backup_path}_{idx}"):

@@ -34,6 +34,7 @@ import numpy as np
 import pandas as pd
 
 import autoemx.utils.constants as cnst
+import autoemx._paths as paths
 from autoemx.utils.helper import parse_xsp_spots_image_name
 from autoemx.config.ledger_io import get_active_quantification_config, load_sample_ledger
 from autoemx.config.ledger_schemas import (
@@ -152,18 +153,22 @@ CALIBRATIONS_DIR = Path(__file__).resolve().parents[1] / "calibrations"
 
 
 def available_microscopes() -> List[str]:
-    """Microscopes with calibrations (folders of autoemx/calibrations with an XS_calibrations.py)."""
-    ids = [d.name for d in sorted(CALIBRATIONS_DIR.iterdir()) if (d / "XS_calibrations.py").exists()]
+    """Microscopes with a detector model (folders of autoemx/calibrations with a detector_model.json)."""
+    ids = [d.name for d in sorted(CALIBRATIONS_DIR.iterdir()) if (d / cnst.DETECTOR_MODEL_FILENAME).exists()]
     return ids or [dflt.microscope_ID]
 
 
 def standards_beam_energies(microscope_id: str, meas_type: str = dflt.measurement_type) -> List[float]:
-    """Beam energies (keV) for which the microscope has a P/B standards file."""
-    energies = []
-    for path in (CALIBRATIONS_DIR / microscope_id).glob(f"{meas_type}_{cnst.STD_FILENAME}_*keV.json"):
-        match = re.search(r"_(\d+(?:\.\d+)?)keV$", path.stem)
-        if match:
-            energies.append(float(match.group(1)))
+    """Beam energies (keV) for which the microscope has a P/B standards file.
+
+    Those in the local calibration folder, and those of the package (copied to the local folder when first used).
+    """
+    energies = set()
+    for folder in (paths.user_calibration_dir(microscope_id), paths.package_calibration_dir(microscope_id)):
+        for path in folder.glob(f"{meas_type}_{cnst.STD_FILENAME}_*keV.json"):
+            match = re.search(r"_(\d+(?:\.\d+)?)keV$", path.stem)
+            if match:
+                energies.add(float(match.group(1)))
     return sorted(energies)
 
 
@@ -174,8 +179,10 @@ def quantifiable_elements(microscope_id: str, beam_energy_keV: Any, meas_mode: s
         kv = float(beam_energy_keV)
     except (TypeError, ValueError):
         return None
-    path = CALIBRATIONS_DIR / microscope_id / f"{meas_type}_{cnst.STD_FILENAME}_{int(round(kv))}keV.json"
-    if abs(kv - round(kv)) > 0.25 or not path.exists():
+    if abs(kv - round(kv)) > 0.25:
+        return None
+    path = paths.user_standards_file(microscope_id, meas_type, round(kv))
+    if not path.exists():
         return None
     try:
         with open(path, encoding="utf-8") as fh:

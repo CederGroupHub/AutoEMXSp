@@ -44,7 +44,7 @@ class MicroscopeConfig(BaseModel):
     Configuration for the microscope hardware.
 
     Attributes:
-        ID (str): Identifier for the microscope, defining instrument calibrations at ./XSp_calibs/Microscopes/ID.
+        ID (str): Identifier for the microscope, defining instrument calibrations at autoemx/calibrations/ID.
         type (str): Type of microscope. Allowed: 'SEM' (implemented), 'STEM' (not implemented).
         is_auto_BC (bool): If True, brightness/contrast are set automatically.
         brightness (Optional[float]): Manual brightness value; required if is_auto_BC is False.
@@ -55,7 +55,7 @@ class MicroscopeConfig(BaseModel):
     Notes:
         - If `is_auto_BC` is False, both `brightness` and `contrast` must be provided.
         - STEM mode is not implemented and will raise NotImplementedError.
-        - The microscope ID must correspond to a folder at ./XSp_calibs/Microscopes/ID containing all necessary calibration files.
+        - The microscope ID must correspond to a folder at autoemx/calibrations/ID containing all necessary calibration files.
     """
 
     ID: str = dflt.microscope_ID
@@ -310,7 +310,8 @@ class QuantificationOptionsConfig(BaseModel):
         use_instrument_background (bool): Whether to use the instrument background in the fit (Default: False).
             If False, AutoEMX computes the background while fitting.
         use_project_specific_std_dict (bool): If True, tries to load the dictionary of reference standards from the project folder.
-            If not found, uses the default file "EDS_Stds_{beamenergy}keV.json" at XSp_calibs/Microscopes/your_microscope.
+            If not found, uses the file "EDS_Stds_{beamenergy}keV.json" in the local calibration folder of the microscope
+                (~/.autoemx/calibrations/<microscope_ID>/).
         min_total_counts_fraction (float): Minimum accepted total spectrum counts as a fraction of
             ``target_acquisition_counts``. Spectra below this threshold are flagged
             ``quant_flag = 2`` ("Total counts too low"). Default is ``0.9`` (90%).

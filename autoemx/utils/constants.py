@@ -177,8 +177,8 @@ BEST_MIXTURE_PLOT_FILENAME = 'Mixture_plot'
 CLUSTERING_PLOT_FILEEXT = '.png'
 NAVCAM_IM_FILENAME = 'Analysed_region'
 INITIAL_SEM_IM_FILENAME = 'Initial_Position'
-DETECTOR_CONV_MATRICES_FILENAME = 'detector_response_convolution_matrices.json'
 DETECTOR_EFFICIENCY_FILENAME ='detector_efficiency.msa'
+DETECTOR_MODEL_FILENAME = 'detector_model.json'
 DETECTOR_CHANNEL_PARAMS_CALIBR_FILENAME = 'detector_channel_params_calibs'
 
 

@@ -9,7 +9,7 @@ Defined Variables
 ------------------
 microscope_ID : str
     Identifier for the microscope hardware.
-    Must correspond to a calibration folder in `./XSp_calibs/Microscopes/<ID>` (MicroscopeConfig.ID).
+    Must correspond to a calibration folder in `autoemx/calibrations/<ID>` (MicroscopeConfig.ID).
     Default is `'PhenomXL'`.
 microscope_type : str
     Type of microscope. Allowed: `'SEM'` (implemented), `'STEM'` (not implemented).
@@ -213,7 +213,7 @@ inhomogeneous_cluster_min_rms_dist: float = 0.05
 
 homogeneity_min_n_points: int = 5
 
-# These values are used as a general estimate but they should be properly defined in the microscope calibration module XS_calibrations.py
+# These values are used as a general estimate but they should be properly defined in the detector model of the microscope (detector_model.json)
 escape_peak_probability = 0.03
 pileup_peak_probability = 0.003
 weight_Ll_ref_Ka1 = 0.05

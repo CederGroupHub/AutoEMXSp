@@ -49,7 +49,8 @@ generate_separate_std_dict = None  # If True, updates a separate standards file 
 # =============================================================================
 
 update_std_library = False
-# If True, writes fitted corrected PB reference values into EDS_Stds_{voltage}keV.json.
+# If True, writes fitted corrected PB reference values into EDS_Stds_{voltage}keV.json, in the local calibration
+# folder of the microscope (~/.autoemx/calibrations/<microscope_ID>/).
 # If False, acquisition/fitting still runs and CSV outputs are saved, but the standards
 # dictionary JSON is left unchanged.
 

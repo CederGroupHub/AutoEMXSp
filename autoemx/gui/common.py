@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from dash import dcc, html
 
+from autoemx._paths import AUTOEMX_HOME
 from autoemx.gui import backend as be
 
 GRAPH_CONFIG = {
@@ -369,7 +370,7 @@ class SummaryLoader:
         self._lock = threading.Lock()
         self._summaries: Dict[str, Dict[str, Any]] = {}
         self._pending: set = set()
-        self._cache_path = os.path.join(os.path.expanduser("~"), ".autoemx", "gui_sample_summaries.json")
+        self._cache_path = str(AUTOEMX_HOME / "gui_sample_summaries.json")
         self._disk: Dict[str, Any] = self._read_disk()
 
     def _read_disk(self) -> Dict[str, Any]:

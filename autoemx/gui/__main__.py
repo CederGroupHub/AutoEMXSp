@@ -21,14 +21,16 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import urlencode
 
+from autoemx._paths import AUTOEMX_HOME
+
 LAUNCHER_NAME = "AutoEMX"
 OLD_LAUNCHER_NAMES = ("AutoEMX GUI",)  # replaced by LAUNCHER_NAME when the launcher is created again
 LAUNCHER_ICON = Path(__file__).with_name("assets") / "autoemx-icon-512.png"
 LAUNCHER_ICON_WINDOWS = Path(__file__).with_name("assets") / "autoemx-icon.ico"
 # On Windows, the .bat run by the Desktop shortcut is kept here (a .bat cannot have its own icon)
-WINDOWS_LAUNCHERS_DIR = Path.home() / ".autoemx" / "launchers"
+WINDOWS_LAUNCHERS_DIR = AUTOEMX_HOME / "launchers"
 # Output of the GUIs started in the background by open_acquisition (macOS, Linux)
-BACKGROUND_LOGS_DIR = Path.home() / ".autoemx" / "logs"
+BACKGROUND_LOGS_DIR = AUTOEMX_HOME / "logs"
 
 
 def acquisition_url(samples: Optional[list] = None, results_folder: Optional[str] = None, port: int = 8050,

@@ -13,7 +13,7 @@ Main Class:
 """
 
 import os
-import json
+import hashlib
 import time
 import warnings
 import numpy as np
@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from autoemx.utils.helper import load_msa
 import autoemx.utils.constants as cnst
 import autoemx.calibrations as calibs
+import autoemx._paths as paths
 from autoemx.data.Xray_absorption_coeffs import xray_mass_absorption_coeff
 
 from autoemx._logging import get_logger
@@ -45,27 +46,11 @@ def _safe_log(level: str, message: str, *, verbose: bool = True) -> None:
         except Exception:
             pass
 
-parent_dir = str(Path(__file__).resolve().parent.parent.parent)
-
-
 class SparseConvolutionRow(BaseModel):
     """Sparse representation of a matrix row."""
 
     start_index: int
     values: list[float]
-
-
-class DetectorConvolutionMatricesCache(BaseModel):
-    """Typed cache payload for detector convolution matrices."""
-
-    det_ch_offset: float
-    det_ch_width: float
-    detector_ch_n: int
-    energy_vals_padding: int
-    matrix_size: int
-    zero_tol: float
-    det_res_rows: list[SparseConvolutionRow]
-    icc_rows: list[SparseConvolutionRow]
 
 
 class DetectorResponseFunction:
@@ -98,9 +83,21 @@ class DetectorResponseFunction:
     energy_vals_padding = 30  # Padding added to energy_vals to ensure correct functioning of convolution operation
     conv_zero_tol = 1e-14
 
-    @staticmethod
-    def _conv_matrices_key(det_ch_offset, det_ch_width):
-        return f"O{det_ch_offset},W{det_ch_width}"
+    @classmethod
+    def _conv_matrices_path(cls, det_ch_offset, det_ch_width, microscope_ID, matrix_size) -> Path:
+        """
+        Cache file of the convolution matrices of a detector channel setup, in ~/.autoemx/cache/<microscope_ID>/.
+
+        The name includes a fingerprint of the detector model and of the matrix settings the matrices are computed
+        from, so matrices computed with other values (e.g. after recalibrating the peak width) are never used.
+        """
+        if calibs.detector_model is None:
+            raise AttributeError("calibrations.detector_model is not initialized")
+        settings = f"{calibs.detector_model.fingerprint()},{cls.energy_vals_padding},{matrix_size},{cls.conv_zero_tol}"
+        fingerprint = hashlib.sha256(settings.encode("utf-8")).hexdigest()[:12]
+        cache_dir = paths.user_cache_dir(microscope_ID) / "detector_response"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return cache_dir / f"conv_matrices_O{det_ch_offset}_W{det_ch_width}_{fingerprint}.npz"
 
     @staticmethod
     def _sparsify_row(row_vals, zero_tol):
@@ -129,55 +126,40 @@ class DetectorResponseFunction:
         return dense
 
     @classmethod
-    def _load_conv_matrices_cache(cls, file_path, det_ch_offset, det_ch_width, matrix_size):
-        """Load typed cache matrices padded to matrix_size."""
+    def _load_conv_matrices_cache(cls, file_path, matrix_size):
+        """Load cached matrices (None if not cached, or unreadable)."""
         if not os.path.exists(file_path):
             return None
-        detector_ch_n = getattr(calibs, 'detector_ch_n', None)
-        if detector_ch_n is None:
-            return None
         try:
-            with open(file_path, 'r') as file:
-                payload = json.load(file)
+            with np.load(file_path) as cache:
+                matrices = tuple(
+                    sparse.csr_matrix(
+                        (cache[f"{name}_data"], cache[f"{name}_indices"], cache[f"{name}_indptr"]),
+                        shape=(matrix_size, matrix_size),
+                    ).toarray()
+                    for name in ("det_res", "icc")
+                )
         except Exception:
             return None
-
-        cache_key = cls._conv_matrices_key(det_ch_offset, det_ch_width)
-        if not isinstance(payload, dict) or cache_key not in payload:
-            return None
-
-        try:
-            cache_payload = DetectorConvolutionMatricesCache.model_validate(payload[cache_key])
-        except Exception:
-            return None
-
-        same_settings = (
-            cache_payload.detector_ch_n == detector_ch_n and
-            cache_payload.energy_vals_padding == cls.energy_vals_padding and
-            np.isclose(cache_payload.det_ch_offset, det_ch_offset) and
-            np.isclose(cache_payload.det_ch_width, det_ch_width)
-        )
-        if not same_settings:
-            return None
-
-        det_res_dense = cls._dense_from_sparse_rows(cache_payload.det_res_rows, matrix_size)
-        icc_dense = cls._dense_from_sparse_rows(cache_payload.icc_rows, matrix_size)
-        if det_res_dense.shape != (matrix_size, matrix_size) or icc_dense.shape != (matrix_size, matrix_size):
-            return None
-        return det_res_dense, icc_dense
+        return matrices
 
     @classmethod
     def _compute_and_cache_conv_matrices(
         cls,
         *,
-        conv_matrices_file_path: str,
+        conv_matrices_file_path,
         det_ch_offset: float,
         det_ch_width: float,
         detector_ch_n: int,
         matrix_size: int,
         verbose: bool = True,
     ):
-        """Compute detector convolution matrices and persist them to the JSON cache."""
+        """
+        Compute detector convolution matrices and save them to the cache.
+
+        Leading and trailing values of each row below conv_zero_tol are set to zero, so the matrices are the same
+        whether computed or loaded from the cache.
+        """
         compute_start_time = time.time()
         if verbose:
             print('-' * 50, flush=True)
@@ -185,37 +167,21 @@ class DetectorResponseFunction:
             print("🔬 Calculating detector convolution matrices...", flush=True)
 
         full_en_vector = [det_ch_offset + j * det_ch_width for j in range(detector_ch_n)]
-        det_res_conv_matrix = cls._calc_det_res_conv_matrix(full_en_vector, verbose)
-        icc_conv_matrix = cls._calc_icc_conv_matrix(full_en_vector, verbose)
-
-        cache_payload = DetectorConvolutionMatricesCache(
-            det_ch_offset=det_ch_offset,
-            det_ch_width=det_ch_width,
-            detector_ch_n=detector_ch_n,
-            energy_vals_padding=cls.energy_vals_padding,
-            matrix_size=matrix_size,
-            zero_tol=cls.conv_zero_tol,
-            det_res_rows=[cls._sparsify_row(row, cls.conv_zero_tol) for row in det_res_conv_matrix],
-            icc_rows=[cls._sparsify_row(row, cls.conv_zero_tol) for row in icc_conv_matrix],
+        matrices = tuple(
+            cls._dense_from_sparse_rows([cls._sparsify_row(row, cls.conv_zero_tol) for row in matrix], matrix_size)
+            for matrix in (cls._calc_det_res_conv_matrix(full_en_vector, verbose),
+                           cls._calc_icc_conv_matrix(full_en_vector, verbose))
         )
 
-        cache_key = cls._conv_matrices_key(det_ch_offset, det_ch_width)
-        cache_file_payload = {}
-        if os.path.exists(conv_matrices_file_path):
-            try:
-                with open(conv_matrices_file_path, 'r') as file:
-                    existing_payload = json.load(file)
-                if isinstance(existing_payload, dict):
-                    cache_file_payload = existing_payload
-            except Exception:
-                cache_file_payload = {}
-
-        cache_file_payload[cache_key] = cache_payload.model_dump()
+        arrays = {}
+        for name, matrix in zip(("det_res", "icc"), matrices):
+            csr = sparse.csr_matrix(matrix)
+            arrays.update({f"{name}_data": csr.data, f"{name}_indices": csr.indices, f"{name}_indptr": csr.indptr})
         # Atomic replace avoids partial reads if another process opens the cache mid-write.
         tmp_path = f"{conv_matrices_file_path}.{os.getpid()}.tmp"
         try:
-            with open(tmp_path, 'w') as file:
-                json.dump(cache_file_payload, file)
+            with open(tmp_path, 'wb') as file:
+                np.savez_compressed(file, **arrays)
             os.replace(tmp_path, conv_matrices_file_path)
         finally:
             if os.path.exists(tmp_path):
@@ -227,7 +193,7 @@ class DetectorResponseFunction:
         if verbose:
             compute_time = time.time() - compute_start_time
             print(f"✅ Finished computing convolution matrices in {compute_time:.1f} s", flush=True)
-        return det_res_conv_matrix, icc_conv_matrix
+        return matrices
 
     @classmethod
     def ensure_conv_matrices_cached(
@@ -249,17 +215,10 @@ class DetectorResponseFunction:
         if detector_ch_n is None:
             raise AttributeError("calibrations.detector_ch_n is not initialized")
 
-        conv_matrices_file_path = os.path.join(
-            parent_dir, cnst.XRAY_SPECTRA_CALIBS_DIR, microscope_ID, cnst.DETECTOR_CONV_MATRICES_FILENAME
-        )
         matrix_size = detector_ch_n + cls.energy_vals_padding + cls.energy_vals_padding // 2 - 1
+        conv_matrices_file_path = cls._conv_matrices_path(det_ch_offset, det_ch_width, microscope_ID, matrix_size)
 
-        if cls._load_conv_matrices_cache(
-            conv_matrices_file_path,
-            det_ch_offset,
-            det_ch_width,
-            matrix_size,
-        ) is not None:
+        if cls._load_conv_matrices_cache(conv_matrices_file_path, matrix_size) is not None:
             return False
 
         cls._compute_and_cache_conv_matrices(
@@ -306,16 +265,14 @@ class DetectorResponseFunction:
     
         Notes
         -----
-        - Convolution matrices are detector-dependent and cached in JSON for efficiency.
+        - Convolution matrices are detector-dependent and cached in ~/.autoemx/cache/<microscope_ID>/ for efficiency.
         - Prefer calling ``ensure_conv_matrices_cached`` once on the main process before
           parallel quantification so workers only hit the cached fast path.
         - If multiple EDS detectors are used, this code should be adapted.
         """
     
         # --- Load EDS detector efficiency spectrum ---
-        detector_efficiency_path = os.path.join(
-            parent_dir, cnst.XRAY_SPECTRA_CALIBS_DIR, microscope_ID, cnst.DETECTOR_EFFICIENCY_FILENAME
-        )
+        detector_efficiency_path = str(paths.package_calibration_dir(microscope_ID) / cnst.DETECTOR_EFFICIENCY_FILENAME)
         det_eff_energy_vals, det_eff_vals, metadata = load_msa(detector_efficiency_path)
         if metadata['XUNITS'] == 'eV':
             det_eff_energy_vals /= 1000  # Convert to keV
@@ -327,17 +284,10 @@ class DetectorResponseFunction:
             raise AttributeError("calibrations.detector_ch_n is not initialized")
     
         # --- Load or calculate convolution matrices ---
-        conv_matrices_file_path = os.path.join(
-            parent_dir, cnst.XRAY_SPECTRA_CALIBS_DIR, microscope_ID, cnst.DETECTOR_CONV_MATRICES_FILENAME
-        )
         matrix_size = detector_ch_n + cls.energy_vals_padding + cls.energy_vals_padding // 2 - 1
+        conv_matrices_file_path = cls._conv_matrices_path(det_ch_offset, det_ch_width, microscope_ID, matrix_size)
 
-        conv_matrices = cls._load_conv_matrices_cache(
-            conv_matrices_file_path,
-            det_ch_offset,
-            det_ch_width,
-            matrix_size,
-        )
+        conv_matrices = cls._load_conv_matrices_cache(conv_matrices_file_path, matrix_size)
         if conv_matrices is None:
             conv_matrices = cls._compute_and_cache_conv_matrices(
                 conv_matrices_file_path=conv_matrices_file_path,

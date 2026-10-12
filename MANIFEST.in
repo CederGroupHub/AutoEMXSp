@@ -13,8 +13,6 @@ global-exclude *~
 global-exclude __pycache__/*
 global-exclude .ipynb_checkpoints/*
 
-# Exclude specific files
-exclude detector_response_convolution_matrices.json
 
 # Exclude paper_data folder and all its contents
 prune tests

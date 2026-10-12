@@ -39,6 +39,7 @@ from autoemx.core.composition_analysis import EMXSp_Composition_Analyzer
 import autoemx.calibrations as calibs
 import autoemx.config.defaults as dflts
 import autoemx.utils.constants as cnst
+import autoemx._paths as paths
 from autoemx.utils import print_double_separator
 from autoemx.config import (
     MicroscopeConfig,
@@ -390,11 +391,10 @@ def batch_acquire_experimental_stds(
 
             if exp_std_dir is not None:
                 standards_dir = Path(exp_std_dir).expanduser().resolve()
+                standards_json_path = standards_dir / paths.standards_filename(measurement_type, beam_energy)
             else:
-                standards_dir = Path(__file__).resolve().parents[1] / cnst.CALIBS_DIR / microscope_ID
-
-            standards_json_filename = f"{measurement_type}_{cnst.STD_FILENAME}_{int(beam_energy):d}keV.json"
-            standards_json_path = standards_dir / standards_json_filename
+                standards_json_path = paths.user_standards_file(microscope_ID, measurement_type, beam_energy)
+                standards_dir = standards_json_path.parent
 
             report_kwargs = {
                 "microscope_ID": microscope_ID,

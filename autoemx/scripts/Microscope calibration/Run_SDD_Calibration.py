@@ -29,6 +29,9 @@ Typical Usage:
 
     - Run the script to collect and fit spectra, with automated generation of SDD calibration file.
 
+    - Sessions and the new calibration file are saved in the local calibration folder of the microscope:
+      ~/.autoemx/calibrations/<microscope_ID>/Detector_channel_params_calibs/
+
 Potential improvements:
     - At the moment the script may run spectral fitting twice when fit_during_collection is True
       and centers are still re-read from the ledger, which is inefficient but acceptable given

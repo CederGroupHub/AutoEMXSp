@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "Si_density": 2.33,
+  "detector_ch_n": 2048,
+  "emergence_angle": 28.5,
+  "undetectable_els": [
+    "H",
+    "He",
+    "Li"
+  ],
+  "available_meas_modes": [
+    "point",
+    "map"
+  ],
+  "R_e_background": 5e-06,
+  "F_loss_background": 0.27,
+  "F": 0.12,
+  "elec_noise": 4.627,
+  "conv_eff": 0.003724,
+  "weight_Ll_ref_Ka1": {
+    "point": 0.05
+  },
+  "escape_peak_probability": {
+    "point": 0.03
+  },
+  "pileup_peak_probability": {
+    "point": 0.003
+  },
+  "gen_background_time_scaling_factor": {
+    "point": 0.0853
+  },
+  "strobe_peak_int_factor": {
+    "point": 1.0
+  },
+  "zero_strobe_peak_sigma": {
+    "point": 0.16
+  },
+  "peak_shape": {
+    "point": {
+      "gamma": {
+        "offset": 1.0,
+        "amplitude": 3.5,
+        "center": 0.88,
+        "steepness": 9.63,
+        "scale": 1.0
+      },
+      "f_tail": {
+        "offset": 0.0094,
+        "amplitude": 0.1022,
+        "center": 0.926,
+        "steepness": -11.42,
+        "scale": 1.0
+      },
+      "R_e": {
+        "offset": 80.67,
+        "amplitude": 101.43,
+        "center": 1.9051,
+        "steepness": 8.6,
+        "scale": 1e-07
+      },
+      "F_loss": {
+        "offset": 0.1,
+        "amplitude": 0.1912,
+        "center": 1.7586,
+        "steepness": -40.3,
+        "scale": 1.0
+      }
+    }
+  },
+  "background": {
+    "point": {
+      "duncumb_P": [
+        2.041e-05,
+        -0.004076,
+        1.252
+      ],
+      "duncumb_F": {
+        "z_offset": 0.7453,
+        "z_scale": 6.1543
+      },
+      "beta": {
+        "sigmoid_offset": 0.0419,
+        "sigmoid_amplitude": 0.2105,
+        "sigmoid_steepness": 0.4788,
+        "sigmoid_center": 45.9098,
+        "gaussian_amplitude": 0.2807,
+        "gaussian_center": 28.0063,
+        "gaussian_sigma": 4.6587
+      }
+    }
+  }
+}

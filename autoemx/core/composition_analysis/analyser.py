@@ -763,7 +763,7 @@ class EMXSp_Composition_Analyzer:
             if energy_zero is not None and bin_width is not None and float(bin_width) != 0.0:
                 self.energy_vals = np.array([energy_zero + bin_width * i for i in range(self.sp_start, self.sp_end)])
             elif is_acquisition:
-                raise ValueError("Missing detector calibration values.\n Please add detector calibration file at {calibs.calibration_files_dir}")
+                raise ValueError(f"Missing detector calibration values.\n Please add detector calibration file at {calibs.calibration_files_dir}")
             # Set a threshold value below which counts are considered to be too low
             # Used to filter "bad" spectra out from clustering analysis. All spectra having less counts than this threshold are filtered out
             # Used also to avoid fitting spectra with excessive absorption, which inevitably lead to large quantification errors

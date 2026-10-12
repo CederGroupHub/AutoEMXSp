@@ -14,10 +14,7 @@ from autoemx.runners.batch_fit_experimental_stds import batch_fit_experimental_s
 import autoemx.utils.constants as cnst
 
 # Al standard of an SDD calibration (5 spectra, already fitted)
-AL_STANDARD = (
-    Path(__file__).resolve().parents[1] / "autoemx" / "calibrations" / "PhenomXL" / "Detector_channel_params_calibs"
-    / "SDD calibrations" / "20260521_09h22m" / "Al"
-)
+AL_STANDARD = Path(__file__).resolve().parent / "inputs" / "SDD_calibration_Al"
 
 
 @pytest.fixture

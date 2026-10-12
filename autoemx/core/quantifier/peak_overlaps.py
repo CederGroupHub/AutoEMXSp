@@ -19,7 +19,6 @@ produce no warnings. The pairs are computed here at runtime, as they also depend
 lines in units of sigma_eff = sqrt((sigma1^2 + sigma2^2) / 2), with sigma the detector resolution at each
 line energy, computed with the calibration of the microscope used (DetectorResponseFunction.det_sigma).
 """
-import importlib
 import json
 import os
 from functools import lru_cache
@@ -27,6 +26,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
+import autoemx.calibrations as calibs
 import autoemx.config.defaults as dflt
 from autoemx._logging import get_logger
 from autoemx.core.fitter.detector_response import DetectorResponseFunction
@@ -54,9 +54,9 @@ def _load_method_table(meas_type: str) -> Optional[dict]:
 
 @lru_cache(maxsize=None)
 def _load_detector_params(microscope_ID: str) -> Tuple[float, float, float]:
-    """Detector resolution parameters (conv_eff, elec_noise, F) from the calibration module of a microscope."""
-    mod = importlib.import_module(f"autoemx.calibrations.{microscope_ID}.XS_calibrations")
-    return mod.conv_eff, mod.elec_noise, mod.F
+    """Detector resolution parameters (conv_eff, elec_noise, F) from the detector model of a microscope."""
+    model = calibs.load_detector_model(microscope_ID)
+    return model.conv_eff, model.elec_noise, model.F
 
 
 def _separation_sigma(energy_a: float, energy_b: float, detector_params: Tuple[float, float, float]) -> float:

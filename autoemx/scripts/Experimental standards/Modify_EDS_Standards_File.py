@@ -6,10 +6,11 @@ Update EDS standards JSON file in place using the main runner from autoemx.runne
 Set the variables below as needed and run this script. The reference means of the modified lines are recomputed,
 and a timestamped backup of the file is saved next to it before it is changed.
 """
+import os
 
-
-# Path to the EDS standards JSON file
-standards_json_path = '/absolute/path/to/EDS_Stds_15keV.json'  # <-- Set this
+# Path to the EDS standards JSON file. The standards used by AutoEMX are in the local calibration folder of the
+# microscope, ~/.autoemx/calibrations/<microscope_ID>/
+standards_json_path = os.path.expanduser('~/.autoemx/calibrations/PhenomXL/EDS_Stds_15keV.json')  # <-- Set this
 
 # List of dicts: {ID: el_line(s) or "all"} to delete
 # Example: [{"BaSO4": "all"}, {"BaSO4": ["Ba_La1", "O_Ka1"]}]

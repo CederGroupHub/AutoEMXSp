@@ -53,3 +53,30 @@ def _patch_opencv_gui(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(cv2, "imshow", lambda *args, **kwargs: None, raising=False)
     monkeypatch.setattr(cv2, "waitKey", lambda *args, **kwargs: 1, raising=False)
     monkeypatch.setattr(cv2, "destroyAllWindows", lambda *args, **kwargs: None, raising=False)
+
+
+@pytest.fixture(scope="session")
+def _shared_autoemx_cache(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return tmp_path_factory.mktemp("autoemx_cache")
+
+
+@pytest.fixture(autouse=True)
+def autoemx_home(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory,
+                 _shared_autoemx_cache: Path) -> Path:
+    """Local AutoEMX folder (~/.autoemx) in a temporary folder, so tests never read or change the user's one.
+
+    The cache (~/.autoemx/cache) is shared by all tests of the session, so detector convolution matrices are computed
+    once: cached files are identified by the detector model they are computed from, so tests changing it get their own.
+    """
+    import autoemx._paths as paths
+
+    home = tmp_path_factory.mktemp("autoemx_home")
+    monkeypatch.setattr(paths, "AUTOEMX_HOME", home)
+
+    def shared_cache_dir(microscope_ID: str) -> Path:
+        path = _shared_autoemx_cache / microscope_ID
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    monkeypatch.setattr(paths, "user_cache_dir", shared_cache_dir)
+    return home

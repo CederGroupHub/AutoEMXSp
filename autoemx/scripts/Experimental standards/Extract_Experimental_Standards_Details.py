@@ -29,7 +29,7 @@ microscope_ID = 'PhenomXL'
 voltage = None
 
 # Optional path to a project-specific standards JSON file.
-# If None, standards are loaded from autoemx/calibrations/<microscope_ID>/
+# If None, standards are loaded from the local calibration folder, ~/.autoemx/calibrations/<microscope_ID>/
 # Example:
 # standards_json_path = '/absolute/path/to/Results/<sample_ID>/EDS_Stds_15keV.json'
 standards_json_path = None

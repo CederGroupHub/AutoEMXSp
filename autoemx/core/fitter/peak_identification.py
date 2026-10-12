@@ -34,7 +34,6 @@ independent of the fitter.
 """
 from __future__ import annotations
 
-import importlib
 import time
 import warnings
 from dataclasses import dataclass, field
@@ -46,6 +45,7 @@ from pymatgen.core import Element
 from scipy.optimize import nnls
 from scipy.signal import find_peaks
 
+import autoemx.calibrations as calibs
 from autoemx._logging import get_logger
 from autoemx.core.fitter.detector_response import DetectorResponseFunction
 from autoemx.core.fitter.fitter import get_reference_xray_line
@@ -411,9 +411,9 @@ class ElementIDResult:
 # =============================================================================
 @lru_cache(maxsize=None)
 def _detector_params(microscope_ID: str) -> Tuple[float, float, float]:
-    """Detector resolution parameters (conv_eff, elec_noise, F) from the calibration module of a microscope."""
-    mod = importlib.import_module(f"autoemx.calibrations.{microscope_ID}.XS_calibrations")
-    return mod.conv_eff, mod.elec_noise, mod.F
+    """Detector resolution parameters (conv_eff, elec_noise, F) from the detector model of a microscope."""
+    model = calibs.load_detector_model(microscope_ID)
+    return model.conv_eff, model.elec_noise, model.F
 
 
 def get_sigma_function(microscope_ID: str) -> Callable:
