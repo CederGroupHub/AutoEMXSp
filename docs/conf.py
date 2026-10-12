@@ -32,6 +32,10 @@ extensions = [
     "sphinx.ext.viewcode",
 ]
 
+# "Attributes:" sections of docstrings as instance variables, not as attribute entries duplicating the fields
+# documented by autodoc (pydantic models)
+napoleon_use_ivar = True
+
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
@@ -67,4 +71,6 @@ autodoc_default_options = {
     "members": True,
     "undoc-members": False,
     "show-inheritance": True,
+    # Packages re-export classes of their modules (__all__): document each class only on the page of its module
+    "ignore-module-all": True,
 }

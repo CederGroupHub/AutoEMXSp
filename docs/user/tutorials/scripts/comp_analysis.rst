@@ -9,7 +9,7 @@ Tutorial: EDS compositional analysis for phase identification
    :ref:`gui_comp_analysis_tutorial`.
 
 This tutorial shows how to run the automated workflow for EDS compositional
-analysis using the ``run_acquisition_quant_analysis.py`` script.
+analysis using the ``Run_Acquisition.py`` script.
 
 This script initiates the fully automated workflow described in Giunto *et al.*,
 *Nature Communications* **17**, 9735 (2026)
@@ -34,11 +34,11 @@ Key output includes:
 Step 1 – Open script to edit
 ----------------------------
 
-Open ``autoemx/scripts/run_acquisition.py``.
+Open ``autoemx/scripts/Run_Acquisition.py``.
 
 In this tutorial, we'll walk you through all the necessary parameters to configure
-the measurement. For further details, see the :ref:`API <runners_acquire_spectra>` for the
-``batch_acquire_and_analyze`` function.
+the measurement. For further details, see the API of
+:func:`~autoemx.runners.batch_acquire_and_analyze.batch_acquire_and_analyze`.
 
 
 Step 2 – Define samples to analyse
@@ -320,7 +320,7 @@ This step allows you to quantify spectra after acquisition. It is performed auto
 ``quantify_spectra = True`` was set during acquisition.
 
 Alternatively, the acquired data folder can be copied to a more performant machine (for example,
-with more CPU cores for faster parallel processing) and processed using ``autoemx/scripts/run_quantification_analysis.py``
+with more CPU cores for faster parallel processing) and processed using ``autoemx/scripts/Run_Quantification.py``
 
 Parameters
 ^^^^^^^^^^
@@ -363,7 +363,7 @@ This step is performed automatically if:
 - ``run_clustering_analysis = True`` was set during quantification.
 
 To run or re-run the clustering analysis of the extracted compositional data, 
-execute ``autoemx/scripts/run_analysis.py``
+execute ``autoemx/scripts/Run_Analysis.py``
 
 This step is not computationally intensive compared to quantification and can
 be run on the same machine or on a separate workstation.
@@ -465,7 +465,7 @@ Plotting options
   ``PlotConfig.custom_plot_file``. This is useful to create publication-ready
   plots while keeping plotting code fully user-editable.
   To recreate ``custom_plot.py`` from the packaged default template, run
-  ``autoemx/scripts/refresh_custom_plot_template.py``.
+  ``autoemx/scripts/Refresh_Custom_Plot_Template.py``.
 - ``show_unused_compositions_cluster_plot`` : If ``True``, display discarded
   compositions as black triangles in the clustering plot. Consider that compositions
   discarded due to their analytical error may still be very close to the true

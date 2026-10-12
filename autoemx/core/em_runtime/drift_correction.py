@@ -37,6 +37,7 @@ def estimate_drift_of(img1: np.ndarray, img2: np.ndarray) -> Tuple[float, float]
     Robust estimate of the translation (dx, dy) of img2 relative to img1.
 
     Uses a 2-stage hierarchical approach:
+
     1. Coarse estimation on downscaled images to handle large displacements.
     2. Fine estimation using an ensemble of crops on the full-resolution images,
        corrected by the coarse shift.

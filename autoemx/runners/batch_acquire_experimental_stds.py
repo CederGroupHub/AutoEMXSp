@@ -108,6 +108,7 @@ def batch_acquire_experimental_stds(
     stds : list of dict
         List of experimental standard definitions.  
         Each dictionary must contain:
+
             - 'ID' (str): Identifier for the standard sample (SampleConfig.ID).
             - 'formula' (str): Chemical formula of the standard (ExpStandardsConfig.formula).
             - 'pos' (tuple of float): (x, y) stage coordinates in mm (SampleConfig.center_pos).

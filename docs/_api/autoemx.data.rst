@@ -1,5 +1,5 @@
 autoemx.data package
-======================
+====================
 
 .. automodule:: autoemx.data
    :members:

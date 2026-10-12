@@ -1,10 +1,18 @@
 autoemx.utils package
-=======================
+=====================
 
 .. automodule:: autoemx.utils
    :members:
    :show-inheritance:
    :undoc-members:
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   autoemx.utils.legacy
 
 Submodules
 ----------
@@ -14,3 +22,6 @@ Submodules
 
    autoemx.utils.constants
    autoemx.utils.helper
+   autoemx.utils.plotting_helpers
+   autoemx.utils.standards_validator
+   autoemx.utils.unimodality

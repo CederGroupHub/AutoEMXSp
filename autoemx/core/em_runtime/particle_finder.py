@@ -37,22 +37,10 @@ Example Usage
 Notes
 -----
 - Requires an initialised EM_Controller object, unless used in development mode
-- Requires a working EM_driver and appropriate hardware configuration, with the following API functions:
-    Microscope Status & Image Acquisition
-    -------------------------------------
-    - is_at_EM
-        Boolean attribute; True if running at the actual electron microscope.
-    
-    - get_image_data(width, height, channel)
-        Acquire an image from the microscope with specified dimensions and channels.
-    
-    - get_frame_width()
-        Get the current field of view/frame width (in mm).
-    
-    Stage & Navigation Control
-    --------------------------
-    - move_to(x, y)
-        Move the microscope stage to the specified (x, y) position.
+- Requires a working microscope driver and appropriate hardware configuration (see the documentation page
+  "Add new Electron Microscope Driver"), in particular: is_at_EM (True if running at the electron microscope),
+  get_image_data(width, height, channel) (acquire an image), get_frame_width() (current frame width, in mm) and
+  move_to(x, y) (move the stage).
 
 Created on Wed Jul 31 09:28:07 2024
 
@@ -1212,6 +1200,7 @@ class EM_Particle_Finder:
         Prepare a segmentation mask for visualization.
     
         Behavior:
+
         - Binary masks with values in {0, 1} are scaled to [0, 255].
         - Binary masks with values in {0, 255} are returned unchanged.
         - Integer label masks have brightness reversed so higher labels are brighter,

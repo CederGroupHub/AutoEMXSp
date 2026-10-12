@@ -102,7 +102,7 @@ Step 2 - Run Acquisition & Analysis
 Follow the instructions from the :ref:`Compositional Characterization Tutorial <comp_analysis_tutorial>`.
 
 The only differences are that, when preparing the acquisition script (i.e.,
-``run_acquisition_quant_analysis.py``), you should:
+``Run_Acquisition.py``), you should:
 
 - As a list of candidate phases, provide **only** the two compositions that are
   intermixed, (as values for the ``cnd`` key in ``samples``).

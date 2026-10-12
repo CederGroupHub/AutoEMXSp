@@ -109,8 +109,17 @@ def is_microscope_connected() -> bool:
 
 
 def __getattr__(name: str) -> Any:
-    """Delegate unresolved attributes to the active microscope driver module."""
-    mod = get_active_driver_module()
+    """Delegate unresolved attributes to the active microscope driver module.
+
+    Raises AttributeError (not RuntimeError) when no driver is loaded, so that hasattr() and getattr() with a
+    default keep working, e.g. for introspection tools.
+    """
+    if _active_driver_module is None or name.startswith("__"):
+        raise AttributeError(
+            f"module '{__name__}' has no attribute '{name}' (no microscope driver loaded: "
+            "call load_microscope_driver first)."
+        )
+    mod = _active_driver_module
     try:
         return getattr(mod, name)
     except AttributeError as exc:

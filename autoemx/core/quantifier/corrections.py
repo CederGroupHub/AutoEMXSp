@@ -33,12 +33,12 @@ class Quant_Corrections:
 
     References
     ----------
-    G. Love, V.D. Scott, "Evaluation of a new correction procedure for quantitative electron probe microanalysis",
-        J. Phys. D. Appl. Phys. 11 (1978) 1369–1376. https://doi.org/10.1088/0022-3727/11/10/002
-    P.J. Statham, "A ZAF PROCEDURE FOR MICROPROBE ANALYSIS BASED ON MEASUREMENT OF PEAK-TO-BACKGROUND RATIOS",
-        in: D.E. Newbury (Ed.), Fourteenth Annu. Conf. Microbeam Anal. Soc., San Francisco Press, 1979: pp. 247–253.
-    M. Essani, E. Brackx, E. Excoffier, "A method for the correction of size effects in microparticles using a peak-to-background approach
-        in electron-probe microanalysis", Spectrochim. Acta B 169 (2020) 105880. https://doi.org/10.1016/j.sab.2020.105880
+    - G. Love, V.D. Scott, "Evaluation of a new correction procedure for quantitative electron probe microanalysis",
+      J. Phys. D. Appl. Phys. 11 (1978) 1369–1376. https://doi.org/10.1088/0022-3727/11/10/002
+    - P.J. Statham, "A ZAF PROCEDURE FOR MICROPROBE ANALYSIS BASED ON MEASUREMENT OF PEAK-TO-BACKGROUND RATIOS",
+      in: D.E. Newbury (Ed.), Fourteenth Annu. Conf. Microbeam Anal. Soc., San Francisco Press, 1979: pp. 247–253.
+    - M. Essani, E. Brackx, E. Excoffier, "A method for the correction of size effects in microparticles using a peak-to-background approach
+      in electron-probe microanalysis", Spectrochim. Acta B 169 (2020) 105880. https://doi.org/10.1016/j.sab.2020.105880
 
     Attributes
     ----------
@@ -155,10 +155,12 @@ class Quant_Corrections:
         Calculate the ZAF multiplicative correction factors for the measured sample P/B ratio.
     
         This method accounts for:
-            1. Differences in average Z between the sample and the employed standard,
-               which affect continuum intensity.
-            2. Second-order corrections for backscattering and absorption due to differential
-               mean generation path between characteristic and continuum X-rays.
+
+        1. Differences in average Z between the sample and the employed standard,
+           which affect continuum intensity.
+        2. Second-order corrections for backscattering and absorption due to differential
+           mean generation path between characteristic and continuum X-rays.
+
         Fluorescence and particle-size corrections are ignored.
         
     
@@ -188,11 +190,12 @@ class Quant_Corrections:
         ----------------------
         Include fluorescence corrections for large particles
         Include particle size corrections, from:
-            [1] J. L. Lábár and S. Török, A peak‐to‐background method for electron‐probe x‐ray microanalysis
-                applied to individual small particles, X-Ray Spectrom. 21, 183 (1992).
-            [2] M. Essani, E. Brackx, and E. Excoffier, A method for the correction of size effects in microparticles
-                using a peak-to-background approach in electron-probe microanalysis,
-                Spectrochim. Acta - Part B At. Spectrosc. 169, 105880 (2020).
+
+        - J. L. Lábár and S. Török, A peak‐to‐background method for electron‐probe x‐ray microanalysis
+          applied to individual small particles, X-Ray Spectrom. 21, 183 (1992).
+        - M. Essani, E. Brackx, and E. Excoffier, A method for the correction of size effects in microparticles
+          using a peak-to-background approach in electron-probe microanalysis,
+          Spectrochim. Acta - Part B At. Spectrosc. 169, 105880 (2020).
         """
         # Convert mass fractions to atomic fractions
         atomic_fractions = weight_to_atomic_fr(weight_fractions, self.sample_elements, verbose=False)

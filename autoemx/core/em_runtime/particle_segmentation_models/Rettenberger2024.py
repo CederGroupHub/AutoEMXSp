@@ -43,6 +43,7 @@ def segment_particles(frame_image: np.ndarray,
     -------
     par_mask : ndarray (uint8)
         An 8-bit index image where:
+
         - Background pixels are 0.
         - Each particle (up to 255 particles) receives an index 1..255 and all of
           its pixels are set to that index value. If >255 particles are found,

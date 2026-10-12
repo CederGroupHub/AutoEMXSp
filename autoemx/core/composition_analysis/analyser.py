@@ -16,6 +16,8 @@ Features:
 
 Example Usage
 -------------
+::
+
     # Create analyzer instance
     >>> analyzer = EMXSp_Composition_Analyzer(
             sample_id='sample_001',
@@ -4175,12 +4177,13 @@ class EMXSp_Composition_Analyzer:
     ) -> Tuple[bool, bool]:
         """
         Perform iterative collection (and optional quantification) of spectra, followed by phase analysis and convergence check.
-    
-                This method:
-                    - Iteratively collects spectra in batches (and quantifies them if `quantify` is True).
-                    - After each batch, persists acquisitions to the ledger and (if quantification is enabled) performs phase analysis (clustering).
-          - Checks for convergence based on clustering statistics and confidence.
-          - Stops early if convergence is achieved and minimum spectra is reached, or if no more particles are available.
+
+        This method:
+
+        - Iteratively collects spectra in batches (and quantifies them if `quantify` is True).
+        - After each batch, persists acquisitions to the ledger and (if quantification is enabled) performs phase analysis (clustering).
+        - Checks for convergence based on clustering statistics and confidence.
+        - Stops early if convergence is achieved and minimum spectra is reached, or if no more particles are available.
     
         Parameters
         ----------

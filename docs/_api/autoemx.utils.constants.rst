@@ -1,5 +1,5 @@
 autoemx.utils.constants module
-================================
+==============================
 
 .. automodule:: autoemx.utils.constants
    :members:

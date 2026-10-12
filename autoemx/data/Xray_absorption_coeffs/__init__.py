@@ -39,7 +39,7 @@ def xray_mass_absorption_coeff(element, energies):
     Returns mass absorption coefficient of element at given energies.
     Calculated from atomic form factors from Henke database (https://henke.lbl.gov/optical_constants/asf.html)
 
-        Parameters
+    Parameters
     ----------
     el : str or int
         The element symbol (e.g., 'O' for oxygen) or atomic number (e.g., 8 for oxygen).

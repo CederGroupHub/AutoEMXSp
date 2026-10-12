@@ -47,7 +47,7 @@ the different phase compositions in your sample.
 
 - **GUI**: Acquisition, Quantification and Analysis tabs, with interactive 3D plots of the
   results (:ref:`Tutorial <gui_comp_analysis_tutorial>`).
-- **Scripts**: ``run_acquisition_quant_analysis.py`` (:ref:`Tutorial <comp_analysis_tutorial>`).
+- **Scripts**: ``Run_Acquisition.py`` (:ref:`Tutorial <comp_analysis_tutorial>`).
 
 See full workflow at:
 
@@ -66,8 +66,8 @@ or in batch.
 
 - **GUI**: Single spectrum tab for one spectrum; Quantification tab for many spectra,
   including folders of exported spectra (:ref:`Tutorial <gui_fit_spectra_tutorial>`).
-- **Scripts**: ``fit_quant_single_autoemx_spectrum.py`` (:ref:`Tutorial <fit_autoemx_spectrum_tutorial>`)
-  or ``fit_quant_single_msa_spectrum.py`` (:ref:`Tutorial <fit_msa_spectrum_tutorial>`) for one
+- **Scripts**: ``Fit_Quant_Single_AutoEMX_Spectrum.py`` (:ref:`Tutorial <fit_autoemx_spectrum_tutorial>`)
+  or ``Fit_Quant_Single_MSA_Spectrum.py`` (:ref:`Tutorial <fit_msa_spectrum_tutorial>`) for one
   spectrum, which print the full process in the terminal, the employed fit parameters and their
   final values; ``quantify_external_spectra.py`` for exported spectra in batch
   (:ref:`Tutorial <quantify_external_spectra_tutorial>`).
@@ -78,7 +78,7 @@ Measure particle size distribution via SEM
 
 Have `AutoEMX` collect multiple images, detect particles, and quantify their size distribution.
 
-- **Scripts**: ``collect_particle_statistics.py`` (:ref:`Tutorial <particle_size_tutorial>`).
+- **Scripts**: ``Collect_Particle_Statistics.py`` (:ref:`Tutorial <particle_size_tutorial>`).
   Not available in the GUI yet.
 
 
@@ -93,4 +93,4 @@ the rationalization of impurity formation in solid-state reactions. See for exam
 
 - **GUI**: as for the compositional analysis, with the precursor options
   (:ref:`Tutorial <gui_comp_analysis_tutorial>`, last section).
-- **Scripts**: ``Run_Acquisition_PrecursorMix.py`` (:ref:`Tutorial <precursor_mix_tutorial>`).
+- **Scripts**: ``Run_Acquisition.py`` with ``is_known_phase_mixture = True`` (:ref:`Tutorial <precursor_mix_tutorial>`).

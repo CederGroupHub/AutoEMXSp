@@ -1,4 +1,5 @@
 import json
+import os
 
 xray_nomenclature_conversion_dict = {
     'KA1' : 'Ka1',
@@ -84,6 +85,10 @@ xray_nomenclature_conversion_dict = {
 for key, value in xray_nomenclature_conversion_dict.items():
     if value == '':
         xray_nomenclature_conversion_dict[key] = key.replace('-','')
-    
-with open('lines_nomenclature_conversion.json', 'w') as file:
-    json.dump(xray_nomenclature_conversion_dict, file)
+
+
+if __name__ == "__main__":
+    # Saved next to this script, where autoemx.data.Xray_lines reads it
+    output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lines_nomenclature_conversion.json')
+    with open(output_path, 'w') as file:
+        json.dump(xray_nomenclature_conversion_dict, file)

@@ -7,8 +7,10 @@ The table is organised by measurement method. Only 'EDS' is defined here. The ta
 candidate pairs closer than MAX_CANDIDATE_SEPARATION_EV; their severity is assigned at runtime
 (autoemx.core.quantifier.peak_overlaps) from the separation in units of the detector sigma at the
 line energies, computed with the calibration of the microscope used:
-    severe:      separation < 2 sigma_eff (Sparrow limit: two equal Gaussians merge into one peak)
-    significant: separation < 3 sigma_eff (overlap criterion of the fitter, see Peaks_Model)
+
+- severe: separation < 2 sigma_eff (Sparrow limit: two equal Gaussians merge into one peak)
+- significant: separation < 3 sigma_eff (overlap criterion of the fitter, see Peaks_Model)
+
 with sigma_eff = sqrt((sigma1^2 + sigma2^2) / 2). The resolution model and these thresholds are
 specific to energy-dispersive detectors: whoever adds another measurement method to autoemx must
 define its own resolution model, severity categories and candidate pairs under a new key of "methods".

@@ -10,7 +10,7 @@ Tutorial: Fit and quantify individual spectra exported by commercial EDS softwar
    :ref:`gui_fit_spectra_tutorial`.
 
 This tutorial shows how to fit--and optionall quantify-- a single EDS spectrum,
-using the ``fit_quant_single_msa_spectrum.py`` script.
+using the ``Fit_Quant_Single_MSA_Spectrum.py`` script.
 
 This allows to load an individual spectrum from an exported file (typically
 ``.msa``, ``.emsa``, ``.msg``), fit and quantify it and visualize the fitted spectrum
@@ -35,7 +35,7 @@ Phenom` SEM-EDS and by `Oxford Aztec` software.
 Step 1 - Open script to edit
 -------------------------------
 
-Open ``autoemx/scripts/fit_quant_single_msa_spectrum.py``.
+Open ``autoemx/scripts/Fit_Quant_Single_MSA_Spectrum.py``.
 
 
 Step 2 - Define Spectrum to Fit
@@ -55,8 +55,8 @@ Step 3 - Modify Parameters
 
 Modify the rest of the parameters to match to the sample you're fitting.
 
-For details on the parameters, see the  :ref:`API <runners_fit_single_spectrum>` for the ``fit_and_quantify_spectrum``
-function.
+For details on the parameters, see the  API of
+:func:`~autoemx.runners.fit_and_quantify_spectrum.fit_and_quantify_spectrum`.
 
 
 Step 4 - Launch script

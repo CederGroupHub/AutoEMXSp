@@ -12,18 +12,17 @@ Main Components:
     - **peaks.Peaks_Model**: Peak modeling and parameterization
     - **background.Background_Model**: Background continuum modeling
 
-Typical Usage:
-    ```python
+Typical Usage::
+
     from autoemx.core.fitter import XSp_Fitter
-    
+
     fitter = XSp_Fitter(
-        spectrum_vals, energy_vals, 
+        spectrum_vals, energy_vals,
         spectrum_lims=spectrum_lims,
         microscope_ID='PhenomXL',
         ...
     )
     fit_result, fitted_lines = fitter.fit_spectrum(plot_result=True)
-    ```
 """
 
 from .fitter import XSp_Fitter

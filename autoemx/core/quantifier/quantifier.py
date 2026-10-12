@@ -12,8 +12,9 @@ of X-ray spectra, implementing the peak-to-background (P/B) method and related Z
 for scanning electron microscopy (SEM) energy-dispersive X-ray spectroscopy (EDS).
 
 Class Structure and Interactions
--------------------------------
+--------------------------------
 The main classes are:
+
 - **XSp_Quantifier**
   Performs quantification of X-ray spectra using matrix corrections. Interfaces with spectral fitting
   routines from XSp_Fitter to extract peak/background intensities and applies the full suite
@@ -192,8 +193,8 @@ class XSp_Quantifier:
 
         Parameters
         ----------
-        peaks : iterable of (element, line, pb_ratio)
-            Fitted peaks. Lines that are not reference lines, and missing or non-positive P/B ratios, are skipped.
+        peaks : iterable of tuple
+            Fitted peaks, as (element, line, pb_ratio). Lines that are not reference lines, and missing or non-positive P/B ratios, are skipped.
         standard_elements : iterable of str, optional
             If given, only peaks of these elements are reported.
 

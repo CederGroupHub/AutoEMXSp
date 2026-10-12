@@ -114,9 +114,10 @@ class SampleConfig(BaseModel):
     Attributes:
         elements (List[str]): List of elemental symbols (e.g., ['Fe', 'O']).
         type (str): Sample type. Allowed types:
+
             - powder: Expects particles, and uses geometrical correction factors during spectral fits.
             - powder_continuous: Expects a quasi-continuous powder mixture, sampled in a grid (NO PARTICLE DETECTION APPLIED).
-                    Applies geometrical correction factors during spectral fits.
+              Applies geometrical correction factors during spectral fits.
             - bulk: Expects a flat, continuous surface, sampled in a grid. Does not apply geometrical factors.
             - bulk_rough: Expects a continuous surface, sampled in a grid. Applies geometrical factors.
             - film: NOT IMPLEMENTED YET
@@ -311,7 +312,7 @@ class QuantificationOptionsConfig(BaseModel):
             If False, AutoEMX computes the background while fitting.
         use_project_specific_std_dict (bool): If True, tries to load the dictionary of reference standards from the project folder.
             If not found, uses the file "EDS_Stds_{beamenergy}keV.json" in the local calibration folder of the microscope
-                (~/.autoemx/calibrations/<microscope_ID>/).
+            (~/.autoemx/calibrations/<microscope_ID>/).
         min_total_counts_fraction (float): Minimum accepted total spectrum counts as a fraction of
             ``target_acquisition_counts``. Spectra below this threshold are flagged
             ``quant_flag = 2`` ("Total counts too low"). Default is ``0.9`` (90%).
@@ -392,6 +393,7 @@ class PowderMeasurementConfig(BaseModel):
 
     Attributes:
         par_selection_mode (str): Particle navigation mode (default: 'auto'):
+
             - ``'auto'``: automatic frame scan and particle detection
             - ``'manual'``: prompt the user to center each particle
             - ``'list'``: visit a caller-supplied list of ledger particle ids or
@@ -560,8 +562,9 @@ class ExpStandardsConfig(BaseModel):
         els_to_use_for_mean_PB_calc (Optional[List[str]]):
             List of element symbols (e.g., ["Fe", "O"]) to use for mean PB calculation.
             Special values:
-                ["all"] or ["All"]: use all elements/lines as standards (default)
-                None, [], ["none"], or ["None"]: use no elements/lines
+
+            - ["all"] or ["All"]: use all elements/lines as standards (default)
+            - None, [], ["none"], or ["None"]: use no elements/lines
 
         generate_separate_std_dict (bool):
             Whether the acquired reference standard values are added to the current reference dictionary. If True,

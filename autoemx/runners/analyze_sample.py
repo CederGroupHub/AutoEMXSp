@@ -175,6 +175,8 @@ def analyze_sample(
 ) -> Optional[EMXSp_Composition_Analyzer]:
     """
     Run clustering and analysis for a single sample.
+
+    Parameters
     ----------
     sample_ID : str
         Sample identifier.

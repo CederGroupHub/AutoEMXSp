@@ -49,7 +49,7 @@ def segment_particles(frame_image : np.array,
           cv2.ConnectedComponentsWithStats(img, connectivity=8) to discern particles
 
         - **Labeled image (uint8 or higher precision)**
-            USE THIS IF DIFFERENT PARTICLES HAVE CONTIGOUS EDGES
+          USE THIS IF DIFFERENT PARTICLES HAVE CONTIGUOUS EDGES.
           Background pixels are set to ``0`` (black). Each detected particle
           is assigned a unique positive integer label, starting from ``1`` and
           increasing consecutively (same format as the ``labels`` output from

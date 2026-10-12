@@ -14,8 +14,9 @@ Overview
 The module is designed to enable robust, quantitative analysis of EDS spectra, including background continuum, detector response, and detailed peak shapes (including escape and pileup peaks, ICC effects, and low-energy tails). It is suitable for both bulk and particle samples, and supports flexible calibration and constraint schemes.
 
 Class Structure and Interactions
--------------------------------
+--------------------------------
 The main classes are:
+
 - **XSp_Fitter**  
   The main workflow class. Given a measured spectrum, calibration information, and a list of elements, it builds the complete lmfit model (background + peaks), sets up all parameters and constraints, and runs the fit. It provides methods for plotting, reporting, and extracting fit results. This class orchestrates the use of all other classes and should be the main entry point for typical users.
 
@@ -30,16 +31,15 @@ The main classes are:
 
 Typical Usage
 -------------
-1. **Initialize the fitter:**
-   ```python
-   fitter = XSp_Fitter(
-       spectrum_vals, energy_vals, els_to_quantify=['Fe', 'Ni'], microscope_ID='PhenomXL'
-   )
-   
-2. **Fit the spectrum:**
-   ```python
-   fit_result, fitted_lines = fitter.fit_spectrum(plot_result=True, print_result=True)
-   )
+1. **Initialize the fitter**::
+
+       fitter = XSp_Fitter(
+           spectrum_vals, energy_vals, els_to_quantify=['Fe', 'Ni'], microscope_ID='PhenomXL'
+       )
+
+2. **Fit the spectrum**::
+
+       fit_result, fitted_lines = fitter.fit_spectrum(plot_result=True, print_result=True)
     
 3. **Inspect and use results:**
    Use fit_result for detailed analysis.
@@ -55,14 +55,14 @@ Dependencies
 ------------
 numpy, scipy, lmfit, matplotlib, and supporting modules for calibration and physical constants.
 
-**How the classes interact:**
+How the classes interact
 ------------------------
 - `XSp_Fitter` is the main user-facing class. It creates and coordinates instances of `Background_Model` and `Peaks_Model`, and uses `DetectorResponseFunction` to ensure all detector effects are handled consistently.
 - `DetectorResponseFunction` is a utility class used by both `Background_Model` and `Peaks_Model` to convolve model components with the detector response.
 - `Peaks_Model` and `Background_Model` each build their respective parts of the overall spectrum model, which are then combined by the fitter for the full fit.
 
-**In short:**  
----------
+In short
+--------
 Instantiate `XSp_Fitter` with your data and settings, then call `fit_spectrum()`. The module will handle background, detector response, and peak modeling for you, providing a comprehensive, physically-based EDS spectrum fit.
 """
 

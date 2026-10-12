@@ -131,7 +131,7 @@ Notes and troubleshooting
 - If a ``ledger.json`` already exists, ingestion is skipped by default.
   Set ``overwrite_existing=True`` to rebuild from current script settings.
 - For re-analysis with different clustering filters (without re-ingestion), use
-  ``run_analysis.py``.
+  ``Run_Analysis.py``.
 - ``quantify=False`` only copies the spectra and writes the ledgers; the samples can then be
   quantified with ``Run_Quantification.py`` or in the GUI (see :ref:`gui_fit_spectra_tutorial`, which
   can also import a folder of spectra with **Import spectra folder…** in the Quantification tab).

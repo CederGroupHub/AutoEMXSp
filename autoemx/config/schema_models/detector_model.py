@@ -33,9 +33,11 @@ Notes
     - R. H. Redus, A. C. Huber (2015). Response Function of Silicon Drift Detectors for Low Energy X-rays. In Advances
       in X-ray Analysis (AXA), pp. 274–282. International Centre for Diffraction Data (ICDD).
 
-Fine-tuning parameters (weight_Ll_ref_Ka1, escape_peak_probability, pileup_peak_probability,
-gen_background_time_scaling_factor, strobe_peak_int_factor, zero_strobe_peak_sigma)
--------------------------------------------------------------------------------------
+Fine-tuning parameters
+----------------------
+weight_Ll_ref_Ka1, escape_peak_probability, pileup_peak_probability, gen_background_time_scaling_factor,
+strobe_peak_int_factor, zero_strobe_peak_sigma:
+
 - These values are empirical and not highly sensitive for most quantification tasks; reasonable estimates suffice.
 - Calibration can be performed manually by observing the fitted values in a few high-quality spectra of EDS standards.
 - To do this, allow the parameter(s) to vary freely in your lmfit model (set `vary=True`), fit the spectrum, and

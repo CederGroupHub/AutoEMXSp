@@ -17,6 +17,7 @@ Main Features
 --------------
 
 **Compositional Conversions**
+
 - `atomic_to_weight_fr()`: Convert atomic fractions to weight fractions.
 - `weight_to_atomic_fr()`: Convert weight fractions to atomic fractions.
   Both functions use `pymatgen.Element` for accurate atomic mass values.
@@ -24,10 +25,12 @@ Main Features
   compatible with both current ``as_weight_dict()`` and older ``to_weight_dict``.
 
 **Formula Handling**
+
 - `get_std_comp_from_formula()`: Parse chemical formulas into standardized element dictionaries.
 - `to_latex_formula()`: Convert a chemical formula into LaTeX format (e.g., ``Fe2O3`` → ``Fe$_2$O$_3$``).
 
 **String and Table Utilities**
+
 - `print_nice_1d_row()`: Print a formatted 1D table row (with adjustable width and alignment).
 - `print_element_fractions_table()`: Display element names with their atomic and weight percentages.
 - `print_single_separator()`: Print a single horizontal line separator.
@@ -35,17 +38,21 @@ Main Features
 - `AlphabetMapper`: Map integers to alphabetic letters (0 → 'A', 25 → 'Z', etc.).
 
 **Image Utilities**
+
 - `draw_scalebar()`: Draw a scale bar on an image using OpenCV, with optional text label and styling.
 
 **File and Directory Handling**
+
 - `get_sample_dir()`: Locate a directory named after a given sample ID, with optional recursive search.
 - `make_unique_path()`: Generate a unique file or directory path if one already exists (e.g., ``file_1.png``).
 - `load_msa()`: Load and parse a `.msa` spectral file, returning energy and intensity arrays.
 
 **User Interaction**
+
 - `Prompt_User`: Display a Tkinter prompt window for manual user confirmation (e.g., proceed/stop execution).
 
 **Error Handling**
+
 - `EDSError`: Custom exception class for handling EDS-related errors gracefully.
 
 Created on Fri Jun 28 11:50:53 2024
@@ -224,7 +231,8 @@ def to_latex_formula(formula: str, include_dollar_signs: bool = True) -> str:
     Convert a chemical formula string into its LaTeX representation.
 
     Supports nested parentheses, element subscripts, and group multipliers.
-    For example:
+    For example::
+
         'Al2(SO4)3' -> 'Al$_{2}$(SO$_{4}$)$_{3}$'
 
     Args:

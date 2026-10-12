@@ -164,8 +164,8 @@ def batch_quantify_and_analyze(
         Whether the sample is a mixture of known phases (the candidate phases). If True, spectra are quantified with
         the reference P/B values of these phases, and the analysis characterizes their intermixing.
         Default: None, keeps the value of the sample's active quantification run. See example at:
-            L. N. Walters et al., Synthetic Accessibility and Sodium Ion Conductivity of the Na 8– x A x P 2 O 9 (NAP)
-            High-Temperature Sodium Superionic Conductor Framework, Chem. Mater. 37, 6807 (2025).
+        L. N. Walters et al., Synthetic Accessibility and Sodium Ion Conductivity of the Na 8– x A x P 2 O 9 (NAP)
+        High-Temperature Sodium Superionic Conductor Framework, Chem. Mater. 37, 6807 (2025).
     intermixing_violin_plots : bool, optional
         Whether to plot the intermixing of the reported mixtures as violin plots (PlotConfig.intermixing_violin_plots).
         Default: None, keeps the saved setting (by default, plotted for known phase mixtures).
