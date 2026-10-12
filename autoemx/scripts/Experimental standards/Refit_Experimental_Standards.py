@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Automated X-Ray Experimental Standard Acquisition and Analysis
+Refit Experimental Standards
 
-This script configures and runs automated collection and fitting
-of EDS/WDS spectra from experimental standards (i.e., samples of known composition)
-to generate reference values of peak-to-background ratios.
-
-Requirements:
-    - Proper instrument calibration files and instrument driver for the selected microscope
+This script refits the X-ray spectra of experimental standards (i.e., samples of known composition) that were
+already acquired, e.g. with Run_Experimental_Standard_Collection.py, to recompute their reference values of
+peak-to-background (P/B) ratios. Use it after changing fitting settings, the detector model, or the settings of the
+standards below, without measuring the standards again.
 
 Typical usage:
-    - Edit the 'std_list' list to define your standards
-        Use preferably bulk standards. Powder standards are also acceptable, especially when making standards for analysing known precursor mixtures.
-    - Adjust configuration parameters as needed
-    - Run the script to collect experimental standards for one or multiple samples at a time
+    - List the IDs of the standards in 'std_ids': their folders in exp_std_dir (default: ./Std_measurements).
+    - Adjust the settings of the standards as needed (None keeps the values saved in each standard's ledger).
+    - Set update_std_library = True to write the new reference P/B values into the standards file of the microscope.
+    - Run the script.
 
 Created on Fri Aug 20 09:34:34 2025
 

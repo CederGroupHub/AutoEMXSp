@@ -199,7 +199,7 @@ def extract_experimental_standards_details(
     report_lines.append(f"Microscope ID: {microscope_ID}")
     report_lines.append(f"Standards source: {source_label}")
     if standards_json_path is not None:
-        report_lines.append(f"Custom standards file: {Path(standards_json_path).expanduser().resolve()}")
+        report_lines.append(f"Custom standards file: {Path(standards_json_path).name}")
     report_lines.append(
         f"Voltage filter: {requested_voltage} keV" if requested_voltage is not None else "Voltage filter: all"
     )

@@ -3,7 +3,7 @@ Experimental standards summary
 --------------------------------------------------------------------------------
 Microscope ID: PhenomXL
 Standards source: custom_project_file
-Custom standards file: /Users/Andrea_1/Desktop/Work/Codes/Repositories/AutoEMXSp/autoemx/calibrations/PhenomXL/EDS_Stds_15keV.json
+Custom standards file: EDS_Stds_15keV.json
 Voltage filter: 15 keV
 Standards files found: 1
 
