@@ -473,6 +473,20 @@ Plotting options
   reason, it is preferrable to plot them unless the plot becomes too clogged.
 
 
+Active analysis
+^^^^^^^^^^^^^^^
+
+Every analysis is saved in the sample's ``ledger.json`` and in its own
+``analysis_quant<i>_clust<j>`` folder. The *active* analysis provides the settings
+reused by later analyses and is the one shown by default in the GUI.
+
+- ``activate_new_analysis`` : When the settings create a new analysis, whether it
+  becomes the active one: ``"ask"`` (default in ``Run_Analysis.py``; asked once the
+  analysis is done), ``True`` or ``False``.
+- To list the analyses of a sample, or make another one active, run
+  ``autoemx/scripts/Set_Active_Analysis.py`` (or use **Set as active** in the GUI).
+
+
 Output
 ^^^^^^
 

@@ -101,6 +101,8 @@ plot_custom_plots = False # If True, auto-creates sample_folder/custom_plot.py (
 show_unused_compositions_cluster_plot = True
 intermixing_violin_plots = None # Violin plots of the intermixing of the reported mixtures. None keeps the saved value (by default, plotted for known phase mixtures)
 output_filename_suffix = ''
+activate_new_analysis = "ask" # If these settings create a new analysis, whether it becomes the active one (settings reused later, shown in the GUI): "ask", True or False.
+                              # The new analysis is saved either way; change the active one with Set_Active_Analysis.py
 
 # =============================================================================
 # Run
@@ -128,4 +130,5 @@ comp_analyzer = analyze_sample(
     show_unused_compositions_cluster_plot=show_unused_compositions_cluster_plot,
     intermixing_violin_plots=intermixing_violin_plots,
     output_filename_suffix=output_filename_suffix,
+    activate_new_analysis=activate_new_analysis,
 )

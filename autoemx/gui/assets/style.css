@@ -135,6 +135,7 @@ body, .dash-spreadsheet-container .dash-spreadsheet-inner td, .dash-spreadsheet-
 }
 .analysis-select { width: 400px; max-width: 100%; }
 .analysis-select .side-label { margin-bottom: 2px; }
+#set-active-btn { margin-top: 4px; }
 .summary { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; }
 .summary-actions { display: flex; gap: 6px; margin-left: auto; }
 .chip {

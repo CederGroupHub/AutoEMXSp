@@ -301,6 +301,9 @@ def _main() -> html.Div:
                         html.Label("Analysis", className="side-label"),
                         dcc.Dropdown(id="analysis-dd", options=[], placeholder="No analysis yet", clearable=False,
                                      className="analysis-dd"),
+                        html.Button("Set as active", id="set-active-btn", className="btn btn-small",
+                                    title="Make the shown analysis the active one: its settings are reused by "
+                                          "later analyses and it is shown by default"),
                     ], className="analysis-select"),
                     html.Div(id="summary", className="summary"),
                 ],
@@ -1137,6 +1140,26 @@ def create_app(results_dir: Optional[str] = None) -> Dash:
         Input({"type": "sem-thumb", "index": ALL}, "className"),
         Input("tabs", "value"),
     )
+
+    @app.callback(
+        Output("action-msg", "children", allow_duplicate=True),
+        Output("data-version", "data", allow_duplicate=True),
+        Input("set-active-btn", "n_clicks"),
+        State("sample-dd", "value"),
+        State("analysis-dd", "value"),
+        State("data-version", "data"),
+        prevent_initial_call=True,
+    )
+    def set_active(_, sample_dir, analysis_key, version):
+        info = get_info(sample_dir) if sample_dir else None
+        if info is None:
+            return html.Span("Select a sample first.", className="err"), no_update
+        try:
+            message = be.set_active_analysis(info, analysis_key)
+        except Exception as exc:
+            return html.Span(f"Could not change the active analysis: {exc}", className="err"), no_update
+        _info_cache.pop(sample_dir, None)
+        return html.Span(message, className="ok"), (version or 0) + 1
 
     @app.callback(
         Output("action-msg", "children", allow_duplicate=True),

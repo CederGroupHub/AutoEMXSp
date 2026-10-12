@@ -98,6 +98,51 @@ def _ensure_custom_plot_file(sample_dir: str, plot_cfg) -> None:
 
     plot_cfg.custom_plot_file = custom_plot_file
 
+def _ask_yes_no(question: str) -> bool:
+    """Ask a yes/no question in the console (Enter = yes). Returns True if no answer can be given."""
+    try:
+        answer = input(question)
+    except (EOFError, OSError):
+        logging.info("No console input available: answering yes.")
+        return True
+    return answer.strip().lower() not in ("n", "no")
+
+
+def _keep_or_revert_new_analysis(
+    ledger_path: str,
+    quantification_id: Optional[int],
+    previous_index: Optional[int],
+    n_previous_analyses: int,
+    activate_new_analysis: Union[bool, str],
+) -> None:
+    """Decide (or ask) whether a clustering analysis created by this run stays active; else restore the previous one."""
+    if quantification_id is None:
+        return
+    ledger = load_sample_ledger(ledger_path)
+    quant_config = next((q for q in ledger.quantifications if q.quantification_id == quantification_id), None)
+    if quant_config is None or len(quant_config.clustering_analyses) <= n_previous_analyses:
+        return  # No new analysis: an existing one with the same settings was reused
+    new_clustering_id = quant_config.clustering_analyses[-1].config.clustering_id
+    activate = activate_new_analysis
+    if activate == "ask":
+        activate = _ask_yes_no(
+            f"New clustering analysis {new_clustering_id} (quantification {quantification_id}). "
+            "Make it the active analysis? [Y/n] "
+        )
+    if activate:
+        return
+    quant_config.active_clustering_analysis_index = previous_index
+    ledger.to_json_file(ledger_path)
+    previous = (
+        f"clustering {quant_config.clustering_analyses[previous_index].config.clustering_id}"
+        if previous_index is not None else "none"
+    )
+    logging.info(
+        f"Clustering analysis {new_clustering_id} saved but not active: the active analysis is still {previous}. "
+        "Use Set_Active_Analysis.py to change it."
+    )
+
+
 def analyze_sample(
     sample_ID: str,
     results_path: Optional[str] = None,
@@ -126,6 +171,7 @@ def analyze_sample(
     plot_best_mixture: Optional[bool] = None,
     intermixing_violin_plots: Optional[bool] = None,
     show_legend_clustering: Optional[bool] = None,
+    activate_new_analysis: Union[bool, str] = True,
 ) -> Optional[EMXSp_Composition_Analyzer]:
     """
     Run clustering and analysis for a single sample.
@@ -220,6 +266,11 @@ def analyze_sample(
         (by default, they are plotted for samples quantified as known phase mixtures).
     show_legend_clustering : bool, optional
         Whether to show the legend in the clustering plot. If None, the saved value is kept.
+    activate_new_analysis : bool or "ask", optional
+        If the settings create a new clustering analysis, whether it becomes the active one (whose settings are
+        reused by later analyses, and shown by default in the GUI). "ask" asks once the analysis is done (if no
+        answer can be given, e.g. without a console, it becomes active). The new analysis is saved either way;
+        the active one can be changed later with set_active_analysis. Default: True.
         
     Returns
     -------
@@ -365,6 +416,14 @@ def analyze_sample(
         results_dir=sample_dir
     )
 
+    if activate_new_analysis not in (True, False, "ask"):
+        raise ValueError(f"activate_new_analysis must be True, False or 'ask', got {activate_new_analysis!r}")
+    # Active analysis before this run, to restore it if a new analysis is not made active
+    active_quant_config = ledger_cfgs.active_quant_config
+    previous_quantification_id = active_quant_config.quantification_id if active_quant_config is not None else None
+    previous_index = active_quant_config.active_clustering_analysis_index if active_quant_config is not None else None
+    n_previous_analyses = len(active_quant_config.clustering_analyses) if active_quant_config is not None else 0
+
     has_ledger = os.path.exists(ledger_path)
     source_label = "Data.csv (legacy format)" if (not has_ledger) else "ledger.json"
     logging.info(f"Running analysis for '{sample_ID}' (source: {source_label}).") 
@@ -387,5 +446,8 @@ def analyze_sample(
     else:
         utils.print_single_separator(f"Analysis was not successful for '{sample_ID}'.")
         comp_analyzer._warn_peak_overlaps()
-    
+
+    _keep_or_revert_new_analysis(
+        ledger_path, previous_quantification_id, previous_index, n_previous_analyses, activate_new_analysis
+    )
     return comp_analyzer

@@ -2143,6 +2143,19 @@ def find_analysis(info: SampleInfo, key: Optional[str]) -> Optional[AnalysisRef]
     return info.active_analysis
 
 
+def set_active_analysis(info: SampleInfo, key: Optional[str]) -> str:
+    """Make the analysis selected in the GUI the active one of its sample; returns a message for the user."""
+    from autoemx.runners.set_active_analysis import set_active_analysis as _set_active_analysis
+
+    ref = find_analysis(info, key) if key else None
+    if ref is None:
+        raise ValueError("Select an analysis first.")
+    if ref.is_active:
+        return f"quant{ref.quant_id} / clust{ref.clust_id} is already the active analysis."
+    _set_active_analysis(ref.quant_id, ref.clust_id, sample_path=info.sample_dir)
+    return f"quant{ref.quant_id} / clust{ref.clust_id} is now the active analysis."
+
+
 # =============================================================================
 # Raw spectra
 # =============================================================================

@@ -244,9 +244,11 @@ afterwards**. To run the analysis again with other parameters, open the **Analys
 2. **Set the parameters.** The form contains every clustering parameter, filled in with the
    values saved in the sample's ledger. Parameters not used with the current settings are
    greyed out. **Load settings of shown analysis** fills the form with the settings of the
-   analysis selected above the plot.
+   analysis selected above the plot. **Set as active** makes the selected analysis the active
+   one: its settings are then reused by later analyses and it is shown by default.
 
-   - *Spectra filtering*: maximum analytical error and accepted quant flags.
+   - *Spectra filtering*: maximum analytical error, minimum background counts (quant flag 8, applied
+     without re-quantifying) and accepted quant flags.
    - *Clustering*: method (k-means or DBSCAN), geometry (euclidean, Aitchison or auto; see
      :ref:`clustering_modes`), features (atomic or mass fractions), number of clusters (empty =
      found automatically, with the chosen method), **candidate phases**, and mixture
