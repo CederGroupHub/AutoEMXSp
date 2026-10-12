@@ -64,6 +64,9 @@ def fit_and_quantify_spectrum(
     quant_verbose: bool = True,
     fitting_verbose: bool = True,
     free_area_el_lines=None,
+    free_peak_shape_els=None,
+    free_peak_shape_params=None,
+    free_background_params=None,
     peaks_to_annotate: str = 'main',
     identify_missing_elements: bool = dflt.identify_missing_elements,
     quantify_plot: Optional[bool] = None,
@@ -172,6 +175,9 @@ def fit_and_quantify_spectrum(
         fitting_verbose=fitting_verbose,
         standards_dict = standards_dict,
         free_area_el_lines=free_area_el_lines,
+        free_peak_shape_els=free_peak_shape_els,
+        free_peak_shape_params=free_peak_shape_params,
+        free_background_params=free_background_params,
         identify_missing_elements=identify_missing_elements,
     )
 

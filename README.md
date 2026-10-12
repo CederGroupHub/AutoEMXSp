@@ -74,7 +74,6 @@ DOI: [https://doi.org/10.1038/s41467-026-76633-x](https://doi.org/10.1038/s41467
 - [🧪 Try quantification on your spectrum](#-try-quantification-on-your-spectrum)
 - [📘 Documentation](#-documentation)
 - [📦 Requirements](#-requirements)
-- [🆕 Coming Soon](#-coming-soon)
 - [📂 Project Structure](#-project-structure)
 - [📁 Scripts](#-scripts)
 - [🤝 Contributing](#-contributing)
@@ -115,14 +114,6 @@ Installation instructions, usage examples, and workflow descriptions are availab
 - ✅ Compatible with any Phenom microscope equipped with **PPI (Phenom Programming Interface)**.  
 - ⚠️ For other microscope models, the driver must be adapted to the appropriate API commands (easy to do with modern LLMs).  
 
-
----
-
-## 🆕 Coming Soon
-Here’s what’s planned for future releases of **AutoEMX**:
-- 📏 New scripts for **spectral parameter calibration** to extend the `XSp_calibs` library to your own instrument.
-
-Need one of these sooner, or a feature or guide that is not listed? Please ask for it in the [GitHub Discussions](https://github.com/CederGroupHub/AutoEMX/discussions): requests help us prioritize.
 
 ---
 
@@ -180,6 +171,7 @@ This repository includes a collection of scripts that streamline the use of **Au
 - **Refit_Experimental_Standards.py** — Refit previously acquired experimental standards.
 - **Modify_EDS_Standards_File.py** — Delete standards, or exclude them from the reference P/B values.
 - **Extract_Experimental_Standards_Details.py** — Summarize the available standards (elements, peaks, P/B values).
+- **Calibrate_Peak_Sigma_Params.py**, **Calibrate_Peak_Shape_Params.py**, **Calibrate_Background_Params.py** — Calibrate the detector model of a new microscope (peak widths, peak tails, background).
 
 ### ⚗️ Characterize Extent of Intermixing in Known Powder Mixtures  
 *(see [Chem. Mater. 2025, 37, 6807−6822](https://pubs.acs.org/doi/10.1021/acs.chemmater.5c01573) for example)*  
@@ -191,7 +183,7 @@ Use the same scripts as regular composition characterization, as described in th
 
 ## 🤝 Contributing
 
-Contributions are welcome!
+Contributions are welcome! Need a feature or guide that is not available? Please ask for it in the [GitHub Discussions](https://github.com/CederGroupHub/AutoEMX/discussions): requests help us prioritize.
 
 Open to collaborations to extend this package to different tools or to different types of samples, for example thin films.
 Please contact me at agiunto@lbl.gov

@@ -81,15 +81,9 @@ class PeakShapeParams(BaseModel):
     Calibration Procedure
     ---------------------
     The energy dependence and values of these parameters should be calibrated empirically using high-count spectra
-    from bulk standards, ideally pure elements. The recommended workflow is:
-
-    1. For each element of interest, fit spectra individually by adding the element symbol to `free_peak_shapes_els`
-       in the `Peaks_Model` class. This allows the ICC peak shape parameters to be freely optimized for that element.
-    2. Perform the fitting using your main fitting code or the script `FitSpectra.py`, which can automate fitting
-       across multiple spectra and elements and output the optimized parameters for each case.
-    3. Extract the fitted ICC parameters (gamma, f_tail, R_e, F_loss) from the lmfit output for each element/energy.
-    4. Fit the energy dependence of each parameter with the sigmoid form.
-    5. Update the coefficients with the new calibration results.
+    from bulk standards, ideally pure elements, with the script Calibrate_Peak_Shape_Params.py: it refits the
+    spectra with the chosen parameters (gamma, f_tail, R_e, F_loss) fitted freely for the chosen elements, fits the
+    chosen sigmoid coefficients to their values as a function of energy, and prints the coefficients to update.
 
     Accurate calibration of ICC parameters improves modeling of low-energy tailing and the quantitative accuracy of
     EDS fits, especially for light elements. These parameters are system- and detector-specific, and should be
@@ -138,17 +132,10 @@ class BackgroundParams(BaseModel):
     Calibration Procedure
     ---------------------
     The background model parameters (P, F, and beta) should be empirically calibrated using high-count spectra from
-    bulk standards. The recommended procedure is:
-
-    1. In the `Background_Model` class, set the `is_calibration` parameter to `True` in the function
-       `get_generated_background_mod_pars`. This enables background parameter calibration mode.
-    2. For each parameter (P, F, beta), select whether it should be varied freely or held fixed by manually setting
-       `vary=True/False` in the relevant parameter definition. This can be done to calibrate one parameter at a time or
-       all together.
-    3. Fit high-statistics spectra from well-characterized standards, ideally covering a range of atomic numbers Z,
-       to optimize the background parameters, e.g. with the script `FitSpectra.py`.
-    4. Extract the fitted values for P, F, and beta (as a function of Z) from the lmfit output.
-    5. Fit the Z-dependence of each parameter with the functional forms above, and update the coefficients.
+    bulk standards, ideally pure elements covering a range of atomic numbers Z, with the script
+    Calibrate_Background_Params.py: it refits the spectra with the chosen parameters (P, F, beta) fitted freely, fits
+    the chosen coefficients of their functions to their values as a function of Z, and prints the coefficients to
+    update. One parameter can be calibrated at a time, or all together.
 
     Accurate calibration of the background model is essential for quantification, especially for light elements and
     low-count regions, since it is used for composition-dependent background corrections in the PB method. These

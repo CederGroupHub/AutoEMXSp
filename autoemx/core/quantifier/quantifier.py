@@ -238,6 +238,9 @@ class XSp_Quantifier:
         verbose=False,
         fitting_verbose=False,
         free_area_el_lines=None,
+        free_peak_shape_els=None,
+        free_peak_shape_params=None,
+        free_background_params=None,
         identify_missing_elements=False,
         identification_pool=None,
         identification_settings=None,
@@ -381,6 +384,9 @@ class XSp_Quantifier:
         self.verbose = verbose
         self.fitting_verbose = fitting_verbose
         self.free_area_el_lines = free_area_el_lines
+        self.free_peak_shape_els = free_peak_shape_els
+        self.free_peak_shape_params = free_peak_shape_params
+        self.free_background_params = free_background_params
 
         # Identification of elements missing from the fit
         self.identify_missing_elements = bool(identify_missing_elements)
@@ -435,6 +441,9 @@ class XSp_Quantifier:
             print_evolving_params=False,
             verbose=self.fitting_verbose,
             free_area_el_lines=self.free_area_el_lines,
+            free_peak_shape_els=self.free_peak_shape_els,
+            free_peak_shape_params=self.free_peak_shape_params,
+            free_background_params=self.free_background_params,
         )
     
     

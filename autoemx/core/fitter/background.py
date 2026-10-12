@@ -73,6 +73,10 @@ class Background_Model:
         Elemental weight fractions.
     """
 
+    # Parameters of the generated background (modified Duncumb model), which can be fitted freely
+    BACKGROUND_PARAMS = ('P', 'F', 'beta')
+
+
     # Class variables for shared/cached state
     cls_beam_e: float = None
     den_int = None
@@ -93,9 +97,18 @@ class Background_Model:
         emergence_angle: float = 28.5,
         els_w_fr: dict = None,
         meas_mode: str = 'point',
-        energy_vals=None
+        energy_vals=None,
+        free_background_params=None,
     ):
-        """Initialize a Background_Model instance."""
+        """
+        Initialize a Background_Model instance.
+
+        free_background_params : list or None, optional
+            For calibration of the detector model: parameters of the generated background (modified Duncumb model)
+            fitted freely, among BACKGROUND_PARAMS ('P', 'F', 'beta'); the others are set by the calibrated functions
+            of the detector model. If None (default), P and F are set by the detector model, and beta is fitted
+            freely for bulk samples and set by the detector model for particles.
+        """
         if beam_energy is not None:
             type(self).cls_beam_e = beam_energy
 
@@ -106,6 +119,10 @@ class Background_Model:
         self.energy_vals = energy_vals
         self.meas_mode = meas_mode
         self.els_w_fr = els_w_fr if els_w_fr is not None else {}
+        self.free_background_params = None if free_background_params is None else tuple(free_background_params)
+        unknown = set(self.free_background_params or ()) - set(self.BACKGROUND_PARAMS)
+        if unknown:
+            raise ValueError(f"Unknown background parameters {sorted(unknown)}. Available: {self.BACKGROUND_PARAMS}")
 
         self._clear_cached_abs_att_variables()
 
@@ -607,7 +624,7 @@ class Background_Model:
         return beta_expr_full
     
     
-    def get_generated_background_mod_pars(self, fr_pars, is_calibration=False, model='DuncumbMod'):
+    def get_generated_background_mod_pars(self, fr_pars, model='DuncumbMod'):
         """Returns an lmfit Model and Parameters for continuum X-ray background."""
     
         els, _, _ = Background_Model._get_els_frs(**fr_pars)
@@ -657,19 +674,20 @@ class Background_Model:
     
             P_expr, F_expr, beta_expr_Z = calibs.get_calibrated_background_params(self.meas_mode)
     
-            if is_calibration:
-                P_par = dict(value=1.16, vary=True, min=1, max=1.3)
-                F_par = dict(value=1, vary=True, min=0.1, max=1.3)
-                beta_param = {'value': 0.2, 'vary': True, 'min': 0, 'max': 0.5} if model == 'duncumbmod' else {'value': 0, 'vary': False}
-            elif self.is_particle:
-                P_par = dict(expr=P_expr)
-                F_par = dict(expr=F_expr)
-                beta_expr = Background_Model.get_beta_expr(beta_expr_Z, els)
-                beta_param = {'expr': beta_expr} if model == 'duncumbmod' else {'value': 0, 'vary': False}
+            # Calibrated functions of the detector model, or fitted freely (free_background_params)
+            free_params = self.free_background_params or ()
+            P_par = dict(value=1.16, vary=True, min=1, max=1.3) if 'P' in free_params else dict(expr=P_expr)
+            F_par = dict(value=1, vary=True, min=0.1, max=1.3) if 'F' in free_params else dict(expr=F_expr)
+            if self.free_background_params is None:
+                is_beta_free = not self.is_particle  # fitted freely for bulk samples
             else:
-                P_par = dict(expr=P_expr)
-                F_par = dict(expr=F_expr)
-                beta_param = {'value': 0.2, 'vary': True, 'min': 0, 'max': 0.5} if model == 'duncumbmod' else {'value': 0, 'vary': False}
+                is_beta_free = 'beta' in free_params
+            if model != 'duncumbmod':
+                beta_param = {'value': 0, 'vary': False}
+            elif is_beta_free:
+                beta_param = {'value': 0.2, 'vary': True, 'min': 0, 'max': 0.5}
+            else:
+                beta_param = {'expr': Background_Model.get_beta_expr(beta_expr_Z, els)}
     
             params_bckgrnd = bckgrnd_m.make_params(
                 apply_det_response=dict(value=1, vary=False),

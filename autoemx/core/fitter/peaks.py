@@ -60,7 +60,7 @@ class Peaks_Model:
         Whether the sample is a particle (affects some constraints).
     free_area_el_lines : list
         Elements/lines whose area is fitted freely (for peak intensity weight calibration).
-    free_peak_shapes_els : list
+    free_peak_shape_els : list
         Elements whose peak shapes are calibrated (for shape calibration).
     fixed_peaks_dict : dict
         Tracks dependencies for overlapping peaks.
@@ -90,6 +90,8 @@ class Peaks_Model:
     center_offset_key = 'cen_offset'
     sigma_broadening_key = 'sigma_broad'
     gamma_key = 'gamma'
+    # Peak shape parameters of incomplete charge collection (ICC) tailing, which can be fitted freely
+    PEAK_SHAPE_PARAMS = ('gamma', 'f_tail', 'R_e', 'F_loss')
     tail_fraction_key = 'f_tail'
     F_loss_key = 'F_loss'
     R_e_key = 'R_e'
@@ -117,7 +119,8 @@ class Peaks_Model:
         xray_weight_refs_dict=None,
         is_particle=False,
         free_area_el_lines=None,
-        free_peak_shapes_els=None
+        free_peak_shape_els=None,
+        free_peak_shape_params=None,
     ):
         """
         Initialize a Peaks_Model instance for X-ray spectral peak modeling.
@@ -143,14 +146,17 @@ class Peaks_Model:
             Whether the sample is a particle (affects some constraints).
         free_area_el_lines : list or None, optional
             Elements/lines whose area is fitted freely (for peak intensity weight calibration).
-        free_peak_shapes_els : list or None, optional
-            Elements whose peak shapes are calibrated (for peak shape calibration).
+        free_peak_shape_els : list or None, optional
+            Elements whose peak shape parameters are fitted freely (for calibration of the detector model).
+        free_peak_shape_params : list or None, optional
+            Peak shape parameters fitted freely for free_peak_shape_els, among PEAK_SHAPE_PARAMS
+            ('gamma', 'f_tail', 'R_e', 'F_loss'). Default: all. The others keep their calibrated values.
 
         Notes
         -----
         - If `xray_weight_refs_dict` is not provided, it defaults to an empty dictionary.
         - If `free_area_el_lines` is not provided, it defaults to DEFAULT_FREE_AREA_EL_LINES.
-        - If `free_peak_shapes_els` is not provided, it defaults to an empty list.
+        - If `free_peak_shape_els` is not provided, it defaults to an empty list.
         - `icc_freq_spectra` is reset for each new instance.
         """
         # Store spectrum and energy values
@@ -177,10 +183,14 @@ class Peaks_Model:
             free_area_el_lines = list(DEFAULT_FREE_AREA_EL_LINES)
         self.free_area_el_lines = free_area_el_lines
 
-        # Elements whose peak shapes are calibrated (for shape calibration)
-        if free_peak_shapes_els is None:
-            free_peak_shapes_els = []
-        self.free_peak_shapes_els = free_peak_shapes_els
+        # Elements whose peak shape parameters are fitted freely, and which parameters (for shape calibration)
+        self.free_peak_shape_els = list(free_peak_shape_els or [])
+        if free_peak_shape_params is None:
+            free_peak_shape_params = self.PEAK_SHAPE_PARAMS
+        unknown = set(free_peak_shape_params) - set(self.PEAK_SHAPE_PARAMS)
+        if unknown:
+            raise ValueError(f"Unknown peak shape parameters {sorted(unknown)}. Available: {self.PEAK_SHAPE_PARAMS}")
+        self.free_peak_shape_params = tuple(free_peak_shape_params)
 
         # Reset icc spectra cache
         self.clear_cached_icc_spectra()
@@ -625,7 +635,7 @@ class Peaks_Model:
                         else:
                             peak_m = None
                 else:
-                    calibrate_peak_shape_params = el in self.free_peak_shapes_els
+                    calibrate_peak_shape_params = el in self.free_peak_shape_els
                     peak_m, _ = self._get_peak_model_and_update_pars(
                         params, line_energy, line_prefix,
                         is_calibration=calibrate_peak_shape_params,
@@ -677,7 +687,7 @@ class Peaks_Model:
                 params.add(line_prefix + self.center_offset_key, expr=f"{line_energy} - {line_prefix}{self.center_key}")
                 params.add(line_prefix + self.sigma_broadening_key, expr=f"{line_prefix}{self.sigma_key} / {sigma_init}")
     
-                calibrate_peak_shape_params = el in self.free_peak_shapes_els
+                calibrate_peak_shape_params = el in self.free_peak_shape_els
                 peak_m, _ = self._get_peak_model_and_update_pars(
                     params, line_energy, line_prefix,
                     is_calibration=calibrate_peak_shape_params
@@ -703,75 +713,62 @@ class Peaks_Model:
     
     
     def _get_peak_model_and_update_pars(self, params, line_energy, line_prefix, is_calibration=False, ref_line_prefix=None):
-        """Select and configure the appropriate peak model and update shape parameters."""
-    
+        """
+        Select and configure the appropriate peak model and update shape parameters.
+
+        Shape parameters have their calibrated values (detector model), fixed. If is_calibration, those in
+        free_peak_shape_params are fitted instead: freely for a reference line, or equal to those of its reference
+        line (ref_line_prefix) for the other lines of the element.
+        """
         gamma, f_tail, R_e, F_loss = calibs.get_calibrated_peak_shape_params(line_energy, self.meas_mode)
-    
-        if not is_calibration:
-            if line_energy < 1.18:
-                peak_m = Model(Peaks_Model._gaussian_with_tail, prefix=line_prefix)
-                params.add(line_prefix + self.gamma_key, value=gamma, vary=False)
-                params.add(line_prefix + self.tail_fraction_key, value=f_tail, vary=False)
-    
-            elif line_energy <= 1.839:
-                peak_m = Model(Peaks_Model._gaussian_with_tail_and_icc, prefix=line_prefix)
-                params.add(line_prefix + self.gamma_key, value=gamma, vary=False)
-                params.add(line_prefix + self.tail_fraction_key, value=f_tail, vary=False)
-                params.add(line_prefix + self.F_loss_key, value=F_loss, vary=False)
-                params.add(line_prefix + self.R_e_key, value=R_e, vary=False)
-    
-            elif line_energy <= 5:
-                peak_m = Model(Peaks_Model._gaussian_with_icc, prefix=line_prefix)
-                params.add(line_prefix + self.F_loss_key, value=F_loss, vary=False)
-                params.add(line_prefix + self.R_e_key, value=R_e, vary=False)
-    
+        values = {self.gamma_key: gamma, self.tail_fraction_key: f_tail, self.F_loss_key: F_loss, self.R_e_key: R_e}
+        free_params = set(self.free_peak_shape_params) if is_calibration else set()
+        tail_keys = [self.gamma_key, self.tail_fraction_key]
+        icc_keys = [self.F_loss_key, self.R_e_key]
+
+        if is_calibration and ref_line_prefix:
+            # Same model as the reference line
+            is_f_tail_param = params.get(ref_line_prefix + self.tail_fraction_key) is not None
+            is_F_loss_param = params.get(ref_line_prefix + self.F_loss_key) is not None
+            if is_f_tail_param and is_F_loss_param:
+                peak_m, keys = Model(Peaks_Model._gaussian_with_tail_and_icc, prefix=line_prefix), tail_keys + icc_keys
+            elif is_f_tail_param:
+                peak_m, keys = Model(Peaks_Model._gaussian_with_tail, prefix=line_prefix), tail_keys
+            elif is_F_loss_param:
+                peak_m, keys = Model(Peaks_Model._gaussian_with_icc, prefix=line_prefix), icc_keys
             else:
-                peak_m = Model(Peaks_Model._gaussian, prefix=line_prefix)
-    
+                peak_m, keys = Model(Peaks_Model._gaussian, prefix=line_prefix), []
+            for key in keys:
+                if key in free_params:
+                    params.add(line_prefix + key, expr=ref_line_prefix + key)
+                else:
+                    params.add(line_prefix + key, value=values[key], vary=False)
+            return peak_m, params
+
+        if line_energy < 1.18:
+            peak_m, keys = Model(Peaks_Model._gaussian_with_tail, prefix=line_prefix), tail_keys
+        elif line_energy <= 1.839:
+            peak_m, keys = Model(Peaks_Model._gaussian_with_tail_and_icc, prefix=line_prefix), tail_keys + icc_keys
+        elif line_energy <= 5:
+            peak_m, keys = Model(Peaks_Model._gaussian_with_icc, prefix=line_prefix), icc_keys
         else:
-            if not ref_line_prefix:
-                if line_energy < 1.18:
-                    peak_m = Model(Peaks_Model._gaussian_with_tail, prefix=line_prefix)
-                    params.add(line_prefix + self.gamma_key, value=gamma, vary=True, min=1, max=6)
-                    params.add(line_prefix + self.tail_fraction_key, value=f_tail, vary=True, min=0.0001, max=0.15)
-    
-                elif line_energy <= 1.839:
-                    peak_m = Model(Peaks_Model._gaussian_with_tail_and_icc, prefix=line_prefix)
-                    params.add(line_prefix + self.gamma_key, value=gamma, vary=True, min=1, max=4.5)
-                    params.add(line_prefix + self.tail_fraction_key, value=f_tail, vary=True, min=0.001, max=0.15)
-                    params.add(line_prefix + self.F_loss_key, value=F_loss, vary=True, min=0.01, max=0.5)
-                    params.add(line_prefix + self.R_e_key, value=R_e, vary=True, min=1e-6, max=7e-5)
-    
-                elif line_energy <= 5:
-                    peak_m = Model(Peaks_Model._gaussian_with_icc, prefix=line_prefix)
-                    params.add(line_prefix + self.F_loss_key, value=F_loss, vary=True, min=0.01, max=0.5)
-                    params.add(line_prefix + self.R_e_key, value=R_e, vary=True, min=1e-7, max=7e-5)
-    
-                else:
-                    peak_m = Model(Peaks_Model._gaussian, prefix=line_prefix)
+            peak_m, keys = Model(Peaks_Model._gaussian, prefix=line_prefix), []
+
+        # Bounds of the free parameters
+        bounds = {
+            self.gamma_key: (1, 6) if line_energy < 1.18 else (1, 4.5),
+            self.tail_fraction_key: (0.0001, 0.15) if line_energy < 1.18 else (0.001, 0.15),
+            self.F_loss_key: (0.01, 0.5),
+            self.R_e_key: (1e-6, 7e-5) if line_energy <= 1.839 else (1e-7, 7e-5),
+        }
+        for key in keys:
+            if key in free_params:
+                params.add(line_prefix + key, value=values[key], vary=True, min=bounds[key][0], max=bounds[key][1])
             else:
-                is_f_tail_param = params.get(ref_line_prefix + self.tail_fraction_key) is not None
-                is_F_loss_param = params.get(ref_line_prefix + self.F_loss_key) is not None
-    
-                if is_f_tail_param and is_F_loss_param:
-                    peak_m = Model(Peaks_Model._gaussian_with_tail_and_icc, prefix=line_prefix)
-                    params.add(line_prefix + self.gamma_key, expr=ref_line_prefix + self.gamma_key)
-                    params.add(line_prefix + self.tail_fraction_key, expr=ref_line_prefix + self.tail_fraction_key)
-                    params.add(line_prefix + self.F_loss_key, expr=ref_line_prefix + self.F_loss_key)
-                    params.add(line_prefix + self.R_e_key, expr=ref_line_prefix + self.R_e_key)
-                elif is_f_tail_param:
-                    peak_m = Model(Peaks_Model._gaussian_with_tail, prefix=line_prefix)
-                    params.add(line_prefix + self.gamma_key, expr=ref_line_prefix + self.gamma_key)
-                    params.add(line_prefix + self.tail_fraction_key, expr=ref_line_prefix + self.tail_fraction_key)
-                elif is_F_loss_param:
-                    peak_m = Model(Peaks_Model._gaussian_with_icc, prefix=line_prefix)
-                    params.add(line_prefix + self.F_loss_key, expr=ref_line_prefix + self.F_loss_key)
-                    params.add(line_prefix + self.R_e_key, expr=ref_line_prefix + self.R_e_key)
-                else:
-                    peak_m = Model(Peaks_Model._gaussian, prefix=line_prefix)
-    
+                params.add(line_prefix + key, value=values[key], vary=False)
+
         return peak_m, params
-    
+
     # =============================================================================
     # Fix parameters of overlapping peaks
     # =============================================================================

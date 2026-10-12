@@ -289,6 +289,9 @@ class XSp_Fitter:
         print_evolving_params=False,
         verbose=False,
         free_area_el_lines=None,
+        free_peak_shape_els=None,
+        free_peak_shape_params=None,
+        free_background_params=None,
     ):
         """Initialize the EDS spectrum fitter."""
         # Handle mutable default arguments
@@ -299,6 +302,10 @@ class XSp_Fitter:
         if els_w_fr is None:
             els_w_fr = {}
         self.free_area_el_lines = free_area_el_lines
+        # Peak shape and background parameters fitted freely (for calibration of the detector model)
+        self.free_peak_shape_els = free_peak_shape_els
+        self.free_peak_shape_params = free_peak_shape_params
+        self.free_background_params = free_background_params
         if xray_quant_ref_lines is None:
             xray_quant_ref_lines = ('Ka1', 'La1', 'Ma1')
 
@@ -460,7 +467,8 @@ class XSp_Fitter:
             self.emergence_angle,
             self.els_w_fr,
             self.meas_mode,
-            self.energy_vals
+            self.energy_vals,
+            free_background_params=self.free_background_params,
         )
         return bckgrnd_model_and_pars
     
@@ -620,6 +628,8 @@ class XSp_Fitter:
             xray_weight_refs_dict=self.el_lines_weight_refs_dict,
             is_particle=self.is_particle,
             free_area_el_lines=self.free_area_el_lines,
+            free_peak_shape_els=self.free_peak_shape_els,
+            free_peak_shape_params=self.free_peak_shape_params,
         )
         
         fitted_peaks = []
