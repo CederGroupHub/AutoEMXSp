@@ -268,10 +268,10 @@ def save_frame_image(frame_image, pixel_size_um, im_width, im_height,
     
     desc_str = json.dumps(image_description_d, ensure_ascii=True)
     
-    # Convert numpy arrays to Pillow Image objects.
+    # Convert numpy arrays to Pillow Image objects (RGB, from their 3 channels).
     is_annotated = bool(scalebar or im_annotations)
-    raw_image = Image.fromarray(frame_image_uint8.astype('uint8'), mode='RGB')
-    image = Image.fromarray(color_image.astype('uint8'), mode='RGB') if is_annotated else raw_image
+    raw_image = Image.fromarray(frame_image_uint8.astype('uint8'))
+    image = Image.fromarray(color_image.astype('uint8')) if is_annotated else raw_image
     # A raw copy is only useful when the saved image is annotated
     save_raw_copy = save_raw_image and is_annotated
 

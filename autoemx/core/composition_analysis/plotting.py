@@ -7,7 +7,6 @@ import os
 import warnings
 from typing import Any, List, Optional, Tuple
 
-import matplotlib.cm as cm
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
@@ -566,8 +565,8 @@ class PlottingModule:
         plt.rcParams['axes.labelsize'] = fontsize
         plt.rcParams['xtick.labelsize'] = fontsize
         plt.rcParams['ytick.labelsize'] = fontsize
-        purple_cmap = cm.get_cmap('Purples')
-        yellow_cmap = cm.get_cmap('autumn')
+        purple_cmap = plt.get_cmap('Purples')
+        yellow_cmap = plt.get_cmap('autumn')
 
         y_vals = np.asarray(W_mol_frs, dtype=float)[:, 0]
         fig, ax_left = plt.subplots(figsize=(4, 4))
@@ -624,8 +623,8 @@ class PlottingModule:
         plt.rcParams['axes.labelsize'] = fontsize
         plt.rcParams['xtick.labelsize'] = fontsize
         plt.rcParams['ytick.labelsize'] = fontsize
-        purple_cmap = cm.get_cmap('Purples')
-        yellow_cmap = cm.get_cmap('autumn')
+        purple_cmap = plt.get_cmap('Purples')
+        yellow_cmap = plt.get_cmap('autumn')
 
         x = np.asarray(W_mol_frs, dtype=float)
         n_phases = x.shape[1]
@@ -923,7 +922,7 @@ class PlottingModule:
                 corner_labels.append(ax.text(x + dx, y + dy, f'{el} ({unit})', ha='center', va='center', fontsize=fontsize))
         if len(phases) == 2:
             PlottingModule._plot_reconstruction(ax, P, txy(W @ H))
-        ax.scatter(P[:, 0], P[:, 1], color=cm.get_cmap('viridis')(0.0), marker='o', s=25, alpha=0.8, label='Compositions', zorder=2)
+        ax.scatter(P[:, 0], P[:, 1], color=plt.get_cmap('viridis')(0.0), marker='o', s=25, alpha=0.8, label='Compositions', zorder=2)
         ax.plot(*(np.vstack([Q, Q[:1]]) if len(Q) > 2 else Q).T, '-', color='blue', lw=1.5, zorder=2)
         texts = PlottingModule._plot_other_refs(ax, {f: txy(v)[0] for f, v in other_refs.items()}, view, fontsize)
         texts += PlottingModule._label_mixture_phases(ax, Q, phases, fontsize, corners)
@@ -949,7 +948,7 @@ class PlottingModule:
         else:
             view = ((0, 100), (0, 100))
         PlottingModule._plot_reconstruction(ax, P, Rp)
-        ax.scatter(P[:, 0], P[:, 1], color=cm.get_cmap('viridis')(0.0), marker='o', s=25, alpha=0.8, label='Compositions', zorder=2)
+        ax.scatter(P[:, 0], P[:, 1], color=plt.get_cmap('viridis')(0.0), marker='o', s=25, alpha=0.8, label='Compositions', zorder=2)
         ax.plot(*Q.T, '-', color='blue', lw=1.5, zorder=2)
         texts = PlottingModule._plot_other_refs(ax, {f: v * 100 for f, v in other_refs.items()}, view, fontsize)
         texts += PlottingModule._label_mixture_phases(ax, Q, phases, fontsize)
