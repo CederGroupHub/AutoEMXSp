@@ -140,7 +140,7 @@ def test_extract_spectrum_info_inserts_size_columns():
     analyser = object.__new__(EMXSp_Composition_Analyzer)
     spectrum = _spectrum(7, spectrum_id="3")
     particle = ParticleInfo(id=7, area_um=4.0129, eq_diameter_um=2.256758334)
-    row = analyser._extract_spectrum_info(
+    row = LedgerModule._extract_spectrum_info(analyser, 
         spectrum, 3, particles_by_id={7: particle}
     )
     keys = list(row.keys())
@@ -157,7 +157,7 @@ def test_extract_spectrum_info_inserts_size_columns():
 
 def test_extract_spectrum_info_omits_size_columns_without_particles():
     analyser = object.__new__(EMXSp_Composition_Analyzer)
-    row = analyser._extract_spectrum_info(_spectrum(1), 0, particles_by_id=None)
+    row = LedgerModule._extract_spectrum_info(analyser, _spectrum(1), 0, particles_by_id=None)
     assert cnst.PAR_AREA_UM_KEY not in row
     assert cnst.PAR_EQ_D_KEY not in row
 
@@ -192,7 +192,7 @@ def test_update_particles_from_clustering(outputs_dir: Path):
         clusters_assigned_mixtures=[[], []],
     )
     # spectrum 0 -> cluster 0, spectrum 1 -> cluster 1, spectrum 2 -> cluster 0
-    changed = analyser._update_particles_from_clustering(
+    changed = LedgerModule._update_particles_from_clustering(analyser, 
         ledger,
         labels=[0, 1, 0],
         df_indices=[0, 1, 2],
@@ -218,7 +218,7 @@ def test_update_particles_noop_when_empty(outputs_dir: Path):
         particles=[],
     )
     result = ClusteringResult(centroids=[], wcss=0.0, sil_score=0.0, tot_n_points=0)
-    assert not analyser._update_particles_from_clustering(
+    assert not LedgerModule._update_particles_from_clustering(analyser, 
         ledger, labels=[0], df_indices=[0], clustering_result=result
     )
 
@@ -235,7 +235,7 @@ def test_upsert_particle_info_sets_frame_id_and_coordinates(outputs_dir: Path):
         particles=[],
     )
     coords = Coordinate2D(x=3.5, y=-1.25)
-    analyser._upsert_particle_info(
+    LedgerModule._upsert_particle_info(analyser, 
         ledger,
         particle_id=4,
         area_um=math.pi,
@@ -251,7 +251,7 @@ def test_upsert_particle_info_sets_frame_id_and_coordinates(outputs_dir: Path):
     assert particle.coordinates.y == pytest.approx(-1.25)
     assert particle.eq_diameter_um == pytest.approx(2.0)
 
-    analyser._upsert_particle_info(
+    LedgerModule._upsert_particle_info(analyser, 
         ledger,
         particle_id=4,
         area_um=None,

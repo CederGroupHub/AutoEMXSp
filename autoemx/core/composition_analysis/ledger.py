@@ -25,8 +25,10 @@ from autoemx.config.schema_models import (
     Coordinate2D,
     LedgerConfigs,
     LedgerVersionError,
+    ParticleInfo,
     QuantificationConfig,
     SampleLedger,
+    SpectrumEntry,
     SpotCoordinates,
 )
 from autoemx.utils.legacy.ledger_bootstrap import create_analyzer_ledger_from_legacy_data_csv
@@ -375,3 +377,225 @@ class LedgerModule:
             sample_substrate_cfg=self.sample_substrate_cfg,
             plot_cfg=self.plot_cfg,
         )
+
+    def _extract_spectrum_info(
+        self: Any,
+        spectrum: 'SpectrumEntry',
+        index: int,
+        particles_by_id: Optional[Dict[int, ParticleInfo]] = None,
+    ) -> dict:
+        """Extract spectrum metadata from a ledger SpectrumEntry for use in CSV export."""
+        par_id = frame_id = ""
+        particle_id_int: Optional[int] = None
+        acq = spectrum.acquisition_details
+        if acq is not None:
+            particle_id_int = acq.particle_id
+            par_id = str(acq.particle_id) if acq.particle_id is not None else ""
+            frame_id = str(acq.frame_id or "")
+
+        row = {
+            cnst.SP_ID_DF_KEY: str(spectrum.spectrum_id) if spectrum.spectrum_id is not None else str(index),
+            cnst.PAR_ID_DF_KEY: par_id,
+        }
+        if particles_by_id:
+            particle = particles_by_id.get(particle_id_int) if particle_id_int is not None else None
+            if particle is not None and particle.area_um is not None:
+                row[cnst.PAR_AREA_UM_KEY] = round(float(particle.area_um), 3)
+            else:
+                row[cnst.PAR_AREA_UM_KEY] = ""
+            if particle is not None and particle.eq_diameter_um is not None:
+                row[cnst.PAR_EQ_D_KEY] = round(float(particle.eq_diameter_um), 3)
+            else:
+                row[cnst.PAR_EQ_D_KEY] = ""
+        row[cnst.FRAME_ID_DF_KEY] = frame_id
+        return row
+
+    def _upsert_particle_info(
+        self: Any,
+        ledger: SampleLedger,
+        particle_id: int,
+        area_um: Optional[float],
+        frame_id: Optional[str] = None,
+        coordinates: Optional[Coordinate2D] = None,
+        image_pixel_size_um: Optional[float] = None,
+    ) -> None:
+        """Create or update the ParticleInfo entry for a particle in the ledger."""
+        eq_diameter_um = (
+            LedgerModule._eq_diameter_um_from_area(area_um) if area_um is not None else None
+        )
+        for particle in ledger.particles:
+            if particle.id == particle_id:
+                if area_um is not None:
+                    particle.area_um = area_um
+                    particle.eq_diameter_um = eq_diameter_um
+                if frame_id is not None:
+                    particle.frame_id = frame_id
+                if coordinates is not None:
+                    particle.coordinates = coordinates
+                if image_pixel_size_um is not None:
+                    particle.image_pixel_size_um = image_pixel_size_um
+                return
+        ledger.particles.append(
+            ParticleInfo(
+                id=particle_id,
+                area_um=area_um,
+                eq_diameter_um=eq_diameter_um,
+                frame_id=frame_id,
+                coordinates=coordinates,
+                image_pixel_size_um=image_pixel_size_um,
+            )
+        )
+
+    def _update_particles_from_clustering(
+        self: Any,
+        ledger: SampleLedger,
+        labels: Optional[List],
+        df_indices: Optional[List],
+        clustering_result: ClusteringResult,
+    ) -> bool:
+        """
+        Fill ParticleInfo.clusters and .composition from the active clustering run.
+
+        Returns True if the ledger was modified.
+        """
+        if not ledger.particles or labels is None or df_indices is None:
+            return False
+
+        clusters_by_particle: Dict[int, List[int]] = {
+            particle.id: [] for particle in ledger.particles
+        }
+        for label_pos, spectrum_index in enumerate(df_indices):
+            if label_pos >= len(labels):
+                continue
+            cluster_id = labels[label_pos]
+            if cluster_id is None or pd.isna(cluster_id):
+                continue
+            cluster_id_int = int(cluster_id)
+            if cluster_id_int < 0:
+                continue
+            if spectrum_index < 0 or spectrum_index >= len(ledger.spectra):
+                continue
+            acq = ledger.spectra[spectrum_index].acquisition_details
+            if acq is None or acq.particle_id is None:
+                continue
+            particle_id = int(acq.particle_id)
+            if particle_id not in clusters_by_particle:
+                continue
+            if cluster_id_int not in clusters_by_particle[particle_id]:
+                clusters_by_particle[particle_id].append(cluster_id_int)
+
+        changed = False
+        for particle in ledger.particles:
+            ordered_clusters = sorted(clusters_by_particle.get(particle.id, []))
+            composition = LedgerModule._format_particle_composition_string(
+                ordered_clusters, clustering_result
+            )
+            if particle.clusters != ordered_clusters or particle.composition != composition:
+                particle.clusters = ordered_clusters
+                particle.composition = composition
+                changed = True
+        return changed
+
+    def _attach_particle_stats_ledger(self: Any) -> None:
+        """Create or load a SampleLedger and attach it to the particle finder for PSD."""
+        ledger = LedgerModule._load_existing_ledger(self)
+        if ledger is None:
+            ledger = SampleLedger(
+                sample_id=self.sample_id,
+                sample_path=os.path.abspath(self.sample_result_dir),
+                configs=LedgerModule._build_ledger_configs(self),
+                spectra=[],
+                particles=[],
+                quantifications=[],
+                active_quant=None,
+            )
+        else:
+            # Fresh PSD run replaces prior particle geometry records.
+            ledger.particles = []
+            ledger.configs = LedgerModule._build_ledger_configs(self)
+        ledger_path = LedgerModule._get_ledger_path(self)
+        ledger.to_json_file(ledger_path)
+
+        particle_finder = None
+        if getattr(self, "EM_controller", None) is not None:
+            particle_finder = getattr(self.EM_controller, "particle_finder", None)
+        if particle_finder is not None:
+            particle_finder.attach_stats_ledger(ledger, ledger_path=ledger_path)
+
+    def _configure_list_particle_selection(self: Any) -> None:
+        """Validate and attach list-mode particle targets to the particle finder."""
+        if self._particle_ids is not None and self._particle_coords_mm is not None:
+            raise ValueError(
+                "Provide exactly one of particle_ids or particle_coords_mm for "
+                "par_selection_mode='list'"
+            )
+        if self._particle_ids is None and self._particle_coords_mm is None:
+            raise ValueError(
+                "par_selection_mode='list' requires particle_ids or particle_coords_mm"
+            )
+
+        particle_finder = None
+        if getattr(self, "EM_controller", None) is not None:
+            particle_finder = getattr(self.EM_controller, "particle_finder", None)
+        if particle_finder is None:
+            raise RuntimeError(
+                "Particle finder is not available for list particle selection"
+            )
+
+        ledger = LedgerModule._load_or_create_ledger(self)
+        particle_finder.set_particle_targets(
+            particle_ids=self._particle_ids,
+            particle_coords_mm=self._particle_coords_mm,
+            ledger=ledger,
+        )
+
+    def _record_acquired_spectrum(
+        self: Any,
+        spectrum_entry: SpectrumEntry,
+        particle_id: Optional[int] = None,
+        particle_area_um: Optional[float] = None,
+        frame_id: Optional[str] = None,
+        particle_coordinates: Optional[Coordinate2D] = None,
+        image_pixel_size_um: Optional[float] = None,
+    ) -> None:
+        """
+        Add a newly acquired spectrum to the ledger (created if missing), with its particle if particle_id is
+        given, and save the ledger.
+        """
+        try:
+            ledger = LedgerModule._load_existing_ledger(self)
+        except Exception:
+            ledger = None
+        if ledger is None:
+            ledger = SampleLedger(
+                sample_id=self.sample_id,
+                sample_path=os.path.abspath(self.sample_result_dir),
+                configs=LedgerModule._build_ledger_configs(self),
+                spectra=[],
+                particles=[],
+                quantifications=[],
+                active_quant=None,
+            )
+        ledger.spectra.append(spectrum_entry)
+        if particle_id is not None:
+            LedgerModule._upsert_particle_info(
+                self,
+                ledger,
+                particle_id=particle_id,
+                area_um=particle_area_um,
+                frame_id=frame_id,
+                coordinates=particle_coordinates,
+                image_pixel_size_um=image_pixel_size_um,
+            )
+        ledger.to_json_file(LedgerModule._get_ledger_path(self))
+
+    def _backfill_particles_from_clustering(
+        self: Any,
+        labels: Optional[List],
+        df_indices: Optional[List],
+        clustering_result: ClusteringResult,
+    ) -> None:
+        """Save the clusters and composition of each particle of the ledger, from the clustering result."""
+        ledger = LedgerModule._load_or_create_ledger(self)
+        if LedgerModule._update_particles_from_clustering(self, ledger, labels, df_indices, clustering_result):
+            ledger.to_json_file(LedgerModule._get_ledger_path(self))
