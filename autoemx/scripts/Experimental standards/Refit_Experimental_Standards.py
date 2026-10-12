@@ -38,8 +38,13 @@ exp_std_dir = None # Defines directory where measurements are saved. If None, us
 
 std_ids = ['Al']
 
-#TODO ensure that you can modify all the necessary parameters from here instead of having to open the stdanrd ledger.json file in the standard folder
-# els_to_use_for_mean_PB_calc: elements to include as standards; default is ["all"] if sample is "bulk", None otherwise. (all elements/lines). Use ["Fe", "O"] for specific elements, []/["none"] for none.
+# =============================================================================
+# Standard settings. None keeps the value saved in each standard's ledger; values given apply to this run only.
+# =============================================================================
+els_to_use_for_mean_PB_calc = None  # Elements whose P/B ratios are used for the mean reference values: e.g. ["Fe", "O"]; ["all"] for all, [] or ["none"] for none
+min_acceptable_PB_ratio = None  # Minimum P/B ratio for a peak to be accepted as a standard (cnts/(cnts*keV^-1))
+quant_flags_accepted = None  # Quantification flags of the spectra used for the standard, e.g. [0]
+generate_separate_std_dict = None  # If True, updates a separate standards file in the project folder instead of the main one
 
 # =============================================================================
 
@@ -63,6 +68,10 @@ exp_std_maker = batch_fit_experimental_stds(
     min_bckgrnd_cnts=min_bckgrnd_cnts,
     update_std_library = update_std_library,
     els_substrate=els_substrate,
+    els_to_use_for_mean_PB_calc=els_to_use_for_mean_PB_calc,
+    min_acceptable_PB_ratio=min_acceptable_PB_ratio,
+    quant_flags_accepted=quant_flags_accepted,
+    generate_separate_std_dict=generate_separate_std_dict,
     output_filename_suffix=output_filename_suffix,
     verbose=True,
     stds_path = exp_std_dir

@@ -27,6 +27,7 @@ from autoemx.config.ledger_io import ledger_runtime_configs, load_sample_ledger
 import autoemx.utils.constants as cnst
 import autoemx.config.defaults as dflts
 from autoemx.config.schema_models.standards import EDSStandardsFile
+from autoemx.config.runtime_configs import ExpStandardsConfig
 
 
 logging.basicConfig(
@@ -48,6 +49,10 @@ def batch_fit_experimental_stds(
     els_sample: Optional[List[str]] = None,
     els_w_frs: Optional[Dict[str, float]] = None,
     els_substrate: Optional[List[str]] = None,
+    els_to_use_for_mean_PB_calc: Optional[List[str]] = None,
+    min_acceptable_PB_ratio: Optional[float] = None,
+    quant_flags_accepted: Optional[List[int]] = None,
+    generate_separate_std_dict: Optional[bool] = None,
     output_filename_suffix: str = '',
     verbose: bool = True,
     stds_path: Optional["str | Path"] = None,
@@ -80,6 +85,18 @@ def batch_fit_experimental_stds(
     els_substrate : Optional[List[str]], optional
         List of elements in the substrate. If None, defaults to all elements in the sample.
         If the first entry is "" or None, the rest of the list is appended to the list loaded from the ledger; otherwise, the provided list replaces it.
+    els_to_use_for_mean_PB_calc : list of str, optional
+        Elements whose P/B ratios are used for the mean reference values (ExpStandardsConfig.els_to_use_for_mean_PB_calc):
+        e.g. ["Fe", "O"]; ["all"] for all elements; [] or ["none"] for none.
+    min_acceptable_PB_ratio : float, optional
+        Minimum P/B ratio for a peak to be accepted as a standard (ExpStandardsConfig.min_acceptable_PB_ratio).
+    quant_flags_accepted : list of int, optional
+        Quantification flags of the spectra used for the standard (ExpStandardsConfig.quant_flags_accepted).
+    generate_separate_std_dict : bool, optional
+        Whether to update a separate standards file in the project folder instead of the main one
+        (ExpStandardsConfig.generate_separate_std_dict).
+        For these four parameters, None (default) keeps the value saved in each standard's ledger. Values given apply
+        to this run only, like the other parameters of this function.
     output_filename_suffix : str, optional
         Suffix for the output filename.
     verbose : bool, optional
@@ -205,6 +222,17 @@ def batch_fit_experimental_stds(
 
         if els_w_frs is not None and len(els_w_frs) > 0:
             sample_cfg.w_frs = els_w_frs
+
+        # Settings of the standard given here replace those saved in its ledger (validated again)
+        exp_stds_overrides = {
+            "els_to_use_for_mean_PB_calc": els_to_use_for_mean_PB_calc,
+            "min_acceptable_PB_ratio": min_acceptable_PB_ratio,
+            "quant_flags_accepted": quant_flags_accepted,
+            "generate_separate_std_dict": generate_separate_std_dict,
+        }
+        exp_stds_overrides = {key: value for key, value in exp_stds_overrides.items() if value is not None}
+        if exp_stds_overrides:
+            exp_stds_cfg = ExpStandardsConfig.model_validate({**exp_stds_cfg.model_dump(), **exp_stds_overrides})
 
         if min_bckgrnd_cnts is not None:
             clustering_cfg.min_bckgrnd_cnts = min_bckgrnd_cnts

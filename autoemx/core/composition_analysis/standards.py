@@ -198,6 +198,7 @@ class StandardsModule:
         ledger-backed) and no longer relies on a temporary DataFrame export.
         """
         accepted_flags = set(self.exp_stds_cfg.quant_flags_accepted)
+        min_pb_ratio = self.exp_stds_cfg.min_acceptable_PB_ratio
         ref_lines = set(XSp_Quantifier.xray_quant_ref_lines)
         detectable = set(self.detectable_els_sample)
 
@@ -219,6 +220,9 @@ class StandardsModule:
                     continue
                 if peak.pb_ratio is None:
                     continue
+                # Peaks too weak to be used as standards (P/B ratio below min_acceptable_PB_ratio)
+                if min_pb_ratio is not None and peak.pb_ratio < min_pb_ratio:
+                    continue
 
                 if peak_key not in pb_by_line:
                     pb_by_line[peak_key] = []
@@ -232,13 +236,7 @@ class StandardsModule:
             if len(meas_pb_ratios) < 1:
                 continue
 
-            if el_line in th_energy_by_line:
-                th_energy = th_energy_by_line[el_line]
-            elif el_line in self._th_peak_energies:
-                th_energy = float(self._th_peak_energies[el_line])
-            else:
-                # Keep compatibility with previous behavior if energy cache is absent.
-                th_energy = float("nan")
+            th_energy = th_energy_by_line.get(el_line, float("nan"))
 
             std_ref_lines[el_line] = StandardFitLineResult.model_validate({
                 "pb_ratios": meas_pb_ratios,
@@ -304,31 +302,6 @@ class StandardsModule:
                 logger.info(f"⏳ {n_remaining} more valid spectra required.")
 
         return num_valid_spectra, is_fit_successful, is_converged
-
-    def _assemble_std_PB_data(
-        self: Any,
-        data_df: "pd.DataFrame"
-    ) -> Dict[str, Dict[str, Union[float, List[float]]]]:
-        data_df = data_df.dropna(axis=1, how="all")
-        if cnst.QUANT_FLAG_DF_KEY not in data_df.columns:
-            raise RuntimeError(f"Missing required column '{cnst.QUANT_FLAG_DF_KEY}' in input DataFrame.")
-        data_filtered_df = data_df[data_df[cnst.QUANT_FLAG_DF_KEY].isin(self.exp_stds_cfg.quant_flags_accepted)]
-
-        all_fitted_el_lines = [el_line for el_line in self._th_peak_energies.keys() if el_line in data_filtered_df.columns]
-        fitted_std_el_lines = [el_line for el_line in all_fitted_el_lines if el_line.split("_")[0] in self.detectable_els_sample]
-
-        std_ref_lines = {}
-        for el_line in fitted_std_el_lines:
-            meas_pb_ratios = data_filtered_df[el_line].tolist()
-            if len(meas_pb_ratios) > 0:
-                std_ref_lines[el_line] = {
-                    cnst.PB_RATIO_KEY: meas_pb_ratios,
-                    cnst.MEAN_PB_KEY: float(np.nanmean(meas_pb_ratios)),
-                    cnst.STDEV_PB_DF_KEY: float(np.nanstd(meas_pb_ratios)),
-                    cnst.PEAK_TH_ENERGY_KEY: self._th_peak_energies[el_line],
-                }
-
-        return std_ref_lines
 
     def _calc_corrected_PB(
         self: Any,
