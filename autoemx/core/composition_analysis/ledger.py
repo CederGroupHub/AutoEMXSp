@@ -18,22 +18,27 @@ import pandas as pd
 
 import autoemx.config.defaults as dflt
 import autoemx.utils.constants as cnst
-from autoemx.config.ledger_io import _background_relpath, ingest_spectra
+from autoemx._version import __version__ as AUTOEMX_VERSION
+from autoemx.config.ledger_io import _background_relpath, get_active_quantification_config, ingest_spectra
 from autoemx.config.schema_models import (
     ClusteringConfig as LedgerClusteringConfig,
     ClusteringResult,
     Coordinate2D,
     LedgerConfigs,
     LedgerVersionError,
+    EDSStandardsFile,
     ParticleInfo,
     QuantificationConfig,
+    QuantificationResult,
     SampleLedger,
     SpectrumEntry,
     SpotCoordinates,
 )
 from autoemx.utils.legacy.ledger_bootstrap import create_analyzer_ledger_from_legacy_data_csv
 from autoemx.utils.legacy.legacy_config_loader import has_legacy_data_csv
+from autoemx.core.quantifier import XSp_Quantifier
 from .reference_matching import ReferenceMatchingModule
+from .standards import StandardsModule
 
 from autoemx._logging import get_logger
 logger = get_logger(__name__)
@@ -599,3 +604,461 @@ class LedgerModule:
         ledger = LedgerModule._load_or_create_ledger(self)
         if LedgerModule._update_particles_from_clustering(self, ledger, labels, df_indices, clustering_result):
             ledger.to_json_file(LedgerModule._get_ledger_path(self))
+
+    def _ensure_quant_tracking_length(self: Any, total_spectra: int) -> None:
+        """Ensure in-memory quantification tracking lists are indexable for all spectra."""
+        if len(self.spectra_quant_records) < total_spectra:
+            self.spectra_quant_records.extend([None] * (total_spectra - len(self.spectra_quant_records)))
+
+    def _ensure_current_quantification_run(self: Any, force_new: bool = False) -> None:
+        """Resolve the active quantification run for this launch.
+
+        Parameters
+        ----------
+        force_new : bool
+            If True, always create a new quantification config id.
+        """
+        existing_ledger = LedgerModule._load_or_create_ledger(self)
+        active_quant_config = LedgerModule._get_active_quantification_config(existing_ledger)
+        active_quant_has_results = (
+            active_quant_config is not None
+            and LedgerModule._ledger_has_quantification_results(
+                existing_ledger,
+                int(active_quant_config.quantification_id),
+            )
+        )
+
+        current_sample_elements = list(self.all_els_sample)
+        current_substrate_elements = list(self.all_els_substrate)
+        current_options = LedgerModule._build_quantification_options(self)
+        current_reference_values = LedgerModule._get_reference_values_by_el_line(self, active_quant_config=active_quant_config)
+
+        candidate_id = (
+            active_quant_config.quantification_id
+            if active_quant_config is not None
+            else LedgerModule._next_quantification_id(existing_ledger)
+        )
+        candidate_config = LedgerModule._build_quantification_config(self, 
+            quantification_id=candidate_id,
+            sample_elements=current_sample_elements,
+            substrate_elements=current_substrate_elements,
+            options=current_options,
+            reference_values_by_el_line=current_reference_values,
+        )
+
+        if (
+            not force_new
+            and active_quant_config is not None
+            and LedgerModule._quantification_configs_match(active_quant_config, candidate_config)
+        ):
+            self.current_quant_config = active_quant_config
+            self.current_quantification_id = active_quant_config.quantification_id
+            LedgerModule._update_non_fingerprint_options(self.current_quant_config, candidate_config)
+            # Even when reusing quantification settings, clustering inputs (e.g., ref_formulae
+            # passed via runners as sample['cnd']) may have changed for this run.
+            self._ensure_current_clustering_run(
+                self.current_quant_config,
+            )
+            self._apply_active_clustering_config(self.current_quant_config)
+            return
+
+        # Same science as a prior (non-active) run: reuse the latest matching fingerprint.
+        if not force_new and existing_ledger is not None:
+            matching_prior = [
+                config
+                for config in existing_ledger.quantifications
+                if LedgerModule._quantification_configs_match(config, candidate_config)
+            ]
+            if matching_prior:
+                latest_match = max(matching_prior, key=lambda config: config.quantification_id)
+                self.current_quant_config = latest_match
+                self.current_quantification_id = latest_match.quantification_id
+                LedgerModule._update_non_fingerprint_options(self.current_quant_config, candidate_config)
+                self._ensure_current_clustering_run(self.current_quant_config)
+                self._apply_active_clustering_config(self.current_quant_config)
+                return
+
+        if not force_new and active_quant_config is not None:
+            changes = active_quant_config.fingerprint_differences(candidate_config)
+            if changes:
+                changed_summary = LedgerModule._format_quantification_config_changes(changes)
+                if not active_quant_has_results:
+                    logger.info(
+                        "🆕 Quantification scientific fingerprint changed; "
+                        "replacing unused active quantification config.\n%s",
+                        changed_summary,
+                    )
+                    self.current_quant_config = candidate_config
+                    self.current_quantification_id = candidate_config.quantification_id
+                    self._ensure_current_clustering_run(
+                        self.current_quant_config,
+                    )
+                    self._apply_active_clustering_config(self.current_quant_config)
+                    return
+                logger.info(
+                    "🆕 Quantification scientific fingerprint changed; "
+                    "creating a new quantification config.\n%s",
+                    changed_summary,
+                )
+
+        quantification_id = LedgerModule._next_quantification_id(existing_ledger)
+        self.current_quant_config = LedgerModule._build_quantification_config(self, 
+            quantification_id=quantification_id,
+            sample_elements=current_sample_elements,
+            substrate_elements=current_substrate_elements,
+            options=current_options,
+            reference_values_by_el_line=current_reference_values,
+        )
+        self.current_quantification_id = quantification_id
+        self._ensure_current_clustering_run(self.current_quant_config)
+        self._apply_active_clustering_config(self.current_quant_config)
+
+    def _build_quantification_options(self: Any) -> Dict[str, Any]:
+        """Build the subset of quantification options that defines result reuse."""
+        options: Dict[str, Any] = {
+            "method": self.quant_cfg.method,
+            "spectrum_lims": [
+                float(self.quant_cfg.spectrum_lims[0]),
+                float(self.quant_cfg.spectrum_lims[1]),
+            ],
+            "fit_tolerance": float(self.quant_cfg.fit_tolerance),
+            "use_instrument_background": bool(self.quant_cfg.use_instrument_background),
+            # Effective quantifier state values that materially affect quantification output.
+            "is_particle": bool(self._apply_geom_factors),
+            "beam_energy_keV": float(self.measurement_cfg.beam_energy_keV),
+            "emergence_angle": float(self.measurement_cfg.emergence_angle),
+            "det_ch_offset": float(self.det_ch_offset),
+            "det_ch_width": float(self.det_ch_width),
+            "min_total_counts_fraction": self._min_total_counts_fraction(),
+            "is_known_phase_mixture": bool(getattr(self.quant_cfg, "is_known_phase_mixture", False)),
+            "identify_missing_elements": bool(getattr(self.quant_cfg, "identify_missing_elements", dflt.identify_missing_elements)),
+            "identification_seed_spectra": int(
+                getattr(self.quant_cfg, "identification_seed_spectra", dflt.identification_seed_spectra)
+            ),
+            "identification_z_range": [
+                int(z) for z in getattr(self.quant_cfg, "identification_z_range", dflt.identification_z_range)
+            ],
+            "identification_excluded_elements": sorted(
+                getattr(self.quant_cfg, "identification_excluded_elements", dflt.identification_excluded_elements)
+            ),
+        }
+        return options
+
+    def _get_reference_values_by_el_line(
+        self: Any,
+        active_quant_config: Optional[QuantificationConfig] = None,
+    ) -> Dict[str, Any]:
+        """Return method-dependent reference values for the scientific fingerprint.
+
+        Only sample-element reference lines are stored and compared. Substrate
+        elements are excluded from ``reference_values_by_el_line``.
+
+        Always loads standards when needed so live values for sample elements are
+        compared against any cached active-config values. Cached values are reused
+        only when they match the live standards within tolerance.
+        """
+        # load_if_missing=True is required: the default quant path leaves
+        # standards_dict=None until XSp_Quantifier loads standards, so a False
+        # flag would skip the comparison and always reuse stale cached refs.
+        sample_elements = set(self.all_els_sample)
+        current_reference_values = LedgerModule._extract_reference_values_from_standards(self, load_if_missing=True)
+
+        if active_quant_config is not None and active_quant_config.reference_values_by_el_line:
+            cached_reference_values = LedgerModule._filter_reference_values_for_elements(
+                active_quant_config.reference_values_by_el_line,
+                relevant_elements=sample_elements,
+            )
+            if not current_reference_values:
+                return cached_reference_values
+
+            if LedgerModule._reference_values_changed(
+                current_reference_values,
+                cached_reference_values,
+                decimals=2,
+                relevant_elements=sample_elements,
+            ):
+                logger.info(
+                    "🆕 Reference values in standards differ from active quantification config "
+                    "(beyond 2-decimal tolerance) for sample elements; "
+                    "a new quantification config will be created."
+                )
+                return current_reference_values
+            return cached_reference_values
+
+        return current_reference_values
+
+    @staticmethod
+    def _filter_reference_values_for_elements(
+        reference_values_by_el_line: Dict[str, Any],
+        relevant_elements: Optional[set[str]] = None,
+    ) -> Dict[str, Any]:
+        """Keep only reference-line entries whose element is in ``relevant_elements``."""
+        if relevant_elements is None:
+            return dict(sorted((str(k), v) for k, v in reference_values_by_el_line.items()))
+
+        filtered: Dict[str, Any] = {}
+        for el_line, value in reference_values_by_el_line.items():
+            element = str(el_line).split("_", maxsplit=1)[0]
+            if element in relevant_elements:
+                filtered[str(el_line)] = value
+        return dict(sorted(filtered.items()))
+
+    @staticmethod
+    def _rounded_reference_values(
+        reference_values_by_el_line: Dict[str, Any],
+        decimals: int,
+        relevant_elements: Optional[set[str]] = None,
+    ) -> Dict[str, float]:
+        """Return deterministic rounded reference values keyed by element-line."""
+        filtered = LedgerModule._filter_reference_values_for_elements(
+            reference_values_by_el_line,
+            relevant_elements=relevant_elements,
+        )
+        rounded: Dict[str, float] = {}
+        for el_line, value in filtered.items():
+            rounded[str(el_line)] = round(float(value), decimals)
+        return dict(sorted(rounded.items()))
+
+    @staticmethod
+    def _reference_values_changed(
+        current_reference_values: Dict[str, Any],
+        cached_reference_values: Dict[str, Any],
+        decimals: int,
+        relevant_elements: Optional[set[str]] = None,
+    ) -> bool:
+        """Return True when reference values differ beyond configured decimal tolerance."""
+        rounded_current = LedgerModule._rounded_reference_values(
+            current_reference_values,
+            decimals,
+            relevant_elements=relevant_elements,
+        )
+        rounded_cached = LedgerModule._rounded_reference_values(
+            cached_reference_values,
+            decimals,
+            relevant_elements=relevant_elements,
+        )
+        return rounded_current != rounded_cached
+
+    def _extract_reference_values_from_standards(self: Any, load_if_missing: bool) -> Dict[str, Any]:
+        """Extract per-reference-line values from standards for the configured quantification method."""
+        standards_by_line = None
+
+        if self.quant_cfg.use_project_specific_std_dict:
+            if self.standards_dict is not None and not load_if_missing:
+                standards_by_line = self.standards_dict
+            else:
+                standards, _ = StandardsModule._load_standards(self)
+                standards_by_line = standards.standards_by_mode.get(self.measurement_cfg.mode, {})
+        else:
+            standards_by_line = self.standards_dict
+            if standards_by_line is None and self.standards is not None:
+                if isinstance(self.standards, EDSStandardsFile):
+                    standards_by_line = self.standards.standards_by_mode.get(
+                        self.measurement_cfg.mode,
+                        {},
+                    )
+                elif self.measurement_cfg.mode in self.standards:
+                    standards_by_line = self.standards[self.measurement_cfg.mode]
+                else:
+                    standards_by_line = self.standards
+            if standards_by_line is None and load_if_missing:
+                standards, _ = StandardsModule._load_standards(self)
+                standards_by_line = standards.standards_by_mode.get(self.measurement_cfg.mode, {})
+
+        if standards_by_line is None:
+            return {}
+
+        # Persist/compare only sample-element reference lines (never substrate).
+        relevant_elements = set(self.detectable_els_sample)
+        reference_line_suffixes = tuple(XSp_Quantifier.xray_quant_ref_lines)
+        reference_values_by_el_line: Dict[str, Any] = {}
+        if self.quant_cfg.method == "PB":
+            for el_line, std_values in standards_by_line.items():
+                element, _, line_suffix = str(el_line).partition("_")
+                if element not in relevant_elements or line_suffix not in reference_line_suffixes:
+                    continue
+
+                if hasattr(std_values, "reference_mean"):
+                    reference_mean = getattr(std_values, "reference_mean", None)
+                    if reference_mean is None:
+                        continue
+                    reference_values_by_el_line[str(el_line)] = float(reference_mean.corrected_pb)
+                    continue
+
+                if isinstance(std_values, dict):
+                    reference_mean = std_values.get("reference_mean")
+                    if isinstance(reference_mean, dict) and cnst.COR_PB_DF_KEY in reference_mean:
+                        reference_values_by_el_line[str(el_line)] = float(reference_mean[cnst.COR_PB_DF_KEY])
+                        continue
+                    std_values = std_values.get("entries", [])
+
+                mean_std = next(
+                    (std for std in std_values if std.get(cnst.STD_ID_KEY) == cnst.STD_MEAN_ID_KEY),
+                    None,
+                )
+                if mean_std is None or cnst.COR_PB_DF_KEY not in mean_std:
+                    continue
+                reference_values_by_el_line[str(el_line)] = float(mean_std[cnst.COR_PB_DF_KEY])
+
+        return dict(sorted(reference_values_by_el_line.items()))
+
+    @staticmethod
+    def _get_active_quantification_config(existing_ledger: Optional[SampleLedger]) -> Optional[QuantificationConfig]:
+        """Return the active quantification config from the ledger when available."""
+        return get_active_quantification_config(existing_ledger)
+
+    def _build_quantification_config(
+        self: Any,
+        quantification_id: int,
+        sample_elements: List[str],
+        substrate_elements: List[str],
+        options: Dict[str, Any],
+        reference_values_by_el_line: Dict[str, Any],
+    ) -> QuantificationConfig:
+        """Build the persisted descriptor for the current quantification run."""
+        label = f"Quant {quantification_id} {self.output_filename_suffix}"
+        if isinstance(self.output_filename_suffix, str) and self.output_filename_suffix:
+            label += self.output_filename_suffix
+        # Never persist substrate reference lines in the quantification config.
+        sample_reference_values = LedgerModule._filter_reference_values_for_elements(
+            reference_values_by_el_line,
+            relevant_elements=set(sample_elements),
+        )
+        reference_lines_by_element = QuantificationConfig.derive_reference_lines_by_element(
+            reference_values_by_el_line=sample_reference_values,
+            preferred_lines=XSp_Quantifier.xray_quant_ref_lines,
+        )
+        return QuantificationConfig(
+            quantification_id=quantification_id,
+            label=label,
+            autoemx_version=AUTOEMX_VERSION,
+            sample_elements=sample_elements,
+            substrate_elements=substrate_elements,
+            els_w_fr=LedgerModule._get_forced_mass_fractions(self),
+            options=options,
+            reference_values_by_el_line=sample_reference_values,
+            reference_lines_by_element=reference_lines_by_element,
+            clustering_analyses=[],
+            active_clustering_analysis_index=None,
+        )
+
+    def _get_forced_mass_fractions(self: Any) -> Optional[Dict[str, float]]:
+        """Return forced elemental mass fractions for the active run, if any."""
+        forced = getattr(self.sample_cfg, "w_frs", None)
+        if isinstance(forced, dict) and forced:
+            return {str(el): float(fr) for el, fr in forced.items()}
+
+        return None
+
+    def _upsert_current_quantification_config_on_ledger(self: Any, ledger: SampleLedger) -> None:
+        """Insert or replace the current quantification config inside the provided ledger.
+
+        Same scientific fingerprint with the same quantification_id updates that slot in place.
+        Same fingerprint with a different id is treated as a distinct run (no id remapping),
+        so force_requantification can keep a newly allocated id.
+        """
+        if self.current_quant_config is None:
+            return
+
+        # Same science and same id: refresh that slot (clustering history, etc.).
+        for idx, config in enumerate(ledger.quantifications):
+            if (
+                config.quantification_id == self.current_quant_config.quantification_id
+                and LedgerModule._quantification_configs_match(config, self.current_quant_config)
+            ):
+                ledger.quantifications[idx] = self.current_quant_config
+                self.current_quantification_id = self.current_quant_config.quantification_id
+                ledger.active_quant = self.current_quant_config.quantification_id
+                return
+
+        # Upsert by quantification_id only (do not collapse distinct ids onto fingerprint matches).
+        existing_index = next(
+            (
+                i
+                for i, config in enumerate(ledger.quantifications)
+                if config.quantification_id == self.current_quant_config.quantification_id
+            ),
+            None,
+        )
+
+        if existing_index is None:
+            ledger.append_quantification_config(self.current_quant_config)
+        else:
+            ledger.quantifications[existing_index] = self.current_quant_config
+        ledger.active_quant = self.current_quant_config.quantification_id
+
+    def _persist_current_quantification_config(self: Any) -> None:
+        """Persist the currently selected quantification config as the ledger active run."""
+        if self.current_quant_config is None or self.current_quantification_id is None:
+            return
+
+        ledger = LedgerModule._load_or_create_ledger(self)
+        LedgerModule._upsert_current_quantification_config_on_ledger(self, ledger)
+
+        # Ensure the full current config payload (including clustering history/index)
+        # is written for the active quantification id.
+        for idx, config in enumerate(ledger.quantifications):
+            if config.quantification_id == self.current_quantification_id:
+                ledger.quantifications[idx] = self.current_quant_config.model_copy(deep=True)
+                break
+
+        ledger.active_quant = self.current_quantification_id
+        ledger.to_json_file(LedgerModule._get_ledger_path(self))
+
+    def _sync_existing_quantification_from_ledger(self: Any) -> None:
+        """Populate in-memory quantification slots from ledger results with the current id."""
+        if self.current_quantification_id is None:
+            return
+        existing_ledger = LedgerModule._load_or_create_ledger(self)
+        if existing_ledger is None:
+            return
+
+        total_spectra = len(existing_ledger.spectra)
+        LedgerModule._ensure_quant_tracking_length(self, total_spectra)
+
+        for index, spectrum in enumerate(existing_ledger.spectra):
+            matching = next(
+                (
+                    result for result in spectrum.quantification_results
+                    if result.quantification_id == self.current_quantification_id
+                ),
+                None,
+            )
+            if matching is None:
+                continue
+
+            self.spectra_quant_records[index] = matching
+
+    def _persist_quantification_record(self: Any, spectrum_index: int, quant_record: QuantificationResult, overwrite: bool = False) -> None:
+        """Write one quantification result to the ledger immediately for interruption-safe progress.
+
+        Parameters
+        ----------
+        overwrite : bool
+            If True and a result with the same quantification_id already exists for this spectrum,
+            replace it (used for force_requantification, requantify_only_unquantified_spectra,
+            and interrupted re-runs).
+        """
+        existing_ledger = LedgerModule._load_or_create_ledger(self)
+        ledger = existing_ledger
+
+        if self.current_quant_config is None:
+            raise ValueError("Current quantification config is not initialized")
+
+        LedgerModule._upsert_current_quantification_config_on_ledger(self, ledger)
+
+        ledger.active_quant = self.current_quantification_id
+
+        existing_ids = {
+            existing.quantification_id
+            for existing in ledger.spectra[spectrum_index].quantification_results
+        }
+        if quant_record.quantification_id not in existing_ids:
+            ledger.append_quantification_result(spectrum_index, quant_record)
+        elif overwrite:
+            ledger.spectra[spectrum_index].quantification_results = [
+                quant_record if r.quantification_id == quant_record.quantification_id else r
+                for r in ledger.spectra[spectrum_index].quantification_results
+            ]
+
+        ledger.to_json_file(LedgerModule._get_ledger_path(self))

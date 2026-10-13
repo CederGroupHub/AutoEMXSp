@@ -9,10 +9,8 @@ import pytest
 from pydantic import ValidationError
 
 from autoemx.config.runtime_configs import QuantificationOptionsConfig
-from autoemx.core.composition_analysis.analyser import (
-    EMXSp_Composition_Analyzer,
-    _detect_prefit_spectrum_issues,
-)
+from autoemx.core.composition_analysis.analyser import _detect_prefit_spectrum_issues
+from autoemx.core.composition_analysis.ledger import LedgerModule
 from autoemx.config.schema_models.quantification import QuantificationConfig
 
 
@@ -95,14 +93,14 @@ def _options_analyzer(min_total_counts_fraction: float) -> SimpleNamespace:
 
 
 def test_build_quantification_options_always_includes_fraction():
-    options = EMXSp_Composition_Analyzer._build_quantification_options(
+    options = LedgerModule._build_quantification_options(
         _options_analyzer(0.9)
     )
     assert options["min_total_counts_fraction"] == pytest.approx(0.9)
 
 
 def test_build_quantification_options_includes_non_default_fraction():
-    options = EMXSp_Composition_Analyzer._build_quantification_options(
+    options = LedgerModule._build_quantification_options(
         _options_analyzer(0.5)
     )
     assert options["min_total_counts_fraction"] == pytest.approx(0.5)

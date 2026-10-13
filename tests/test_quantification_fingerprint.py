@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from autoemx.config.schema_models.quantification import QuantificationConfig
-from autoemx.core.composition_analysis.analyser import EMXSp_Composition_Analyzer
+from autoemx.core.composition_analysis.ledger import LedgerModule
 
 
 def _minimal_options(**overrides: Any) -> Dict[str, Any]:
@@ -113,17 +113,25 @@ def test_reference_values_changed_respects_relevant_elements():
     cached = {"Mo_La1": 1.004, "Zn_Ka1": 1.0}
 
     # Within 2-decimal tolerance for Mo; Zn ignored when not relevant.
-    assert not EMXSp_Composition_Analyzer._reference_values_changed(
+    assert not LedgerModule._reference_values_changed(
         current,
         cached,
         decimals=2,
         relevant_elements={"Mo"},
     )
-    assert EMXSp_Composition_Analyzer._reference_values_changed(
+    assert LedgerModule._reference_values_changed(
         current,
         cached,
         decimals=2,
         relevant_elements={"Mo", "Zn"},
+    )
+
+
+def _live_reference_values(live_refs):
+    """Reference values of the standards (loaded only when load_if_missing is True)."""
+    return patch.object(
+        LedgerModule, "_extract_reference_values_from_standards",
+        lambda analyzer, load_if_missing: live_refs if load_if_missing else {},
     )
 
 
@@ -141,17 +149,12 @@ def test_get_reference_values_loads_standards_when_standards_dict_is_none():
         standards_dict=None,
         standards=None,
         measurement_cfg=SimpleNamespace(mode="TEM"),
-        _extract_reference_values_from_standards=lambda load_if_missing: (
-            live_refs if load_if_missing else {}
-        ),
-        _filter_reference_values_for_elements=EMXSp_Composition_Analyzer._filter_reference_values_for_elements,
-        _reference_values_changed=EMXSp_Composition_Analyzer._reference_values_changed,
     )
 
-    import autoemx.core.composition_analysis.analyser as analyser_mod
+    import autoemx.core.composition_analysis.ledger as ledger_mod
 
-    with patch.object(analyser_mod.logger, "info") as mock_info:
-        result = EMXSp_Composition_Analyzer._get_reference_values_by_el_line(
+    with patch.object(ledger_mod.logger, "info") as mock_info, _live_reference_values(live_refs):
+        result = LedgerModule._get_reference_values_by_el_line(
             analyzer,
             active_quant_config=active,
         )
@@ -175,17 +178,13 @@ def test_get_reference_values_reuses_cache_when_live_refs_match_within_tolerance
         standards_dict=None,
         standards=None,
         measurement_cfg=SimpleNamespace(mode="TEM"),
-        _extract_reference_values_from_standards=lambda load_if_missing: (
-            live_refs if load_if_missing else {}
-        ),
-        _filter_reference_values_for_elements=EMXSp_Composition_Analyzer._filter_reference_values_for_elements,
-        _reference_values_changed=EMXSp_Composition_Analyzer._reference_values_changed,
     )
 
-    result = EMXSp_Composition_Analyzer._get_reference_values_by_el_line(
-        analyzer,
-        active_quant_config=active,
-    )
+    with _live_reference_values(live_refs):
+        result = LedgerModule._get_reference_values_by_el_line(
+            analyzer,
+            active_quant_config=active,
+        )
     assert result == cached_refs
 
 
@@ -208,7 +207,7 @@ def test_extract_reference_values_filters_to_sample_quant_ref_lines():
         detectable_els_substrate=["C"],
     )
 
-    result = EMXSp_Composition_Analyzer._extract_reference_values_from_standards(
+    result = LedgerModule._extract_reference_values_from_standards(
         analyzer,
         load_if_missing=False,
     )
