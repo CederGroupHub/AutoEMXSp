@@ -10,17 +10,22 @@ first argument and are called as ``LedgerModule._method(analyzer, ...)``.
 
 import functools
 import os
+import re
+from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
+import autoemx.calibrations as calibs
 import autoemx.config.defaults as dflt
 import autoemx.utils.constants as cnst
 from autoemx._version import __version__ as AUTOEMX_VERSION
 from autoemx.config.ledger_io import _background_relpath, get_active_quantification_config, ingest_spectra
 from autoemx.config.schema_models import (
+    ClusteringAnalysis,
     ClusteringConfig as LedgerClusteringConfig,
     ClusteringResult,
     Coordinate2D,
@@ -656,10 +661,10 @@ class LedgerModule:
             LedgerModule._update_non_fingerprint_options(self.current_quant_config, candidate_config)
             # Even when reusing quantification settings, clustering inputs (e.g., ref_formulae
             # passed via runners as sample['cnd']) may have changed for this run.
-            self._ensure_current_clustering_run(
+            LedgerModule._ensure_current_clustering_run(self, 
                 self.current_quant_config,
             )
-            self._apply_active_clustering_config(self.current_quant_config)
+            LedgerModule._apply_active_clustering_config(self, self.current_quant_config)
             return
 
         # Same science as a prior (non-active) run: reuse the latest matching fingerprint.
@@ -674,8 +679,8 @@ class LedgerModule:
                 self.current_quant_config = latest_match
                 self.current_quantification_id = latest_match.quantification_id
                 LedgerModule._update_non_fingerprint_options(self.current_quant_config, candidate_config)
-                self._ensure_current_clustering_run(self.current_quant_config)
-                self._apply_active_clustering_config(self.current_quant_config)
+                LedgerModule._ensure_current_clustering_run(self, self.current_quant_config)
+                LedgerModule._apply_active_clustering_config(self, self.current_quant_config)
                 return
 
         if not force_new and active_quant_config is not None:
@@ -690,10 +695,10 @@ class LedgerModule:
                     )
                     self.current_quant_config = candidate_config
                     self.current_quantification_id = candidate_config.quantification_id
-                    self._ensure_current_clustering_run(
+                    LedgerModule._ensure_current_clustering_run(self, 
                         self.current_quant_config,
                     )
-                    self._apply_active_clustering_config(self.current_quant_config)
+                    LedgerModule._apply_active_clustering_config(self, self.current_quant_config)
                     return
                 logger.info(
                     "🆕 Quantification scientific fingerprint changed; "
@@ -710,8 +715,8 @@ class LedgerModule:
             reference_values_by_el_line=current_reference_values,
         )
         self.current_quantification_id = quantification_id
-        self._ensure_current_clustering_run(self.current_quant_config)
-        self._apply_active_clustering_config(self.current_quant_config)
+        LedgerModule._ensure_current_clustering_run(self, self.current_quant_config)
+        LedgerModule._apply_active_clustering_config(self, self.current_quant_config)
 
     def _build_quantification_options(self: Any) -> Dict[str, Any]:
         """Build the subset of quantification options that defines result reuse."""
@@ -1062,3 +1067,432 @@ class LedgerModule:
             ]
 
         ledger.to_json_file(LedgerModule._get_ledger_path(self))
+
+    def _prepare_acquisition_resume_state(self: Any, log_resume_info: bool = True) -> dict:
+        """Load the ledger, reconcile spectra pointers, and resolve acquisition resume counters.
+
+        Parameters
+        ----------
+        log_resume_info : bool, optional
+            If True, emit resume/progress messages when prior spectra are detected.
+
+        Returns
+        -------
+        dict
+            Keys: ``tot_n_spectra``, ``next_spectrum_id``, ``particle_id_offset``,
+            ``had_ledger_before``, and ``acquisition_needed``.
+        """
+        _had_ledger_before = LedgerModule._load_existing_ledger(self) is not None
+        _existing_ledger = LedgerModule._load_or_create_ledger(self)
+        if _existing_ledger is not None and _existing_ledger.spectra:
+            tot_n_spectra = len(_existing_ledger.spectra)
+            _numeric_ids = [
+                int(e.spectrum_id)
+                for e in _existing_ledger.spectra
+                if e.spectrum_id is not None and str(e.spectrum_id).isdigit()
+            ]
+            next_spectrum_id = (max(_numeric_ids) + 1) if _numeric_ids else 0
+            _particle_ids = [
+                e.acquisition_details.particle_id
+                for e in _existing_ledger.spectra
+                if e.acquisition_details is not None
+                and e.acquisition_details.particle_id is not None
+            ]
+            _particle_id_offset = 0
+            self.particle_cntr = -1
+            try:
+                if _particle_ids:
+                    _particle_id_offset = max(int(p) for p in _particle_ids)
+                    self.particle_cntr = _particle_id_offset
+                else:
+                    inferred_particle_id = LedgerModule._infer_max_particle_id_from_saved_images(self)
+                    if inferred_particle_id is not None:
+                        _particle_id_offset = inferred_particle_id
+                        self.particle_cntr = inferred_particle_id
+            except (ValueError, TypeError):
+                _particle_id_offset = 0
+                self.particle_cntr = -1
+            next_particle_id = _particle_id_offset + 1 if self.sample_cfg.is_particle_acquisition else "n/a"
+            if log_resume_info and self.verbose:
+                n_ingested = getattr(self, "_last_acq_ledger_ingested_spectra_count", 0)
+                if (
+                    not _had_ledger_before
+                    and getattr(self, "_last_acq_ledger_created", False)
+                    and n_ingested > 0
+                ):
+                    logger.info(
+                        "ℹ️ No ledger found; %d pre-existing spectrum file/s ingested into a new ledger "
+                        "(assuming the same acquisition configurations). "
+                        "%d spectrum/spectra available; restarting from spectrum #%d, particle #%s. "
+                        "If a fresh acquisition is desired, delete the sample folder at: %s",
+                        n_ingested,
+                        tot_n_spectra,
+                        next_spectrum_id,
+                        next_particle_id,
+                        os.path.abspath(self.sample_result_dir),
+                    )
+                else:
+                    ledger_note = (
+                        "Existing ledger detected; acquisition will resume"
+                        if _had_ledger_before
+                        else "Prior spectra detected"
+                    )
+                    logger.info(
+                        "ℹ️ %s. %d spectrum/spectra available; restarting from spectrum #%d, particle #%s. "
+                        "If a fresh acquisition is desired, delete the sample folder at: %s",
+                        ledger_note,
+                        tot_n_spectra,
+                        next_spectrum_id,
+                        next_particle_id,
+                        os.path.abspath(self.sample_result_dir),
+                    )
+        else:
+            tot_n_spectra = 0
+            next_spectrum_id = 0
+            _particle_id_offset = 0
+
+        return {
+            "tot_n_spectra": tot_n_spectra,
+            "next_spectrum_id": next_spectrum_id,
+            "particle_id_offset": _particle_id_offset,
+            "had_ledger_before": _had_ledger_before,
+            "acquisition_needed": tot_n_spectra < self.max_n_spectra,
+        }
+
+    def _initialise_acquisition_ledger(self: Any) -> None:
+        """Initialize acquisition ledger and reconcile any existing spectra pointers.
+
+        This guarantees that if a ledger is missing but spectra files already exist
+        under ``spectra/``, those spectra are ingested into the newly created ledger
+        before acquisition restarts. Also determines whether new spectra must be
+        acquired so microscope initialization can be skipped when unnecessary.
+        """
+        resume_state = LedgerModule._prepare_acquisition_resume_state(self)
+        self._acquisition_resume_state = resume_state
+        self._spectrum_acquisition_needed = resume_state["acquisition_needed"]
+        self.EM_controller = None
+
+        if self.verbose and not self._spectrum_acquisition_needed:
+            logger.info(
+                "ℹ️ %d spectrum/spectra already acquired (maximum %d). Skipping acquisition.",
+                "If more spectra are desired, increase max_n_spectra and restart acquisition.",
+                resume_state["tot_n_spectra"],
+                self.max_n_spectra,
+            )
+
+    def _resolve_active_analysis_config_ids(self: Any) -> Tuple[int, int]:
+        """Resolve active quantification and clustering config ids for analysis folder naming."""
+        quant_config = self.current_quant_config
+
+        if quant_config is None:
+            ledger = LedgerModule._load_or_create_ledger(self)
+            quant_config = LedgerModule._get_active_quantification_config(ledger)
+
+        if quant_config is None:
+            raise RuntimeError("No active quantification config is available to name analysis directory")
+
+        active_clustering_analysis = quant_config.get_active_clustering_analysis()
+        if active_clustering_analysis is None:
+            raise RuntimeError("No active clustering config is available to name analysis directory")
+
+        return int(quant_config.quantification_id), int(active_clustering_analysis.config.clustering_id)
+
+    def _infer_max_particle_id_from_saved_images(self: Any) -> Optional[int]:
+        """Infer the maximum particle id from saved acquisition image filenames."""
+        images_dir = Path(self.sample_result_dir, cnst.IMAGES_DIR)
+        if not images_dir.exists():
+            return None
+
+        max_particle_id = None
+        particle_pattern = re.compile(r"_par(\d+)_")
+        for image_path in images_dir.iterdir():
+            if not image_path.is_file():
+                continue
+            match = particle_pattern.search(image_path.name)
+            if match is None:
+                continue
+            try:
+                particle_id = int(match.group(1))
+            except (TypeError, ValueError):
+                continue
+            if max_particle_id is None or particle_id > max_particle_id:
+                max_particle_id = particle_id
+
+        return max_particle_id
+
+    def _apply_active_clustering_config(self: Any, quant_config: QuantificationConfig) -> None:
+        """Load runtime clustering options from the active clustering config of a quantification config."""
+        active_clustering_analysis = quant_config.get_active_clustering_analysis()
+        if active_clustering_analysis is None:
+            raise ValueError(
+                "Active quantification config does not contain an active clustering config"
+            )
+
+        self.clustering_cfg = active_clustering_analysis.config.model_copy(deep=True)
+        self.ref_formulae = list(dict.fromkeys(self.clustering_cfg.ref_formulae))
+        self._calc_reference_phases_df()
+
+    def _build_clustering_config_descriptor(self: Any, clustering_id: int) -> LedgerClusteringConfig:
+        """Build a persisted clustering config descriptor for the current analysis settings."""
+        return LedgerClusteringConfig(
+            clustering_id=clustering_id,
+            method=self.clustering_cfg.method,
+            features=self.clustering_cfg.features,
+            k_forced=self.clustering_cfg.k_forced,
+            k_resolved=self.clustering_cfg.k_resolved,
+            k_finding_method=self.clustering_cfg.k_finding_method,
+            max_k=self.clustering_cfg.max_k,
+            ref_formulae=list(self.clustering_cfg.ref_formulae),
+            do_matrix_decomposition=self.clustering_cfg.do_matrix_decomposition,
+            max_analytical_error_percent=self.clustering_cfg.max_analytical_error_percent,
+            min_bckgrnd_cnts=self.clustering_cfg.min_bckgrnd_cnts,
+            quant_flags_accepted=list(self.clustering_cfg.quant_flags_accepted),
+            dbscan=self.clustering_cfg.dbscan.model_copy(deep=True),
+            geometry=self.clustering_cfg.geometry,
+            aitchison=self.clustering_cfg.aitchison.model_copy(deep=True),
+            mixture=self.clustering_cfg.mixture.model_copy(deep=True),
+            auto_merge_clusters=self.clustering_cfg.auto_merge_clusters,
+            cluster_merge=self.clustering_cfg.cluster_merge.model_copy(deep=True),
+        )
+
+    def _ensure_current_clustering_run(
+        self: Any,
+        quant_config: QuantificationConfig,
+    ) -> None:
+        """Ensure active quantification config tracks clustering run history and active config."""
+        candidate_clustering_config = LedgerModule._build_clustering_config_descriptor(self, 
+            clustering_id=LedgerModule._next_clustering_config_id(quant_config)
+        )
+        matching_index: Optional[int] = None
+        runtime_clustering_id = getattr(self.clustering_cfg, "clustering_id", None)
+        for idx, analysis in enumerate(quant_config.clustering_analyses):
+            if not LedgerModule._clustering_configs_match(analysis.config, candidate_clustering_config):
+                continue
+            if runtime_clustering_id is not None and analysis.config.clustering_id == runtime_clustering_id:
+                matching_index = idx
+                break
+            if matching_index is None:
+                matching_index = idx
+
+        if matching_index is not None:
+            quant_config.active_clustering_analysis_index = matching_index
+            return
+
+        active_clustering_analysis = quant_config.get_active_clustering_analysis()
+        active_clustering_config = (
+            active_clustering_analysis.config if active_clustering_analysis is not None else None
+        )
+        if active_clustering_config is not None:
+            changes = active_clustering_config.fingerprint_differences(candidate_clustering_config)
+            if changes:
+                changed_summary = LedgerModule._format_quantification_config_changes(changes)
+                logger.info(
+                    "🆕 Clustering scientific fingerprint changed; "
+                    "appending a new clustering config to the active quantification config.\n%s",
+                    changed_summary,
+                )
+
+        quant_config.clustering_analyses.append(
+            ClusteringAnalysis(config=candidate_clustering_config, result=None)
+        )
+        quant_config.active_clustering_analysis_index = len(quant_config.clustering_analyses) - 1
+
+    def _persist_resolved_k_on_active_clustering_config(self: Any, resolved_k: Optional[int]) -> None:
+        """Persist resolved k for the active clustering config of the active quantification run."""
+        if resolved_k is None:
+            return
+
+        resolved_k_int = int(resolved_k)
+        self.clustering_cfg.k_resolved = resolved_k_int
+
+        if self.current_quant_config is not None:
+            active_clustering_analysis = self.current_quant_config.get_active_clustering_analysis()
+            active_clustering_config = (
+                active_clustering_analysis.config if active_clustering_analysis is not None else None
+            )
+            if active_clustering_config is not None and active_clustering_config.k_resolved != resolved_k_int:
+                active_clustering_config.k_resolved = resolved_k_int
+                LedgerModule._persist_current_quantification_config(self)
+            return
+
+        ledger = LedgerModule._load_or_create_ledger(self)
+        active_quant_config = LedgerModule._get_active_quantification_config(ledger)
+        if active_quant_config is None:
+            return
+
+        active_clustering_analysis = active_quant_config.get_active_clustering_analysis()
+        active_clustering_config = (
+            active_clustering_analysis.config if active_clustering_analysis is not None else None
+        )
+        if active_clustering_config is None or active_clustering_config.k_resolved == resolved_k_int:
+            return
+
+        active_clustering_config.k_resolved = resolved_k_int
+        ledger.to_json_file(LedgerModule._get_ledger_path(self))
+
+    def _persist_clustering_result_on_active_analysis(self: Any, clustering_result: ClusteringResult) -> None:
+        """Persist the latest clustering result on the active clustering analysis entry."""
+        ledger = LedgerModule._load_or_create_ledger(self)
+        active_quant_config = LedgerModule._get_active_quantification_config(ledger)
+        if active_quant_config is None:
+            return
+
+        # Ensure the current runtime clustering settings map to a concrete analysis entry
+        # on the same ledger object being persisted.
+        LedgerModule._ensure_current_clustering_run(self, active_quant_config)
+
+        active_quant_config.set_active_clustering_result(clustering_result.model_copy(deep=True))
+
+        if (
+            self.current_quant_config is not None
+            and self.current_quant_config.quantification_id == active_quant_config.quantification_id
+        ):
+            self.current_quant_config.set_active_clustering_result(clustering_result.model_copy(deep=True))
+
+        ledger.to_json_file(LedgerModule._get_ledger_path(self))
+
+    def _save_experimental_config(self: Any, is_XSp_measurement) -> None:
+        """
+        Save all relevant configuration dataclasses and metadata related to the
+        current spectrum collection/acquisition to a JSON file.
+    
+        The saved file includes:
+            - Timestamp of saving
+            - All configuration dataclasses
+    
+        This function is intended to be called after acquisition to ensure
+        reproducibility and traceability of the experimental configuration.
+    
+        Raises
+        ------
+        OSError
+            If the output directory cannot be created or file cannot be written.
+        """
+    
+        now = datetime.now()
+
+        def _serialize_config(config_obj: Any) -> Dict[str, Any]:
+            if hasattr(config_obj, "model_dump"):
+                return config_obj.model_dump(mode="json")
+            return asdict(config_obj)
+    
+        # Gather configuration dataclasses as dictionaries
+        self.measurement_cfg = self.measurement_cfg.model_copy(
+            update={
+                "powder_meas_cfg": self.powder_meas_cfg,
+                "bulk_meas_cfg": self.bulk_meas_cfg,
+                "exp_stds_cfg": self.exp_stds_cfg if self.exp_stds_cfg.is_exp_std_measurement else None,
+            }
+        )
+        cfg_dataclasses = {
+            cnst.SAMPLE_CFG_KEY: _serialize_config(self.sample_cfg),
+            cnst.MICROSCOPE_CFG_KEY: _serialize_config(self.microscope_cfg),
+            cnst.MEASUREMENT_CFG_KEY: _serialize_config(self.measurement_cfg),
+            cnst.SAMPLESUBSTRATE_CFG_KEY: _serialize_config(self.sample_substrate_cfg),
+        }
+        
+        if is_XSp_measurement:
+            cfg_dataclasses[cnst.QUANTIFICATION_CFG_KEY] = _serialize_config(self.quant_cfg)
+    
+        # Include dataclasses corresponding to measurement type
+        if is_XSp_measurement and not self.exp_stds_cfg.is_exp_std_measurement:
+            cfg_dataclasses[cnst.CLUSTERING_CFG_KEY] = LedgerModule._runtime_clustering_cfg_payload(self.clustering_cfg)
+            cfg_dataclasses[cnst.PLOT_CFG_KEY] = _serialize_config(self.plot_cfg)
+
+
+    
+        # Compose the metadata dictionary for saving
+        spectrum_collection_info = {
+            cnst.DATETIME_KEY: now.strftime("%Y-%m-%d %H:%M:%S"),
+            **cfg_dataclasses
+        }
+    
+        # Ensure the output directory exists before saving
+        try:
+            os.makedirs(self.sample_result_dir, exist_ok=True)
+        except Exception as e:
+            raise OSError(f"Could not create output directory '{self.sample_result_dir}': {e}")
+    
+        try:
+            ledger = LedgerModule._load_or_create_ledger(self)
+            ledger.configs = LedgerConfigs.model_validate({
+                cnst.MICROSCOPE_CFG_KEY: spectrum_collection_info[cnst.MICROSCOPE_CFG_KEY],
+                cnst.SAMPLE_CFG_KEY: spectrum_collection_info[cnst.SAMPLE_CFG_KEY],
+                cnst.MEASUREMENT_CFG_KEY: spectrum_collection_info[cnst.MEASUREMENT_CFG_KEY],
+                cnst.SAMPLESUBSTRATE_CFG_KEY: spectrum_collection_info[cnst.SAMPLESUBSTRATE_CFG_KEY],
+                cnst.PLOT_CFG_KEY: spectrum_collection_info.get(cnst.PLOT_CFG_KEY, self.plot_cfg.model_dump(mode="json")),
+            })
+
+            # Persist an initial quantification+clustering descriptor at acquisition start
+            # so user-provided clustering inputs (e.g., sample['cnd'] -> ref_formulae)
+            # are saved to ledger even before any quantification run is executed.
+            if is_XSp_measurement and not self.exp_stds_cfg.is_exp_std_measurement and not ledger.quantifications:
+                quantification_id = LedgerModule._next_quantification_id(ledger)
+                self.current_quant_config = LedgerModule._build_quantification_config(self, 
+                    quantification_id=quantification_id,
+                    sample_elements=list(self.all_els_sample),
+                    substrate_elements=list(self.all_els_substrate),
+                    options=LedgerModule._build_quantification_options(self),
+                    reference_values_by_el_line=LedgerModule._get_reference_values_by_el_line(self, active_quant_config=None),
+                )
+                self.current_quantification_id = quantification_id
+                LedgerModule._ensure_current_clustering_run(self, self.current_quant_config)
+                ledger.append_quantification_config(self.current_quant_config)
+                ledger.active_quant = quantification_id
+
+            ledger.to_json_file(LedgerModule._get_ledger_path(self))
+        except Exception as e:
+            raise OSError(f"Could not persist configurations to ledger '{LedgerModule._get_ledger_path(self)}': {e}")
+            
+
+    def _sync_active_quantification_from_ledger(self: Any) -> None:
+        """
+        Sync the in-memory state of the analyzer with the active quantification run of the ledger, before analysis.
+
+        This is essential when analyse_data is called without a preceding run_quantification (i.e. analysis-only
+        path): the typed QuantificationResult records must be populated in memory, and the elements and spectrum
+        limits are those recorded for the active quantification run.
+        """
+        if self.sample_result_dir is None:
+            return
+        existing_ledger = LedgerModule._load_or_create_ledger(self)
+        # Resolve current_quantification_id from the ledger when not already set
+        # (analysis-only callers skip run_quantification so it is never assigned).
+        if self.current_quantification_id is None and existing_ledger is not None:
+            if existing_ledger.active_quant is not None:
+                self.current_quantification_id = existing_ledger.active_quant
+
+        # Analysis-only runs must also register the current clustering inputs on the
+        # active quantification config so clustering history/index stays in sync.
+        active_quant_config = LedgerModule._get_active_quantification_config(existing_ledger)
+        if active_quant_config is not None:
+            self.current_quant_config = active_quant_config
+            self.current_quantification_id = active_quant_config.quantification_id
+            # Use the elements and spectrum limits recorded for the active quantification
+            # run, falling back to the base sample config when they are not stored.
+            self.all_els_sample = list(dict.fromkeys(
+                active_quant_config.sample_elements or self.sample_cfg.elements
+            ))
+            self.detectable_els_sample = [el for el in self.all_els_sample if el not in calibs.undetectable_els]
+            self.all_els_substrate = list(dict.fromkeys(
+                active_quant_config.substrate_elements or self.sample_substrate_cfg.elements
+            ))
+            detectable_els_substrate = [el for el in self.all_els_substrate if el not in calibs.undetectable_els]
+            self.detectable_els_substrate = [el for el in detectable_els_substrate if el not in self.detectable_els_sample]
+            active_spectrum_lims = (active_quant_config.options or {}).get("spectrum_lims")
+            if active_spectrum_lims is not None:
+                self.sp_start = int(round(active_spectrum_lims[0]))
+                self.sp_end = int(round(active_spectrum_lims[1]))
+                if self.det_ch_offset is not None and self.det_ch_width:
+                    self.energy_vals = np.array([
+                        self.det_ch_offset + self.det_ch_width * i
+                        for i in range(self.sp_start, self.sp_end)
+                    ])
+            LedgerModule._ensure_current_clustering_run(self, self.current_quant_config)
+            LedgerModule._persist_current_quantification_config(self)
+            LedgerModule._apply_active_clustering_config(self, self.current_quant_config)
+
+        tot = len(existing_ledger.spectra) if existing_ledger is not None else 0
+        if tot > 0:
+            LedgerModule._ensure_quant_tracking_length(self, tot)
+            LedgerModule._sync_existing_quantification_from_ledger(self)
