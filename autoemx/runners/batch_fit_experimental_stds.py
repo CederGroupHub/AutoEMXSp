@@ -195,9 +195,6 @@ def batch_fit_experimental_stds(
         sample_substrate_cfg = ledger_cfgs.sample_substrate_cfg
         quant_cfg            = ledger_cfgs.quant_cfg
         clustering_cfg       = ledger_cfgs.clustering_cfg
-        plot_cfg             = ledger_cfgs.plot_cfg
-        powder_meas_cfg      = ledger_cfgs.powder_meas_cfg
-        bulk_meas_cfg        = ledger_cfgs.bulk_meas_cfg
         
         # Sample elements
         if els_sample is not None and (els_sample[0] == "" or els_sample[0] is None):
@@ -251,24 +248,14 @@ def batch_fit_experimental_stds(
             pass
 
     # --- Run Composition Analyzer (single instantiation, fit mode)
-        comp_analyzer = EMXSp_Composition_Analyzer(
-            microscope_cfg=microscope_cfg,
-            sample_id=std_id,
-            sample_cfg=sample_cfg,
-            measurement_cfg=measurement_cfg,
-            sample_substrate_cfg=sample_substrate_cfg,
-            quant_cfg=quant_cfg,
-            initial_clustering_cfg=clustering_cfg,
-            powder_meas_cfg=powder_meas_cfg,
-            bulk_meas_cfg=bulk_meas_cfg,
-            plot_cfg=plot_cfg,
+        comp_analyzer = EMXSp_Composition_Analyzer.from_ledger(
+            ledger,
+            ledger_cfgs,
             exp_stds_cfg=exp_stds_cfg,
-            is_acquisition=False,
-            development_mode=False,
+            sample_id=std_id,
             standards_dict=standards_dict,
             output_filename_suffix=output_filename_suffix,
             verbose=verbose,
-            results_dir=std_path,
         )
 
         try:

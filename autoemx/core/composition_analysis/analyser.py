@@ -113,6 +113,9 @@ from autoemx.config.ledger_schemas import (
     SampleLedger,
 )
 from autoemx.config.ledger_io import (
+    LedgerRuntimeConfigs,
+    ledger_runtime_configs,
+    load_sample_ledger,
     _build_spectrum_entry,
     _list_spectrum_pointer_files,
 )
@@ -3281,4 +3284,62 @@ class EMXSp_Composition_Analyzer:
             energy_range_keV=energy_range,
             microscope_ID=self.microscope_cfg.ID,
         )
+    @classmethod
+    def from_ledger(
+        cls,
+        ledger: Union[str, Path, SampleLedger],
+        configs: Optional[LedgerRuntimeConfigs] = None,
+        *,
+        exp_stds_cfg: Optional[ExpStandardsConfig] = None,
+        sample_id: Optional[str] = None,
+        **kwargs: Any,
+    ) -> "EMXSp_Composition_Analyzer":
+        """
+        Create an analyzer of a sample already acquired, from its ledger (to quantify or analyse it again).
+
+        Parameters
+        ----------
+        ledger : str, Path or SampleLedger
+            Sample folder, path of its ledger.json, or its loaded ledger.
+        configs : LedgerRuntimeConfigs, optional
+            Configurations of the sample, e.g. ledger_runtime_configs(ledger) changed by the caller. Default: those of
+            the ledger, with the quantification options and clustering configuration of its active quantification
+            run (see ledger_runtime_configs).
+        exp_stds_cfg : ExpStandardsConfig, optional
+            Settings of the experimental standard, to fit the sample as a standard (as when it was acquired). Default:
+            the sample is quantified and analysed as an ordinary sample, even if it is a standard.
+        sample_id : str, optional
+            Sample ID. Default: that of the ledger.
+        **kwargs
+            Other arguments of the analyzer, e.g. standards_dict, output_filename_suffix, verbose.
+
+        Returns
+        -------
+        EMXSp_Composition_Analyzer
+            Analyzer of the sample (not in acquisition mode).
+        """
+        if not isinstance(ledger, SampleLedger):
+            ledger_path = Path(ledger)
+            if ledger_path.is_dir():
+                ledger_path = ledger_path / f"{cnst.LEDGER_FILENAME}{cnst.LEDGER_FILEEXT}"
+            ledger = load_sample_ledger(ledger_path)
+        if configs is None:
+            configs = ledger_runtime_configs(ledger)
+        return cls(
+            microscope_cfg=configs.microscope_cfg,
+            sample_cfg=configs.sample_cfg,
+            measurement_cfg=configs.measurement_cfg,
+            sample_substrate_cfg=configs.sample_substrate_cfg,
+            quant_cfg=configs.quant_cfg,
+            initial_clustering_cfg=configs.clustering_cfg,
+            powder_meas_cfg=configs.powder_meas_cfg,
+            bulk_meas_cfg=configs.bulk_meas_cfg,
+            exp_stds_cfg=exp_stds_cfg if exp_stds_cfg is not None else ExpStandardsConfig(),
+            plot_cfg=configs.plot_cfg,
+            is_acquisition=False,
+            sample_id=sample_id if sample_id is not None else ledger.sample_id,
+            results_dir=ledger.sample_path,
+            **kwargs,
+        )
+
  

@@ -297,15 +297,8 @@ def analyze_sample(
     sample_processing_time_start = time.time()
 
     # Retrieve configuration objects for this sample
-    microscope_cfg       = ledger_cfgs.microscope_cfg
-    sample_cfg           = ledger_cfgs.sample_cfg
-    measurement_cfg      = ledger_cfgs.measurement_cfg
-    sample_substrate_cfg = ledger_cfgs.sample_substrate_cfg
-    quant_cfg            = ledger_cfgs.quant_cfg
     clustering_cfg       = ledger_cfgs.clustering_cfg
     plot_cfg             = ledger_cfgs.plot_cfg
-    powder_meas_cfg      = ledger_cfgs.powder_meas_cfg
-    bulk_meas_cfg        = ledger_cfgs.bulk_meas_cfg
 
 
     # --- Modify Clustering Configuration
@@ -398,24 +391,12 @@ def analyze_sample(
         plot_cfg.show_legend_clustering = bool(show_legend_clustering)
     _ensure_custom_plot_file(sample_dir, plot_cfg)
 
-    # Spectral source resolution is delegated to LedgerModule._load_or_create_ledger:
-    # --- Run Composition Analysis or Spectral Acquisition
-    comp_analyzer = EMXSp_Composition_Analyzer(
-        microscope_cfg=microscope_cfg,
+    # --- Run Composition Analysis
+    comp_analyzer = EMXSp_Composition_Analyzer.from_ledger(
+        ledger,
+        ledger_cfgs,
         sample_id=sample_ID,
-        sample_cfg=sample_cfg,
-        measurement_cfg=measurement_cfg,
-        sample_substrate_cfg=sample_substrate_cfg,
-        quant_cfg=quant_cfg,
-        initial_clustering_cfg=clustering_cfg,
-        powder_meas_cfg=powder_meas_cfg,
-        bulk_meas_cfg=bulk_meas_cfg,
-        plot_cfg=plot_cfg,
-        is_acquisition=False,
-        development_mode=False,
         output_filename_suffix=output_filename_suffix,
-        verbose=True,
-        results_dir=sample_dir
     )
 
     if activate_new_analysis not in (True, False, "ask"):

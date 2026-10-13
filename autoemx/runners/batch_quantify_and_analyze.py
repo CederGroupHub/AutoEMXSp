@@ -235,15 +235,11 @@ def batch_quantify_and_analyze(
         sample_processing_time_start = time.time()
     
         # Retrieve configuration objects for this sample
-        microscope_cfg       = ledger_cfgs.microscope_cfg
         sample_cfg           = ledger_cfgs.sample_cfg
-        measurement_cfg      = ledger_cfgs.measurement_cfg
         sample_substrate_cfg = ledger_cfgs.sample_substrate_cfg
         quant_cfg            = ledger_cfgs.quant_cfg
         clustering_cfg       = ledger_cfgs.clustering_cfg
         plot_cfg             = ledger_cfgs.plot_cfg
-        powder_meas_cfg      = ledger_cfgs.powder_meas_cfg
-        bulk_meas_cfg        = ledger_cfgs.bulk_meas_cfg
         
         # Sample elements
         if els_sample is not None and (els_sample[0] == "" or els_sample[0] is None):
@@ -289,23 +285,12 @@ def batch_quantify_and_analyze(
             plot_cfg.intermixing_violin_plots = bool(intermixing_violin_plots)
 
         # --- Run Composition Analysis or Spectral Acquisition
-        comp_analyzer = EMXSp_Composition_Analyzer(
-            microscope_cfg=microscope_cfg,
+        comp_analyzer = EMXSp_Composition_Analyzer.from_ledger(
+            ledger,
+            ledger_cfgs,
             sample_id=sample_ID,
-            sample_cfg=sample_cfg,
-            measurement_cfg=measurement_cfg,
-            sample_substrate_cfg=sample_substrate_cfg,
-            quant_cfg=quant_cfg,
-            initial_clustering_cfg=clustering_cfg,
-            powder_meas_cfg=powder_meas_cfg,
-            bulk_meas_cfg=bulk_meas_cfg,
-            plot_cfg=plot_cfg,
-            is_acquisition=False,
-            development_mode=False,
             standards_dict=standards_dict,
             output_filename_suffix=output_filename_suffix,
-            verbose=True,
-            results_dir=sample_dir
         )
 
         logging.info(f"Quantifying spectra for '{sample_ID}'.")
