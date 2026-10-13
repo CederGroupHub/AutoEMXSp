@@ -1426,13 +1426,13 @@ def _run_quant_and_analysis(sample_dir: str, payload: Dict[str, Any]) -> Dict[st
 def _ledger_quant_flag(quantifier: Any, els_sample: List[str], els_substrate: List[str],
                        min_bckgrnd_cnts: Optional[float]) -> Optional[int]:
     """Quant flag of a quantified spectrum, as assigned during batch quantification (see quant_flag docs)."""
-    from autoemx.core.composition_analysis.analyser import _worker_check_fit_quant_validity
+    from autoemx.core.quantifier.quant_flags import check_fit_quant_validity
 
     if getattr(quantifier, "quant_result", None) is None and getattr(quantifier, "bad_quant_flag", None) is None:
         return None
     detectable = [el for el in els_substrate if el not in _DEFAULT_UNDETECTABLE_ELS and el not in els_sample]
     try:
-        flag, _comment = _worker_check_fit_quant_validity(
+        flag, _comment = check_fit_quant_validity(
             is_quant_fit_valid=getattr(quantifier, "quant_result", None) is not None,
             bad_quant_flag=getattr(quantifier, "bad_quant_flag", None),
             quantifier=quantifier,

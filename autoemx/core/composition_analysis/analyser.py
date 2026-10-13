@@ -60,7 +60,7 @@ import warnings
 from pathlib import Path
 from datetime import datetime
 from dataclasses import asdict
-from typing import Any, Optional, Tuple, List, Dict, Sequence, Union
+from typing import Any, Optional, Tuple, List, Dict, Union
 from joblib import Parallel, delayed
 
 #TODO remove in future versions
@@ -81,6 +81,13 @@ from sklearn.metrics import silhouette_score
 # Project-specific imports
 from autoemx.core.quantifier import XSp_Quantifier
 from autoemx.core.quantifier.peak_overlaps import warn_peak_overlaps
+from autoemx.core.quantifier.quant_flags import (
+    check_fit_quant_validity,
+    detect_prefit_spectrum_issues,
+    format_min_total_counts_percent,
+    merge_prefit_quant_flag,
+    should_interrupt_prefit_issue,
+)
 from autoemx.core.fitter import DetectorResponseFunction
 from autoemx.core.em_runtime.controller import EM_Controller
 from autoemx.core.em_runtime.image_utilities import xsp_spot_annotation
@@ -158,141 +165,6 @@ def _resolve_parallel_mode(requested_cores: int) -> tuple[int, Optional[str], bo
     return n_cores, backend, use_parallel
 
 
-def _format_min_total_counts_percent(fraction: float) -> str:
-    """Format a total-counts fraction as a compact percentage string."""
-    return f"{float(fraction) * 100:.4g}%"
-
-
-def _detect_prefit_spectrum_issues(
-    *,
-    spectrum: Optional[np.ndarray],
-    energy_vals: Sequence[float],
-    sp_start: int,
-    sp_end: int,
-    target_acquisition_counts: int,
-    min_bckgrnd_cnts: Optional[float],
-    min_total_counts_fraction: float = QuantificationOptionsConfig.DEFAULT_MIN_TOTAL_COUNTS_FRACTION,
-) -> tuple[Optional[int], Optional[str]]:
-    """Detect pre-fit spectrum quality issues that map to quant flags 1-3."""
-    if spectrum is None or len(spectrum) == 0:
-        return 1, "No spectral data present"
-
-    if np.sum(spectrum) < min_total_counts_fraction * target_acquisition_counts:
-        return 2, "Total counts too low"
-
-    n_vals_considered = dflt.prefit_bckgrnd_n_points
-    filter_len = dflt.prefit_bckgrnd_smoothing_channels
-    en_threshold = dflt.prefit_bckgrnd_max_energy_keV
-
-    xy_data = zip(energy_vals, spectrum[sp_start:sp_end])
-    spectrum_data_to_consider = [cnts for en, cnts in xy_data if cnts > 0 and en < en_threshold]
-    if len(spectrum_data_to_consider) == 0:
-        return 3, "Background counts too low"
-
-    spectrum_smooth = np.convolve(
-        spectrum_data_to_consider,
-        np.ones(filter_len) / filter_len,
-        mode='same',
-    )
-    min_vals = np.sort(spectrum_smooth)[:n_vals_considered]
-    if min_bckgrnd_cnts is not None and len(min_vals) > 0 and all(min_vals < min_bckgrnd_cnts):
-        return 3, "Background counts too low"
-
-    return None, None
-
-
-def _should_interrupt_prefit_issue(
-    prefit_quant_flag: Optional[int],
-    interrupt_fits_bad_spectra: bool,
-) -> bool:
-    """Return whether a detected pre-fit issue should skip fitting entirely."""
-    if prefit_quant_flag is None:
-        return False
-    if prefit_quant_flag == 1:
-        return True
-    if prefit_quant_flag in (2, 3):
-        return interrupt_fits_bad_spectra
-    return False
-
-
-def _merge_prefit_quant_flag(
-    quant_flag: int,
-    comment: str,
-    prefit_quant_flag: Optional[int],
-    prefit_comment: Optional[str],
-) -> tuple[int, str]:
-    """Apply pre-fit flags 2/3 when fitting proceeded without interruption."""
-    if prefit_quant_flag in (2, 3) and quant_flag == 0:
-        return prefit_quant_flag, prefit_comment or comment
-    return quant_flag, comment
-
-
-def _worker_flag_spectrum_for_clustering(
-    *,
-    min_bckgrnd_ref_lines: float,
-    quantifier: Any,
-    detectable_els_substrate: Sequence[str],
-    min_bckgrnd_cnts: Optional[float],
-) -> tuple[bool, int, str]:
-    """Pure worker-safe version of clustering-validity flagging."""
-    sub_peak_int_threshold = dflt.max_substrate_peak_percent_total_counts
-    sub_peak_int_thresh_cnts = quantifier.tot_sp_counts * sub_peak_int_threshold / 100
-
-    els_substrate_intensities = {el: 0 for el in detectable_els_substrate}
-    for el_line, peak_info in quantifier.fitted_peaks_info.items():
-        el = el_line.split('_')[0]
-        if el in detectable_els_substrate:
-            els_substrate_intensities[el] += peak_info[cnst.PEAK_INTENSITY_KEY]
-
-    for el, peak_int in els_substrate_intensities.items():
-        if peak_int > sub_peak_int_thresh_cnts:
-            return False, 7, f"{el} {peak_int:.0f} counts > {sub_peak_int_threshold} % of total counts"
-
-    if min_bckgrnd_cnts is not None and min_bckgrnd_ref_lines < min_bckgrnd_cnts:
-        return False, 8, f"Reference background counts too low ({min_bckgrnd_ref_lines:.1f} < {min_bckgrnd_cnts})"
-
-    return True, 0, ""
-
-
-def _worker_check_fit_quant_validity(
-    *,
-    is_quant_fit_valid: bool,
-    bad_quant_flag: Optional[int],
-    quantifier: Any,
-    min_bckgrnd_ref_lines: Any,
-    detectable_els_substrate: Sequence[str],
-    min_bckgrnd_cnts: Optional[float],
-) -> tuple[int, str]:
-    """Pure worker-safe version of post-fit quantification validation."""
-    start_str_comments = 'Fit interrupted due to ' if not is_quant_fit_valid else ''
-
-    if bad_quant_flag == 1:
-        comment = start_str_comments + 'poor fit'
-        quant_flag = 4
-    elif bad_quant_flag == 2:
-        comment = start_str_comments + 'excessively high analytical error'
-        quant_flag = 5
-    elif bad_quant_flag == 3:
-        comment = start_str_comments + 'excessive X-ray absorption'
-        quant_flag = 6
-    elif not is_quant_fit_valid:
-        comment = 'Fit interrupted for unknown reasons'
-        quant_flag = 9
-    else:
-        _, quant_flag, comment = _worker_flag_spectrum_for_clustering(
-            min_bckgrnd_ref_lines=min_bckgrnd_ref_lines,
-            quantifier=quantifier,
-            detectable_els_substrate=detectable_els_substrate,
-            min_bckgrnd_cnts=min_bckgrnd_cnts,
-        )
-
-    if bad_quant_flag == -1 and quant_flag == 0:
-        comment = f"{comment} - Quantification did not converge." if comment else 'Quantification did not converge.'
-        quant_flag = -1
-
-    return quant_flag, comment
-
-
 def _identification_settings(worker_payload: Dict[str, Any]):
     """Settings of the identification of missing elements from a worker payload (None: defaults)."""
     if not worker_payload.get('identify_missing_elements', False):
@@ -338,7 +210,7 @@ def _quantify_spectrum_worker(worker_payload: Dict[str, Any]) -> tuple[int, Opti
             background = None
 
     interrupt_fits_bad_spectra = bool(worker_payload['interrupt_fits_bad_spectra'])
-    prefit_quant_flag, prefit_comment = _detect_prefit_spectrum_issues(
+    prefit_quant_flag, prefit_comment = detect_prefit_spectrum_issues(
         spectrum=spectrum,
         energy_vals=worker_payload['energy_vals'],
         sp_start=int(worker_payload['sp_start']),
@@ -352,7 +224,7 @@ def _quantify_spectrum_worker(worker_payload: Dict[str, Any]) -> tuple[int, Opti
             )
         ),
     )
-    if _should_interrupt_prefit_issue(prefit_quant_flag, interrupt_fits_bad_spectra):
+    if should_interrupt_prefit_issue(prefit_quant_flag, interrupt_fits_bad_spectra):
         quant_record = QuantificationResult(
             quantification_id=int(worker_payload['quantification_id']),
             quant_flag=prefit_quant_flag,
@@ -410,7 +282,7 @@ def _quantify_spectrum_worker(worker_payload: Dict[str, Any]) -> tuple[int, Opti
             logger.error(f"❌ {type(exc).__name__}: {exc}")
         except BaseException:
             pass
-        quant_flag, comment = _worker_check_fit_quant_validity(
+        quant_flag, comment = check_fit_quant_validity(
             is_quant_fit_valid=False,
             bad_quant_flag=None,
             quantifier=None,
@@ -426,7 +298,7 @@ def _quantify_spectrum_worker(worker_payload: Dict[str, Any]) -> tuple[int, Opti
         )
         return spectrum_index, None, quant_record, time.time() - start_quant_time
 
-    quant_flag, comment = _worker_check_fit_quant_validity(
+    quant_flag, comment = check_fit_quant_validity(
         is_quant_fit_valid=is_quant_fit_valid,
         bad_quant_flag=bad_quant_flag,
         quantifier=quantifier,
@@ -434,7 +306,7 @@ def _quantify_spectrum_worker(worker_payload: Dict[str, Any]) -> tuple[int, Opti
         detectable_els_substrate=worker_payload['detectable_els_substrate'],
         min_bckgrnd_cnts=worker_payload['min_bckgrnd_cnts'],
     )
-    quant_flag, comment = _merge_prefit_quant_flag(
+    quant_flag, comment = merge_prefit_quant_flag(
         quant_flag,
         comment,
         prefit_quant_flag,
@@ -1136,7 +1008,7 @@ class EMXSp_Composition_Analyzer:
         )
         lines.append(
             "  Min total counts     : "
-            f"{_format_min_total_counts_percent(min_total_counts_fraction_used)} of target"
+            f"{format_min_total_counts_percent(min_total_counts_fraction_used)} of target"
         )
         lines.append(f"  Beam energy (keV)    : {beam_energy_used:.4f}")
         lines.append(

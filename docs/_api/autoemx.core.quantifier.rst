@@ -14,4 +14,5 @@ Submodules
 
    autoemx.core.quantifier.corrections
    autoemx.core.quantifier.peak_overlaps
+   autoemx.core.quantifier.quant_flags
    autoemx.core.quantifier.quantifier

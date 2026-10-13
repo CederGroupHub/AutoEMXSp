@@ -9,7 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from autoemx.config.runtime_configs import QuantificationOptionsConfig
-from autoemx.core.composition_analysis.analyser import _detect_prefit_spectrum_issues
+from autoemx.core.quantifier.quant_flags import detect_prefit_spectrum_issues
 from autoemx.core.composition_analysis.ledger import LedgerModule
 from autoemx.config.schema_models.quantification import QuantificationConfig
 
@@ -33,13 +33,13 @@ def _prefit_kwargs(**overrides):
 
 
 def test_default_fraction_flags_counts_below_90_percent():
-    flag, comment = _detect_prefit_spectrum_issues(**_prefit_kwargs())
+    flag, comment = detect_prefit_spectrum_issues(**_prefit_kwargs())
     assert flag == 2
     assert comment == "Total counts too low"
 
 
 def test_lower_fraction_allows_the_same_spectrum():
-    flag, comment = _detect_prefit_spectrum_issues(
+    flag, comment = detect_prefit_spectrum_issues(
         **_prefit_kwargs(min_total_counts_fraction=0.7)
     )
     assert flag != 2
@@ -47,7 +47,7 @@ def test_lower_fraction_allows_the_same_spectrum():
 
 
 def test_zero_fraction_disables_the_total_counts_check():
-    flag, _comment = _detect_prefit_spectrum_issues(
+    flag, _comment = detect_prefit_spectrum_issues(
         **_prefit_kwargs(
             spectrum=_flat_spectrum(1),
             min_total_counts_fraction=0.0,
@@ -57,7 +57,7 @@ def test_zero_fraction_disables_the_total_counts_check():
 
 
 def test_empty_spectrum_still_flagged_as_missing():
-    flag, comment = _detect_prefit_spectrum_issues(
+    flag, comment = detect_prefit_spectrum_issues(
         **_prefit_kwargs(spectrum=np.array([]), min_total_counts_fraction=0.0)
     )
     assert flag == 1
