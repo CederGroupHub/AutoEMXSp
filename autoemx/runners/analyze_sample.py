@@ -46,6 +46,7 @@ from autoemx.utils.plotting_helpers import (
 )
 from autoemx.config import load_sample_ledger
 from autoemx.config.ledger_io import ledger_runtime_configs
+from autoemx.runners.set_active_analysis import set_active_analysis
 from autoemx.config.ledger_schemas import (
     AitchisonParams,
     ClusterMergeParams,
@@ -131,15 +132,14 @@ def _keep_or_revert_new_analysis(
         )
     if activate:
         return
-    quant_config.active_clustering_analysis_index = previous_index
-    ledger.to_json_file(ledger_path)
-    previous = (
-        f"clustering {quant_config.clustering_analyses[previous_index].config.clustering_id}"
-        if previous_index is not None else "none"
-    )
+    if previous_index is None:
+        logging.info(f"Clustering analysis {new_clustering_id} stays active: no analysis was active before.")
+        return
+    previous_clustering_id = quant_config.clustering_analyses[previous_index].config.clustering_id
+    set_active_analysis(quantification_id, previous_clustering_id, sample_path=os.path.dirname(ledger_path))
     logging.info(
-        f"Clustering analysis {new_clustering_id} saved but not active: the active analysis is still {previous}. "
-        "Use Set_Active_Analysis.py to change it."
+        f"Clustering analysis {new_clustering_id} saved but not active: the active analysis is still clustering "
+        f"{previous_clustering_id}. Use Set_Active_Analysis.py to change it."
     )
 
 

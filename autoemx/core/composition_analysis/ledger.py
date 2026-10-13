@@ -23,7 +23,12 @@ import autoemx.calibrations as calibs
 import autoemx.config.defaults as dflt
 import autoemx.utils.constants as cnst
 from autoemx._version import __version__ as AUTOEMX_VERSION
-from autoemx.config.ledger_io import _background_relpath, get_active_quantification_config, ingest_spectra
+from autoemx.config.ledger_io import (
+    _background_relpath,
+    create_sample_ledger,
+    get_active_quantification_config,
+    ingest_spectra,
+)
 from autoemx.config.schema_models import (
     ClusteringAnalysis,
     ClusteringConfig as LedgerClusteringConfig,
@@ -329,14 +334,7 @@ class LedgerModule:
             ledger = LedgerModule._load_existing_ledger(self)
             ledger_changed = False
             if ledger is None:
-                ledger = SampleLedger(
-                    sample_id=self.sample_id,
-                    sample_path=os.path.abspath(self.sample_result_dir),
-                    configs=LedgerModule._build_ledger_configs(self),
-                    spectra=[],
-                    quantifications=[],
-                    active_quant=None,
-                )
+                ledger = create_sample_ledger(self.sample_result_dir, self.sample_id, LedgerModule._build_ledger_configs(self))
                 self._last_acq_ledger_created = True
                 ledger_changed = True
 
@@ -510,15 +508,7 @@ class LedgerModule:
         """Create or load a SampleLedger and attach it to the particle finder for PSD."""
         ledger = LedgerModule._load_existing_ledger(self)
         if ledger is None:
-            ledger = SampleLedger(
-                sample_id=self.sample_id,
-                sample_path=os.path.abspath(self.sample_result_dir),
-                configs=LedgerModule._build_ledger_configs(self),
-                spectra=[],
-                particles=[],
-                quantifications=[],
-                active_quant=None,
-            )
+            ledger = create_sample_ledger(self.sample_result_dir, self.sample_id, LedgerModule._build_ledger_configs(self))
         else:
             # Fresh PSD run replaces prior particle geometry records.
             ledger.particles = []
@@ -577,15 +567,7 @@ class LedgerModule:
         except Exception:
             ledger = None
         if ledger is None:
-            ledger = SampleLedger(
-                sample_id=self.sample_id,
-                sample_path=os.path.abspath(self.sample_result_dir),
-                configs=LedgerModule._build_ledger_configs(self),
-                spectra=[],
-                particles=[],
-                quantifications=[],
-                active_quant=None,
-            )
+            ledger = create_sample_ledger(self.sample_result_dir, self.sample_id, LedgerModule._build_ledger_configs(self))
         ledger.spectra.append(spectrum_entry)
         if particle_id is not None:
             LedgerModule._upsert_particle_info(

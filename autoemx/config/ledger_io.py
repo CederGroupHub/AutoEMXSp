@@ -3,6 +3,7 @@
 """Convenience I/O helpers for sample ledgers."""
 
 import math
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, cast
@@ -149,6 +150,19 @@ def _build_spectrum_entry(
         spectrum_relpath=pointer_relpath,
         instrument_background_relpath=background_relpath,
         quantification_results=list(quantification_results or []),
+    )
+
+
+def create_sample_ledger(sample_dir: str | Path, sample_id: str, configs: LedgerConfigs) -> SampleLedger:
+    """New ledger of a sample, with its configurations and no spectra, particles or quantification runs (not saved)."""
+    return SampleLedger(
+        sample_id=sample_id,
+        sample_path=os.path.abspath(sample_dir),
+        configs=configs,
+        spectra=[],
+        particles=[],
+        quantifications=[],
+        active_quant=None,
     )
 
 

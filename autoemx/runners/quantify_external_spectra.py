@@ -31,8 +31,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import autoemx.calibrations as calibs
 import autoemx.config.defaults as dflt
 import autoemx.utils.constants as cnst
-from autoemx.config.ledger_io import ingest_spectra, load_sample_ledger
-from autoemx.config.ledger_schemas import ClusteringConfig, LedgerConfigs, SampleLedger  # type: ignore
+from autoemx.config.ledger_io import create_sample_ledger, ingest_spectra, load_sample_ledger
+from autoemx.config.ledger_schemas import ClusteringConfig, LedgerConfigs  # type: ignore
 from autoemx.config.runtime_configs import (
     BulkMeasurementConfig,
     MeasurementConfig,
@@ -381,10 +381,10 @@ def quantify_external_spectra(
             if os.path.exists(ledger_path):
                 ledger = load_sample_ledger(ledger_path)
             else:
-                ledger = SampleLedger(
-                    sample_id=sample_id,
-                    sample_path=os.path.abspath(sample_dir),
-                    configs=LedgerConfigs(
+                ledger = create_sample_ledger(
+                    sample_dir,
+                    sample_id,
+                    LedgerConfigs(
                         microscope_cfg=sample_microscope_cfg,
                         sample_cfg=sample_cfg,
                         measurement_cfg=measurement_cfg.model_copy(
@@ -393,9 +393,6 @@ def quantify_external_spectra(
                         sample_substrate_cfg=sample_substrate_cfg,
                         plot_cfg=plot_cfg,
                     ),
-                    spectra=[],
-                    quantifications=[],
-                    active_quant=None,
                 )
             n_ingested, _ = ingest_spectra(ledger)
             if not ledger.spectra:
