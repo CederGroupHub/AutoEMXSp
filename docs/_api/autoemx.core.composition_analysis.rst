@@ -16,6 +16,7 @@ Submodules
    autoemx.core.composition_analysis.clustering
    autoemx.core.composition_analysis.clustering_plot_axes
    autoemx.core.composition_analysis.custom_plotting_builtin
+   autoemx.core.composition_analysis.ledger
    autoemx.core.composition_analysis.plotting
    autoemx.core.composition_analysis.reference_matching
    autoemx.core.composition_analysis.standards

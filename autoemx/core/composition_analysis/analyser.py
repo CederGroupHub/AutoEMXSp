@@ -5,7 +5,7 @@ EMXSp_Composition_Analyzer
 
 Main class for automated compositional analysis of electron microscopy X-ray spectroscopy (EMXSp) data.
 
-Can be run from run_acquisition_quant_analysis.py
+Can be run from Run_Acquisition.py, Run_Quantification.py and Run_Analysis.py.
 
 Features:
 - Structured configuration for microscope, sample, measurement, and analysis parameters.
@@ -41,6 +41,11 @@ Example Usage
     # Alternatively, acquire only, then quantify:
     >>> analyzer.run_collection_and_quantification(quantify=False)
     >>> quantify and analyse on another machine using Run_Quantification.py
+
+    # Analyzer of a sample already acquired, from its ledger (folder, ledger.json or loaded ledger)
+    >>> analyzer = EMXSp_Composition_Analyzer.from_ledger('Results/sample_001')
+    >>> analyzer.run_quantification()
+    >>> analyzer.analyse_data(max_analytical_error_percent=5)
 
 
 @author: Andrea
@@ -455,7 +460,12 @@ class EMXSp_Composition_Analyzer:
 
     This class orchestrates the acquisition, quantification, clustering, and plotting
     of X-ray spectra and composition data, using structured configuration objects for
-    all instrument and analysis settings.
+    all instrument and analysis settings. To quantify or analyse a sample already acquired,
+    create the analyzer from its ledger with ``EMXSp_Composition_Analyzer.from_ledger``.
+
+    The sample ledger (ledger.json) is read and written by ``LedgerModule``
+    (composition_analysis/ledger.py); legacy samples (Data.csv) are imported by
+    ``autoemx.utils.legacy``.
 
     Parameters
     ----------
@@ -854,6 +864,67 @@ class EMXSp_Composition_Analyzer:
             ):
                 LedgerModule._configure_list_particle_selection(self)
         
+
+    @classmethod
+    def from_ledger(
+        cls,
+        ledger: Union[str, Path, SampleLedger],
+        configs: Optional[LedgerRuntimeConfigs] = None,
+        *,
+        exp_stds_cfg: Optional[ExpStandardsConfig] = None,
+        sample_id: Optional[str] = None,
+        **kwargs: Any,
+    ) -> "EMXSp_Composition_Analyzer":
+        """
+        Create an analyzer of a sample already acquired, from its ledger (to quantify or analyse it again).
+
+        Parameters
+        ----------
+        ledger : str, Path or SampleLedger
+            Sample folder, path of its ledger.json, or its loaded ledger.
+        configs : LedgerRuntimeConfigs, optional
+            Configurations of the sample, e.g. ledger_runtime_configs(ledger) changed by the caller. Default: those of
+            the ledger, with the quantification options and clustering configuration of its active quantification
+            run (see ledger_runtime_configs).
+        exp_stds_cfg : ExpStandardsConfig, optional
+            Settings of the experimental standard, to fit the sample as a standard (as when it was acquired). Default:
+            the sample is quantified and analysed as an ordinary sample, even if it is a standard.
+        sample_id : str, optional
+            Sample ID. Default: that of the ledger.
+        **kwargs
+            Other arguments of the analyzer, e.g. standards_dict, output_filename_suffix, verbose.
+
+        Returns
+        -------
+        EMXSp_Composition_Analyzer
+            Analyzer of the sample (not in acquisition mode).
+        """
+        if not isinstance(ledger, SampleLedger):
+            ledger_path = Path(ledger)
+            if ledger_path.is_dir():
+                ledger_path = ledger_path / f"{cnst.LEDGER_FILENAME}{cnst.LEDGER_FILEEXT}"
+            ledger = load_sample_ledger(ledger_path)
+        if configs is None:
+            configs = ledger_runtime_configs(ledger)
+        return cls(
+            microscope_cfg=configs.microscope_cfg,
+            sample_cfg=configs.sample_cfg,
+            measurement_cfg=configs.measurement_cfg,
+            sample_substrate_cfg=configs.sample_substrate_cfg,
+            quant_cfg=configs.quant_cfg,
+            initial_clustering_cfg=configs.clustering_cfg,
+            powder_meas_cfg=configs.powder_meas_cfg,
+            bulk_meas_cfg=configs.bulk_meas_cfg,
+            exp_stds_cfg=exp_stds_cfg if exp_stds_cfg is not None else ExpStandardsConfig(),
+            plot_cfg=configs.plot_cfg,
+            is_acquisition=False,
+            sample_id=sample_id if sample_id is not None else ledger.sample_id,
+            results_dir=ledger.sample_path,
+            **kwargs,
+        )
+
+ 
+
 
     #%% Instrument initializations
     # =============================================================================
@@ -1361,50 +1432,6 @@ class EMXSp_Composition_Analyzer:
         return int(np.round(np.sum(counts_arr)))
     
     
-    def _check_fit_quant_validity(
-        self,
-        is_quant_fit_valid: bool,
-        bad_quant_flag: int,
-        quantifier: Any,
-        min_bckgrnd_ref_lines: Any
-    ) -> tuple[int, str]:
-        """
-        Determine the quantification flag and comment for a spectrum based on fit outcomes.
-    
-        Parameters
-        ----------
-        is_quant_fit_valid : bool
-            Whether the spectrum fit and quantification succeeded without errors.
-        bad_quant_flag : int
-            Indicator of the type of issue detected during fitting:
-            - 1: poor fit
-            - 2: excessively high analytical error
-            - 3: excessive absorption
-            - -1: non-converged fit
-        quantifier : object
-            The quantifier instance used for this spectrum; may be used for additional checks.
-        min_bckgrnd_ref_lines : Any
-            Reference value for background lines, used for further spectrum checks.
-    
-        Returns
-        -------
-        quant_flag : int
-            Numerical flag representing the spectrum quality after fit/quantification.
-        comment : str
-            Human-readable comment describing the outcome or issue detected.
-        """
-        quant_flag, comment = _worker_check_fit_quant_validity(
-            is_quant_fit_valid=is_quant_fit_valid,
-            bad_quant_flag=bad_quant_flag,
-            quantifier=quantifier,
-            min_bckgrnd_ref_lines=min_bckgrnd_ref_lines,
-            detectable_els_substrate=self.detectable_els_substrate,
-            min_bckgrnd_cnts=self.clustering_cfg.min_bckgrnd_cnts,
-        )
-        if self.verbose and is_quant_fit_valid and quant_flag in (4, 5, 6, 7, 8):
-            logger.warning(f"⚠️ Flagged: {comment}. This is likely to lead to large quantification errors.")
-        return quant_flag, comment
-        
     def _min_total_counts_fraction(self) -> float:
         """Return the configured minimum total-counts fraction for pre-fit flag 2."""
         return float(
@@ -1499,84 +1526,6 @@ class EMXSp_Composition_Analyzer:
     def _identification_seed_spectra(self) -> int:
         """Number of spectra checked before the elements found in them are tested first in the others."""
         return int(getattr(self.quant_cfg, "identification_seed_spectra", dflt.identification_seed_spectra))
-
-    def _detect_prefit_spectrum_issues(
-        self,
-        spectrum: Optional[np.ndarray],
-        background: Optional[np.ndarray] = None,
-    ) -> tuple[Optional[int], Optional[str]]:
-        """Detect pre-fit spectrum quality issues for the current analyzer configuration."""
-        _ = background  # Reserved for interface compatibility with call sites.
-        return _detect_prefit_spectrum_issues(
-            spectrum=spectrum,
-            energy_vals=self.energy_vals,
-            sp_start=self.sp_start,
-            sp_end=self.sp_end,
-            target_acquisition_counts=int(self.measurement_cfg.target_acquisition_counts),
-            min_bckgrnd_cnts=dflt.prefit_min_bckgrnd_cnts,
-            min_total_counts_fraction=self._min_total_counts_fraction(),
-        )
-
-    def _resolve_prefit_spectrum_gate(
-        self,
-        spectrum: Optional[np.ndarray],
-        background: Optional[np.ndarray] = None,
-        *,
-        interrupt_fits_bad_spectra: bool,
-    ) -> tuple[bool, Optional[int], Optional[str]]:
-        """
-        Decide whether fitting should be skipped based on pre-fit checks.
-
-        Flags 2 and 3 only block fitting when ``interrupt_fits_bad_spectra`` is
-        True. Flag 1 (missing spectrum data) always blocks fitting.
-        """
-        prefit_quant_flag, prefit_comment = self._detect_prefit_spectrum_issues(
-            spectrum,
-            background,
-        )
-        if prefit_quant_flag == 1 and self.verbose:
-            logger.error("❌ Error during spectrum collection. No quantification was done.")
-        elif prefit_quant_flag == 2 and self.verbose:
-            counts_percent = _format_min_total_counts_percent(self._min_total_counts_fraction())
-            if _should_interrupt_prefit_issue(prefit_quant_flag, interrupt_fits_bad_spectra):
-                logger.info(
-                    "⏭️ Quantification skipped due to spectrum counts lower than "
-                    f"{counts_percent} of the target counts of "
-                    f"{self.measurement_cfg.target_acquisition_counts}"
-                )
-            else:
-                logger.info(
-                    "⚠️ Spectrum counts are lower than "
-                    f"{counts_percent} of the target counts of "
-                    f"{self.measurement_cfg.target_acquisition_counts}; proceeding with "
-                    "quantification because interrupt_fits_bad_spectra=False."
-                )
-        elif prefit_quant_flag == 3 and self.verbose:
-            n_vals_considered = dflt.prefit_bckgrnd_n_points
-            en_threshold = dflt.prefit_bckgrnd_max_energy_keV
-            min_background_threshold = dflt.prefit_min_bckgrnd_cnts
-            if _should_interrupt_prefit_issue(prefit_quant_flag, interrupt_fits_bad_spectra):
-                logger.info(
-                    f"⏭️ Quantification skipped due to at least {n_vals_considered} spectrum "
-                    f"points with E < {en_threshold} keV having a count lower than "
-                    f"{min_background_threshold}"
-                )
-                logger.warning(
-                    "⚠️ This generally indicates an excessive absorption of X-rays before they "
-                    "reach the detector, which compromises accurate measurements of PB ratios."
-                )
-            else:
-                logger.info(
-                    f"⚠️ At least {n_vals_considered} spectrum points with E < {en_threshold} keV "
-                    f"have counts below {min_background_threshold}; proceeding with quantification "
-                    "because interrupt_fits_bad_spectra=False."
-                )
-
-        should_interrupt = _should_interrupt_prefit_issue(
-            prefit_quant_flag,
-            interrupt_fits_bad_spectra,
-        )
-        return not should_interrupt, prefit_quant_flag, prefit_comment
 
     #%% Spectra acquisition and quantification routines
     # ============================================================================= 
@@ -3284,62 +3233,5 @@ class EMXSp_Composition_Analyzer:
             energy_range_keV=energy_range,
             microscope_ID=self.microscope_cfg.ID,
         )
-    @classmethod
-    def from_ledger(
-        cls,
-        ledger: Union[str, Path, SampleLedger],
-        configs: Optional[LedgerRuntimeConfigs] = None,
-        *,
-        exp_stds_cfg: Optional[ExpStandardsConfig] = None,
-        sample_id: Optional[str] = None,
-        **kwargs: Any,
-    ) -> "EMXSp_Composition_Analyzer":
-        """
-        Create an analyzer of a sample already acquired, from its ledger (to quantify or analyse it again).
 
-        Parameters
-        ----------
-        ledger : str, Path or SampleLedger
-            Sample folder, path of its ledger.json, or its loaded ledger.
-        configs : LedgerRuntimeConfigs, optional
-            Configurations of the sample, e.g. ledger_runtime_configs(ledger) changed by the caller. Default: those of
-            the ledger, with the quantification options and clustering configuration of its active quantification
-            run (see ledger_runtime_configs).
-        exp_stds_cfg : ExpStandardsConfig, optional
-            Settings of the experimental standard, to fit the sample as a standard (as when it was acquired). Default:
-            the sample is quantified and analysed as an ordinary sample, even if it is a standard.
-        sample_id : str, optional
-            Sample ID. Default: that of the ledger.
-        **kwargs
-            Other arguments of the analyzer, e.g. standards_dict, output_filename_suffix, verbose.
 
-        Returns
-        -------
-        EMXSp_Composition_Analyzer
-            Analyzer of the sample (not in acquisition mode).
-        """
-        if not isinstance(ledger, SampleLedger):
-            ledger_path = Path(ledger)
-            if ledger_path.is_dir():
-                ledger_path = ledger_path / f"{cnst.LEDGER_FILENAME}{cnst.LEDGER_FILEEXT}"
-            ledger = load_sample_ledger(ledger_path)
-        if configs is None:
-            configs = ledger_runtime_configs(ledger)
-        return cls(
-            microscope_cfg=configs.microscope_cfg,
-            sample_cfg=configs.sample_cfg,
-            measurement_cfg=configs.measurement_cfg,
-            sample_substrate_cfg=configs.sample_substrate_cfg,
-            quant_cfg=configs.quant_cfg,
-            initial_clustering_cfg=configs.clustering_cfg,
-            powder_meas_cfg=configs.powder_meas_cfg,
-            bulk_meas_cfg=configs.bulk_meas_cfg,
-            exp_stds_cfg=exp_stds_cfg if exp_stds_cfg is not None else ExpStandardsConfig(),
-            plot_cfg=configs.plot_cfg,
-            is_acquisition=False,
-            sample_id=sample_id if sample_id is not None else ledger.sample_id,
-            results_dir=ledger.sample_path,
-            **kwargs,
-        )
-
- 
