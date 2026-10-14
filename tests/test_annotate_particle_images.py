@@ -13,8 +13,15 @@ from PIL import Image
 
 import autoemx.utils.constants as cnst
 from autoemx.config.ledger_io import load_sample_ledger
-from autoemx.config.ledger_schemas import AcquisitionDetails, ParticleInfo, SpotCoordinates
-from autoemx.config.runtime_configs import MeasurementConfig
+from autoemx.config.ledger_schemas import (
+    AcquisitionDetails,
+    ParticleInfo,
+    ParticleSizeBand,
+    ParticleStatsFrame,
+    ParticleStatsProgress,
+    SpotCoordinates,
+)
+from autoemx.config.runtime_configs import MeasurementConfig, PowderMeasurementConfig
 from autoemx.core.em_runtime.image_utilities import save_frame_image
 from autoemx.runners.annotate_particle_images import annotate_particle_images
 from ci_paths import INPUTS_DIR, WULFENITE_MINI_ID
@@ -83,3 +90,37 @@ def test_annotate_particle_images(tmp_path: Path):
         # The original image is not modified
         original = np.array(Image.open(sample_dir / cnst.IMAGES_DIR / out.name).convert("RGB"))
         assert not _is_red(original).any()
+
+
+def test_frame_images_annotated_with_their_particles(tmp_path: Path):
+    sample_dir = _make_sample(tmp_path, pixel_size_in_ledger=True)
+    ledger_path = sample_dir / f"{cnst.LEDGER_FILENAME}{cnst.LEDGER_FILEEXT}"
+    ledger = load_sample_ledger(str(ledger_path))
+    images_dir = sample_dir / cnst.IMAGES_DIR
+    for name in ("S_frA0_particles", "S_frEDS0_particles"):  # raw frame images, as saved during acquisition
+        save_frame_image(np.full((150, 200), 90, dtype=np.uint8), PIXEL_SIZE_UM, 200, 150, WULFENITE_MINI_ID,
+                         ledger.configs.microscope_cfg, name, str(images_dir), im_annotations=None, scalebar=False,
+                         image_extension="png")
+
+    def frame(frame_id, image_file, marks):
+        return ParticleStatsFrame(frame_id=frame_id, frame_width_um=10.0, pixel_size_um=PIXEL_SIZE_UM, area_um2=75.0,
+                                  n_particles=0, image_file=image_file, particle_marks_px=marks,
+                                  **({"particle_areas_um2": [], "particle_edge_corrections": []} if "EDS" in frame_id else {}))
+
+    eds_scan = ParticleSizeBand(d_min_um=1.0, d_max_um=5.0, n_frames=0, scanned_area_um2=0.0)
+    eds_scan.add_frame(frame("EDS-0", "S_frEDS0_particles.png", [(150, 75, 20, None)]), [])
+    ledger.eds_size_scans = [eds_scan]
+    progress_band = ParticleSizeBand(d_min_um=1.0, d_max_um=5.0, n_frames=0, scanned_area_um2=0.0)
+    progress_band.add_frame(frame("A0", "S_frA0_particles.png", [(50, 75, 15, 7)]), [])
+    ledger.particle_stats_progress = ParticleStatsProgress(n_par_target=1, powder_meas_cfg=PowderMeasurementConfig(),
+                                                           bands=[progress_band])
+    ledger.to_json_file(str(ledger_path))
+
+    written = annotate_particle_images(sample_path=str(sample_dir), verbose=False)
+    annotated_dir = images_dir / cnst.ANNOTATED_IMAGES_SUBDIR
+    for name, (x, y, r) in (("S_frA0_particles.png", (50, 75, 15)), ("S_frEDS0_particles.png", (150, 75, 20))):
+        assert str(annotated_dir / name) in written
+        annotated = np.array(Image.open(annotated_dir / name).convert("RGB"))
+        assert _is_red(annotated[y, x + r - 1:x + r + 2]).any()  # circle drawn around the particle
+        raw = np.array(Image.open(images_dir / name).convert("RGB"))
+        assert not _is_red(raw).any()  # the saved image stays raw

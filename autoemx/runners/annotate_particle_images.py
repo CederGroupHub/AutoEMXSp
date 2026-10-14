@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Annotate the particle images of a sample with the X-ray spectrum spots.
+Annotate the particle and frame images of a sample with the X-ray spectrum spots and the particles found.
 
-During acquisition, particle images are saved without annotations (unless
-``annotate_particle_images=True``), while the pixel position of every spectrum spot
-is stored in the sample ledger. This runner draws each spot as a dot with its
-spectrum ID, as done during acquisition, plus a scale bar when the pixel size is known.
+During acquisition, particle and frame images are saved without annotations (unless
+``annotate_particle_images=True``), while the pixel position of every spectrum spot, and
+of every particle found in a frame, is stored in the sample ledger. This runner draws each
+spot as a dot with its spectrum ID, and each particle found in a frame (particle size
+statistics, or frames searched for EDS particles) as a circle with its particle number, as
+done during acquisition, plus a scale bar when the pixel size is known.
 
 Annotated copies are written to ``SEM images/annotated``; the original images are not
 modified.
@@ -20,6 +22,8 @@ Workflow
   (or ``<sample>_fr<F>_xyspots.<ext>`` for grid/linescan acquisitions).
 - Finds the spectra acquired on each image: same particle (or same frame, for images without particle).
 - Draws a dot + spectrum ID at the pixel position of each spectrum, and a scale bar.
+- Annotates the frame images recorded in the ledger (``particle_stats``, ``particle_stats_progress``,
+  ``eds_size_scans``) with their particles (``particle_marks_px``).
 
 Notes
 -----
@@ -45,7 +49,7 @@ from PIL import Image
 
 import autoemx.utils.constants as cnst
 from autoemx.config.ledger_io import load_sample_ledger
-from autoemx.core.em_runtime.image_utilities import draw_annotations, xsp_spot_annotation
+from autoemx.core.em_runtime.image_utilities import draw_annotations, particle_mark_annotations, xsp_spot_annotation
 from autoemx.utils.helper import draw_scalebar, get_sample_dir, parse_xsp_spots_image_name
 
 # Configure logging
@@ -124,6 +128,15 @@ def _spots_by_image(ledger) -> Tuple[Dict[int, list], Dict[str, list]]:
     return by_particle, by_frame
 
 
+def _recorded_frames(ledger) -> list:
+    """Frames of the ledger with an image and particles to mark: particle size statistics and EDS frames."""
+    scans = list(ledger.eds_size_scans)
+    for stats in (ledger.particle_stats, ledger.particle_stats_progress):
+        if stats is not None:
+            scans += list(stats.bands)
+    return [frame for scan in scans for frame in scan.frames if frame.image_file and frame.particle_marks_px is not None]
+
+
 def annotate_particle_images(
     sample_path: Optional[str] = None,
     sample_ID: Optional[str] = None,
@@ -134,7 +147,8 @@ def annotate_particle_images(
     verbose: bool = True,
 ) -> List[str]:
     """
-    Write copies of the particle images of a sample annotated with the X-ray spectrum spots.
+    Write copies of the particle images of a sample annotated with the X-ray spectrum spots, and of its frame
+    images annotated with the particles found in them.
 
     Parameters
     ----------
@@ -211,6 +225,22 @@ def annotate_particle_images(
         written.append(str(out_path))
         if verbose:
             logging.info(f"Annotated {path.name} with {len(spots)} spectrum spot(s).")
+
+    # Frames: particles found in them
+    for frame in _recorded_frames(ledger):
+        path = images_dir / frame.image_file
+        out_path = out_dir / frame.image_file
+        if not path.exists() or (out_path.exists() and not overwrite):
+            continue
+        image = _load_raw_image(path)
+        draw_annotations(image, particle_mark_annotations(frame.particle_marks_px, image.shape[1]))
+        if scalebar:
+            image = draw_scalebar(image, frame.pixel_size_um)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(image.astype(np.uint8)).save(out_path)
+        written.append(str(out_path))
+        if verbose:
+            logging.info(f"Annotated {path.name} with {len(frame.particle_marks_px)} particle(s).")
 
     if verbose:
         logging.info(f"{len(written)} annotated image(s) written to {out_dir}")

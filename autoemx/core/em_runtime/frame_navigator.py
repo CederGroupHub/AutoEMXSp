@@ -104,6 +104,9 @@ class FrameNavigator:
         # Current frame center position in stage coordinates (mm).
         # Used by EM_Controller.convert_pixel_pos_to_mm.
         self._current_pos = center_pos
+        # Whether _current_pos is the actual position of the current frame (False if the stage position could not
+        # be read after the user moved it)
+        self.current_pos_is_measured = True
         self.grid_search_fw_mm = None
         self._band_frame_descriptors: List[FrameDescriptor] = []
         self._visited_band_frames: List[FrameDescriptor] = []
@@ -472,7 +475,8 @@ class FrameNavigator:
         Set the current frame position to the stage position, after the user moved the stage manually.
 
         Uses the optional driver function get_position(). If the driver does not provide it, or the
-        position cannot be read, the last known position is kept (initially the sample center).
+        position cannot be read, the last known position is kept (initially the sample center), and
+        ``current_pos_is_measured`` is False: frames are then recorded without position.
         """
         try:
             get_position = getattr(self.EM_driver, "get_position", None)
@@ -483,10 +487,12 @@ class FrameNavigator:
             try:
                 x, y = get_position()
                 self._current_pos = (float(x), float(y))
+                self.current_pos_is_measured = True
                 return
             except Exception as e:
                 logger.warning(f"⚠️ Could not read the stage position ({e}). Using the last known position.")
 
+        self.current_pos_is_measured = False
         if self._current_pos is None:
             self._current_pos = self._center_pos
 
@@ -538,6 +544,7 @@ class FrameNavigator:
             next_frame_pos = self.frame_pos_mm[self._frame_cntr]
             microscope_ctrl.move_to_pos(next_frame_pos)
             self._current_pos = next_frame_pos
+            self.current_pos_is_measured = True
             self.current_frame_label = self.frame_labels[self._frame_cntr]
             
             # Set frame width for particle acquisition

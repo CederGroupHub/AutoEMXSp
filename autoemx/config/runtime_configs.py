@@ -251,11 +251,12 @@ class MeasurementConfig(BaseModel):
         bulk_meas_cfg (Optional[BulkMeasurementConfig]): Bulk/grid acquisition settings.
         exp_stds_cfg (Optional[ExpStandardsConfig]): Experimental standards settings.
         saved_images_extension (str): Extension used when saving SEM frame images.
-        save_raw_images (bool): Whether to also save the non-annotated version of annotated SEM images
-            (frame images, and particle images when ``annotate_particle_images`` is True).
-        annotate_particle_images (bool): Whether to draw the spectrum spots (dot + spectrum ID) and a scale bar
-            on the particle images saved during acquisition. If False (default), raw particle images are saved;
-            annotated copies can be made afterwards with ``Annotate_Particle_Images.py``.
+        save_raw_images (bool): Whether to also save the non-annotated version of annotated SEM images (when
+            ``annotate_particle_images`` is True).
+        annotate_particle_images (bool): Whether to annotate the images saved during acquisition: spectrum spots
+            (dot + spectrum ID) on particle images, particles found (circle + particle number) on frame images,
+            and a scale bar. If False (default), raw images are saved; annotated copies can be made afterwards
+            with ``Annotate_Particle_Images.py``, from the positions stored in the ledger.
     """
 
     type: str = dflt.measurement_type
@@ -430,9 +431,10 @@ class PowderMeasurementConfig(BaseModel):
         size_stats_max_n_frames (int): Maximum number of frames analysed when stopping on precision (default: 500).
         size_stats_max_time_min (float, optional): Maximum duration, in minutes, of a measurement stopping on
             precision (default: None, no limit).
-        include_eds_auto_particles (bool): Whether particle size statistics also include the particles of the sample
-            measured by EDS with par_selection_mode 'auto' (default: True). Particles chosen manually or from a
-            list are never included, since their choice is not unbiased.
+        include_eds_auto_particles (bool): Whether particle size statistics also include what EDS measured on the
+            sample with par_selection_mode 'auto' (default: True): the particles counted in the frames it searched,
+            or, for samples measured before these were recorded, the particles it measured. Particles chosen
+            manually or from a list are never included, since their choice is not unbiased.
     """
     DEFAULT_PAR_SEGMENTATION_MODEL: ClassVar[str] = "threshold_bright"
     AVAILABLE_SPOT_SELECTION_MODES: ClassVar[Tuple[str, ...]] = ('auto', 'callback')

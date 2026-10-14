@@ -58,6 +58,7 @@ import numpy as np
 
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
+from autoemx.core.em_runtime.image_utilities import particle_mark_annotations
 from autoemx.core.em_runtime.xsp_spot_selection import (
     XSpSpotSelectionContext,
     XSpSpotSelectorCallback,
@@ -318,6 +319,9 @@ class EM_Particle_Finder:
         self._stats_progress: Optional[ParticleStatsProgress] = None
         self._stats_band: Optional[ParticleSizeBand] = None
         self._stats_max_n_frames: Optional[int] = None  # frame limit of a measurement stopping on precision
+        # Frames searched for EDS (automatic particle selection) not saved to the ledger yet, with the size range
+        # they count: ((d_min_um, d_max_um, frame_width_um), frame record)
+        self.pending_eds_frames: List[Tuple[Tuple[float, float, float], ParticleStatsFrame]] = []
 
     @property
     def is_manual_particle_selection(self) -> bool:
@@ -625,6 +629,86 @@ class EM_Particle_Finder:
         return True
     
     
+    def _stats_frame_id(self) -> Optional[str]:
+        """
+        Id of the current frame in the size band being collected: its label, made unique in the band (``#2``,
+        ``#3``, ...) if a frame with the same label was recorded (e.g. manual frames of a resumed measurement).
+        """
+        label = self.EM.current_frame_label
+        if label is None:
+            return None
+        frame_id = str(label)
+        band = self._stats_band
+        if band is not None:
+            recorded = {frame.frame_id for frame in band.frames}
+            n = 2
+            unique_id = frame_id
+            while unique_id in recorded:
+                unique_id, n = f"{frame_id}#{n}", n + 1
+            frame_id = unique_id
+        return frame_id
+
+    def _current_frame_position(self) -> Optional[Tuple[float, float]]:
+        """Stage position (mm) of the current frame, or None if not known (e.g. not read after a manual move)."""
+        navigator = getattr(self.EM, "frame_navigator", None)
+        if navigator is None or not getattr(navigator, "current_pos_is_measured", True):
+            return None
+        return getattr(navigator, "_current_pos", None)
+
+    def _record_eds_search_frame(
+        self,
+        frame_image_shape: Tuple[int, ...],
+        num_labels: int,
+        stats: np.ndarray,
+        image_file: Optional[str] = None,
+        particle_marks: Optional[List[Tuple[int, int, int, Optional[int]]]] = None,
+    ) -> None:
+        """
+        Record a frame searched for EDS particles, with the area and edge correction of each particle valid for
+        particle size statistics (within the area limits, of at least min_par_pixels pixels, not touching the frame
+        edge), whether it is then measured by EDS or not (see ``SampleLedger.eds_size_scans``).
+        """
+        im_height, im_width = frame_image_shape[:2]
+        pixel_size_um = float(self.EM.pixel_size_um)
+        areas_um2, corrections = [], []
+        for i in range(1, num_labels):
+            area_px = int(stats[i, cv2.CC_STAT_AREA])
+            if (
+                area_px >= self.powder_meas_cfg.min_par_pixels
+                and self._is_particle_area_ok(area_px)
+                and not self.is_particle_at_frame_edge(stats, i)
+            ):
+                areas_um2.append(float(area_px * pixel_size_um**2))
+                corrections.append(particle_statistics.edge_correction_factor(
+                    int(stats[i, cv2.CC_STAT_WIDTH]), int(stats[i, cv2.CC_STAT_HEIGHT]),
+                    im_width, im_height, FRAME_EDGE_MARGIN_PX,
+                ))
+        frame_width_um = im_width * pixel_size_um
+        d_min_um = max(
+            float(2.0 * np.sqrt(self.powder_meas_cfg.min_area_par / np.pi)),
+            min_valid_diameter_um(pixel_size_um, self.powder_meas_cfg.min_par_pixels),
+        )
+        d_max_um = float(2.0 * np.sqrt(self.powder_meas_cfg.max_area_par / np.pi))
+        if d_min_um >= d_max_um:
+            return  # frames too coarse to measure particles of this size
+        position = self._current_frame_position()
+        label = self.EM.current_frame_label
+        self.pending_eds_frames.append((
+            (d_min_um, d_max_um, frame_width_um),
+            ParticleStatsFrame(
+                frame_id=f"EDS-{label}" if label is not None else "EDS",
+                center_mm=Coordinate2D(x=float(position[0]), y=float(position[1])) if position is not None else None,
+                frame_width_um=frame_width_um,
+                pixel_size_um=pixel_size_um,
+                area_um2=float(im_height * im_width * pixel_size_um**2),
+                n_particles=len(areas_um2),
+                particle_areas_um2=areas_um2,
+                particle_edge_corrections=corrections,
+                image_file=image_file,
+                particle_marks_px=list(particle_marks) if particle_marks is not None else None,
+            ),
+        ))
+
     #%% Particle Segmentation Operations
     # =============================================================================
     def _get_particles_coordinates_in_frame(self, frame_image=None, pixel_size=None, results_dir=None):
@@ -729,10 +813,13 @@ class EM_Particle_Finder:
         # cv2.imshow('Filtered mask', par_mask)
         
         
-        # Save frame image annotating it with the identified particles
-        filename = f"{self._sample_id}_fr{self.EM.current_frame_label}_particles"
-        im_annotations = [{cnst.ANNOTATION_CIRCLE_KEY: (int(rad), center.astype(int), 2)} for rad, center in zip(par_radius_pixels, par_pos_pixels)]
-        self.EM.save_frame_image(filename, im_annotations = im_annotations)
+        # Save the frame image (annotated with the identified particles only if annotate_particle_images), and count
+        # the particles of the frame for particle size statistics
+        particle_marks = [
+            (int(center[0]), int(center[1]), int(rad), None) for rad, center in zip(par_radius_pixels, par_pos_pixels)
+        ]
+        image_file = self._save_frame_images(f"{self._sample_id}_fr{self.EM.current_frame_label}", None, particle_marks)
+        self._record_eds_search_frame(frame_image.shape, num_labels, stats, image_file, particle_marks)
         
         
         # Return false if no particles were detected in the frame
@@ -1638,22 +1725,51 @@ class EM_Particle_Finder:
             self._ledger.particle_stats_progress = self._stats_progress
             self._persist_stats_ledger()
 
-    def _record_stats_frame(self, frame_image_shape: Tuple[int, ...], particle_ids: List[int]) -> None:
+    def _save_frame_images(
+        self,
+        filename: str,
+        frame_image: Optional[np.ndarray],
+        particle_marks: List[Tuple[int, int, int, Optional[int]]],
+        mask_image: Optional[np.ndarray] = None,
+    ) -> str:
+        """
+        Save a frame image (``<filename>_particles``) and optionally its particle mask (``<filename>_par_mask``),
+        with the particles marked and a scale bar only if ``annotate_particle_images`` (they can be annotated later
+        from the ledger, see ``autoemx.runners.annotate_particle_images``). Returns the frame image file name.
+        """
+        annotate = bool(getattr(self.EM.measurement_cfg, "annotate_particle_images", False))
+        annotations = particle_mark_annotations(particle_marks, self._im_width) if annotate else None
+        self.EM.save_frame_image(filename + '_particles', im_annotations=annotations, scalebar=annotate,
+                                 frame_image=frame_image)
+        if mask_image is not None:
+            self.EM.save_frame_image(filename + '_par_mask', im_annotations=annotations, scalebar=annotate,
+                                     frame_image=mask_image)
+        return f"{filename}_particles.{self.EM.measurement_cfg.saved_images_extension}"
+
+    def _record_stats_frame(
+        self,
+        frame_image_shape: Tuple[int, ...],
+        particle_ids: List[int],
+        image_file: Optional[str] = None,
+        particle_marks: Optional[List[Tuple[int, int, int, Optional[int]]]] = None,
+    ) -> None:
         """Record the frame just analysed in the size band being collected, saving the progress regularly."""
         band = self._stats_band
         if band is None:
             return
         im_height, im_width = frame_image_shape[:2]
         pixel_size_um = float(self.EM.pixel_size_um)
-        position = getattr(getattr(self.EM, "frame_navigator", None), "_current_pos", None)
+        position = self._current_frame_position()
         band.add_frame(
             ParticleStatsFrame(
-                frame_id=str(self.EM.current_frame_label) if self.EM.current_frame_label is not None else "",
+                frame_id=self._stats_frame_id() or "",
                 center_mm=Coordinate2D(x=float(position[0]), y=float(position[1])) if position is not None else None,
                 frame_width_um=im_width * pixel_size_um,
                 pixel_size_um=pixel_size_um,
                 area_um2=float(im_height * im_width * pixel_size_um**2),
                 n_particles=len(particle_ids),
+                image_file=image_file,
+                particle_marks_px=list(particle_marks) if particle_marks is not None else None,
             ),
             particle_ids,
         )
@@ -1762,20 +1878,31 @@ class EM_Particle_Finder:
         self._collect_in_band(band, band_idx, n_par_target)
         return True
 
+    def _stats_eds_scans(self, powder_meas_cfg: PowderMeasurementConfig) -> List[ParticleSizeBand]:
+        """Frames searched by EDS on the sample (in the attached ledger) to include in the statistics."""
+        if self._ledger is None or not powder_meas_cfg.include_eds_auto_particles:
+            return []
+        return list(self._ledger.eds_size_scans)
+
+    def _stats_particles(self, progress: ParticleStatsProgress, eds_scans: List[ParticleSizeBand]) -> List[ParticleInfo]:
+        """Particles of the statistics: those found by the measurement, and those measured by EDS without EDS scans."""
+        return particle_statistics.select_size_stats_particles(
+            self.analyzed_pars,
+            progress.powder_meas_cfg.include_eds_auto_particles and not eds_scans,
+            size_stats_ids=[pid for band in progress.bands for pid in band.particle_ids],
+        )
+
     def _size_stats_precision(self, progress: ParticleStatsProgress) -> Dict[str, float]:
         """Relative half-width of the 95 % confidence interval of the statistics whose precision is checked."""
         cfg = progress.powder_meas_cfg
-        particles = particle_statistics.select_size_stats_particles(
-            self.analyzed_pars, cfg.include_eds_auto_particles,
-            size_stats_ids=[pid for band in progress.bands for pid in band.particle_ids],
-        )
-        weights, _ = particle_statistics.band_particle_weights(particles, progress.bands)
+        eds_scans = self._stats_eds_scans(cfg)
+        particles = self._stats_particles(progress, eds_scans)
+        obs, weights, _, _ = particle_statistics.weighted_size_observations(particles, progress.bands, (), eds_scans)
         if not np.any(weights > 0):
             return {name: float("inf") for name in cfg.size_stats_ci_quantities}
-        eq_diameters_um = particle_statistics.particle_sizes_dataframe(particles)[cnst.PAR_EQ_D_KEY].to_numpy()
         return particle_statistics.ci_relative_half_widths(
-            particle_statistics.compute_particle_size_stats(eq_diameters_um, weights),
-            particle_statistics.bootstrap_confidence_intervals(particles, progress.bands),
+            particle_statistics.compute_particle_size_stats(obs.eq_diameters_um, weights),
+            particle_statistics.bootstrap_confidence_intervals(particles, progress.bands, eds_scans=eds_scans),
             cfg.size_stats_ci_quantities,
         )
 
@@ -1940,11 +2067,8 @@ class EM_Particle_Finder:
 
         size_bands = progress.bands
         run_particle_ids = [pid for band in size_bands for pid in band.particle_ids]
-        stats_particles = particle_statistics.select_size_stats_particles(
-            self.analyzed_pars,
-            powder_meas_cfg.include_eds_auto_particles,
-            size_stats_ids=run_particle_ids,
-        )
+        eds_scans = self._stats_eds_scans(powder_meas_cfg)
+        stats_particles = self._stats_particles(progress, eds_scans)
         # The measurement ends: its result replaces the record in progress
         self._stats_progress = None
         if self._ledger is not None:
@@ -1959,17 +2083,19 @@ class EM_Particle_Finder:
 
         if self._ledger is not None:
             result = particle_statistics.build_particle_stats_result(
-                stats_particles, powder_meas_cfg, n_par_target=n_par_target, bands=size_bands
+                stats_particles, powder_meas_cfg, n_par_target=n_par_target, bands=size_bands, eds_scans=eds_scans
             )
             result.precision_reached = precision_reached
             self._ledger.particle_stats = result
         self._persist_stats_ledger()
         return self.save_particle_statistics(
-            particles=stats_particles, bands=size_bands,
+            particles=stats_particles, bands=size_bands, eds_scans=eds_scans,
             confidence_intervals=self._ledger.particle_stats.confidence_intervals_95 if self._ledger is not None else None,
         )
 
-    def save_particle_statistics(self, output_file_suffix='', particles=None, bands=None, confidence_intervals=None):
+    def save_particle_statistics(
+        self, output_file_suffix='', particles=None, bands=None, confidence_intervals=None, eds_scans=(),
+    ):
         """
         Compute the size statistics of the analysed particles and save the particle sizes, the statistics and the
         histogram in the sample folder (see :func:`autoemx.core.particle_statistics.save_particle_statistics`).
@@ -1984,6 +2110,8 @@ class EM_Particle_Finder:
             Size bands of the measurement, to weight the statistics by band.
         confidence_intervals : dict, optional
             95 % confidence intervals of the statistics (default: computed).
+        eds_scans : list of ParticleSizeBand, optional
+            Frames searched by EDS on the sample, included in the statistics.
 
         Returns
         -------
@@ -1999,6 +2127,7 @@ class EM_Particle_Finder:
             output_file_suffix=output_file_suffix, verbose=self.verbose, bands=bands,
             image_format=self.powder_meas_cfg.size_stats_plot_format,
             confidence_intervals=confidence_intervals,
+            eds_scans=eds_scans,
         )
 
     def _move_and_get_particles_stats_in_frame(self, frame_image=None, pixel_size=None, results_dir=None):
@@ -2071,7 +2200,7 @@ class EM_Particle_Finder:
         par_centroids = []  # Only used for saving image
         par_areas = []
         par_cntr = 0
-        frame_label = str(self.EM.current_frame_label) if self.EM.current_frame_label is not None else None
+        frame_label = self._stats_frame_id()
         for i in range(1, num_labels):  # Skip the background component (index 0)
             par_area_pixels = stats[i, cv2.CC_STAT_AREA]
             if (
@@ -2104,39 +2233,21 @@ class EM_Particle_Finder:
                 par_centroids.append(centroids[i])
                 par_cntr += 1
                 
-        # Record the frame for the statistics (frames without particles included)
-        self._record_stats_frame(frame_image.shape, [p.id for p in self.analyzed_pars[len(self.analyzed_pars) - par_cntr:]])
-
-        # Save image to visualize selected particles
-        text_margin = 30  # pixel margin to determine where to annotate image with particle numbers
-        text_pos_scale = 0.9
-        im_annotations = []
+        # Save the frame images (without annotations, unless annotate_particle_images), and record the frame for the
+        # statistics, with the particles to mark on its image (frames without particles included)
+        new_particles = self.analyzed_pars[len(self.analyzed_pars) - par_cntr:]
+        particle_marks = [
+            (int(center[0]), int(center[1]), int(np.sqrt(area / np.pi) * 1.1), particle.id)
+            for center, area, particle in zip(par_centroids, par_areas, new_particles)
+        ]
+        image_file = None
         if par_cntr > 0:
-            first_par_n = len(self.analyzed_pars) - par_cntr
-            for i, (center, area) in enumerate(zip(par_centroids, par_areas)):
-                ann_dict = {}
-                radius_pixel = int(np.sqrt(area / np.pi) * 1.1)  # Equivalent radius for particle (as a circle)
-                
-                ann_dict[cnst.ANNOTATION_CIRCLE_KEY] = (radius_pixel, center.astype(int), 2)
-                
-                x_pos_text = int(center[0] + radius_pixel * text_pos_scale)  # Number on the top-right of the circle
-                y_pos_text = int(center[1] - radius_pixel * text_pos_scale)
-                if x_pos_text > (self._im_width - text_margin) or y_pos_text < text_margin: 
-                    # Move number to center
-                    x_pos_text = int(center[0])
-                    y_pos_text = int(center[1])
-                ann_dict[cnst.ANNOTATION_TEXT_KEY] = (str(first_par_n + i), (x_pos_text, y_pos_text))
-                im_annotations.append(ann_dict)
-                
-            filename = f"{self._sample_id}_fr{self.EM.current_frame_label}"
-            # Save annotated particle image
-            self.EM.save_frame_image(filename + '_particles', im_annotations = im_annotations, frame_image = frame_image)
-            
-            # Save mask image
-            par_mask_to_save = self.prepare_mask_for_visualization(par_mask)
-            self.EM.save_frame_image(filename + '_par_mask', im_annotations = im_annotations, frame_image = par_mask_to_save)
+            image_file = self._save_frame_images(
+                f"{self._sample_id}_fr{frame_label if frame_label is not None else self.EM.current_frame_label}",
+                frame_image, particle_marks, mask_image=self.prepare_mask_for_visualization(par_mask),
+            )
+        self._record_stats_frame(frame_image.shape, [p.id for p in new_particles], image_file, particle_marks)
 
-        
         # Return True if at least 1 particle was found
         if par_cntr == 0:
             if save_mask_img and os.path.exists(mask_img_path):

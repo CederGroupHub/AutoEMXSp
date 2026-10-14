@@ -30,12 +30,12 @@ from autoemx.utils import get_sample_dir
 
 
 def _ledger_with_size_stats_particles(sample_dir: str) -> Optional[SampleLedger]:
-    """Ledger of the sample, if it holds particles of a particle size statistics measurement."""
+    """Ledger of the sample, if it holds particles of a particle size statistics measurement or frames searched by EDS."""
     ledger_path = os.path.join(sample_dir, cnst.LEDGER_FILENAME + cnst.LEDGER_FILEEXT)
     if not os.path.exists(ledger_path):
         return None
     ledger = load_sample_ledger(ledger_path)
-    if not any(p.selection == "size_stats" for p in ledger.particles):
+    if not any(p.selection == "size_stats" for p in ledger.particles) and not ledger.eds_size_scans:
         return None
     return ledger
 
@@ -46,6 +46,8 @@ def _particles_from_csv(sample_dir: str, sample_ID: str) -> List[ParticleInfo]:
     if not os.path.exists(par_data_path):
         raise FileNotFoundError(f"Particle size file not found at {par_data_path}")
     par_data = pd.read_csv(par_data_path, dtype={cnst.FRAME_ID_DF_KEY: str}, keep_default_na=False)
+    # Particles counted in frames searched by EDS have no ID: the file is only fully read back through the ledger
+    par_data = par_data[par_data[cnst.PAR_ID_DF_KEY].astype(str) != ""]
     return [
         ParticleInfo(
             id=int(row[cnst.PAR_ID_DF_KEY]),
@@ -157,4 +159,5 @@ def process_particle_statistics(
                                     image_format=(
                                         result.powder_meas_cfg.size_stats_plot_format if ledger is not None else "png"
                                     ),
-                                    confidence_intervals=result.confidence_intervals_95 if ledger is not None else None)
+                                    confidence_intervals=result.confidence_intervals_95 if ledger is not None else None,
+                                    eds_scans=result.eds_scans if ledger is not None else ())

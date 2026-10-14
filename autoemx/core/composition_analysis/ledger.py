@@ -38,6 +38,7 @@ from autoemx.config.schema_models import (
     LedgerVersionError,
     EDSStandardsFile,
     ParticleInfo,
+    ParticleSizeBand,
     QuantificationConfig,
     QuantificationResult,
     SampleLedger,
@@ -534,25 +535,67 @@ class LedgerModule:
         if particle_finder is not None:
             particle_finder.attach_stats_ledger(ledger, ledger_path=ledger_path)
 
+    def _store_eds_search_frames(self: Any, ledger: SampleLedger) -> bool:
+        """
+        Move the frames searched for EDS particles, recorded by the particle finder, to the ledger's EDS scans
+        (one per size range and frame width), their ids made unique (``#2``, ``#3``, ... for a frame searched
+        again by a resumed acquisition, then left out of the statistics as overlapping). Returns True if the
+        ledger was modified.
+        """
+        particle_finder = getattr(getattr(self, "EM_controller", None), "particle_finder", None)
+        pending = getattr(particle_finder, "pending_eds_frames", None)
+        if not pending:
+            return False
+        for (d_min_um, d_max_um, frame_width_um), frame in pending:
+            scan = next(
+                (
+                    s for s in ledger.eds_size_scans
+                    if np.allclose([s.d_min_um, s.d_max_um, s.frame_width_um or 0.0],
+                                   [d_min_um, d_max_um, frame_width_um], rtol=1e-6)
+                ),
+                None,
+            )
+            if scan is None:
+                scan = ParticleSizeBand(d_min_um=d_min_um, d_max_um=d_max_um, frame_width_um=frame_width_um,
+                                        n_frames=0, scanned_area_um2=0.0)
+                ledger.eds_size_scans.append(scan)
+            recorded = {f.frame_id for s in ledger.eds_size_scans for f in s.frames}
+            frame_id, n = frame.frame_id, 2
+            while frame_id in recorded:
+                frame_id, n = f"{frame.frame_id}#{n}", n + 1
+            scan.add_frame(frame.model_copy(update={"frame_id": frame_id}), [])
+        pending.clear()
+        return True
+
     def _refresh_particle_stats(self: Any) -> None:
         """
-        Recalculate the particle size statistics of the ledger, if any, to include the particles just measured by EDS
-        (with the particles and frames left out, and the setting include_eds_auto_particles, of the statistics).
+        Recalculate the particle size statistics of the ledger at the end of an EDS acquisition, to include what EDS
+        measured (with the particles and frames left out, and the setting include_eds_auto_particles, of the
+        statistics). A sample measured only by EDS gets statistics from the frames searched by EDS.
         """
         ledger = LedgerModule._load_existing_ledger(self)
-        if ledger is None or ledger.particle_stats is None:
+        if ledger is None:
             return
+        changed = LedgerModule._store_eds_search_frames(self, ledger)
         previous = ledger.particle_stats
-        result = particle_statistics.recalculate_particle_stats(
-            ledger,
-            previous.excluded_particle_ids,
-            previous.excluded_frame_ids,
-            previous.powder_meas_cfg.include_eds_auto_particles,
-        )
-        if result is None or result.particle_ids == previous.particle_ids:
-            return
-        ledger.particle_stats = result
-        ledger.to_json_file(LedgerModule._get_ledger_path(self))
+        if previous is not None or ledger.eds_size_scans:
+            result = particle_statistics.recalculate_particle_stats(
+                ledger,
+                previous.excluded_particle_ids if previous is not None else None,
+                previous.excluded_frame_ids if previous is not None else None,
+                previous.powder_meas_cfg.include_eds_auto_particles if previous is not None else None,
+            )
+            if result is not None:
+                ledger.particle_stats = result
+                changed = True
+                if self.verbose:
+                    logger.info(
+                        "ℹ️ Particle size statistics updated with what was measured by EDS "
+                        "(D50 %.3g µm, %d particles counted).",
+                        result.size_stats.median, result.size_stats.n_par_analysed,
+                    )
+        if changed:
+            ledger.to_json_file(LedgerModule._get_ledger_path(self))
         if self.verbose:
             logger.info(
                 "ℹ️ Particle size statistics updated with the particles measured by EDS (%d particles).",
@@ -606,6 +649,7 @@ class LedgerModule:
         if ledger is None:
             ledger = create_sample_ledger(self.sample_result_dir, self.sample_id, LedgerModule._build_ledger_configs(self))
         ledger.spectra.append(spectrum_entry)
+        LedgerModule._store_eds_search_frames(self, ledger)
         if particle_id is not None:
             LedgerModule._upsert_particle_info(
                 self,

@@ -19,7 +19,7 @@ import autoemx.core.em_runtime.particle_finder as particle_finder_mod
 import autoemx.utils.constants as cnst
 import test_acquisition_with_quantification as eds_test
 from autoemx.config.ledger_io import create_sample_ledger
-from autoemx.config.ledger_schemas import LedgerConfigs, ParticleInfo, SampleLedger
+from autoemx.config.ledger_schemas import LedgerConfigs, ParticleInfo, ParticleStatsFrame, SampleLedger
 from autoemx.config.runtime_configs import (
     MeasurementConfig,
     MicroscopeConfig,
@@ -104,12 +104,16 @@ class _FakeEMController:
         self.frame_navigator = _FakeFrameNavigator() if self.use_frame_navigator else None
         self.current_frame_label = None
         self.n_frames_visited = 0
+        self.saved_images = []
+        _FakeEMController.last = self
         self.particle_finder = EM_Particle_Finder(self, configs.powder_meas_cfg, results_dir=results_dir, verbose=False,
                                                   development_mode=False)
 
     def initialise_SEM(self): pass
     def initialise_sample_navigator(self, **kwargs): pass
-    def save_frame_image(self, *args, **kwargs): pass
+    def save_frame_image(self, filename, **kwargs):
+        self.saved_images.append((filename, kwargs.get("im_annotations"), kwargs.get("scalebar")))
+
     def adjust_BCF(self): pass
 
     def go_to_next_frame(self):
@@ -210,6 +214,16 @@ def test_particle_statistics_saved_to_csv_and_ledger(tmp_path: Path, fake_micros
     assert sum(f["area_um2"] for f in band["frames"]) == pytest.approx(band["scanned_area_um2"])
     assert [f["n_particles"] for f in band["frames"]] == list(per_frame)
     assert ledger["particle_stats_progress"] is None  # measurement completed
+
+    # Frame images saved without annotations; the particles to mark on them are in the ledger
+    saved = _FakeEMController.last.saved_images
+    assert [name for name, _, _ in saved] == [f"{SAMPLE_ID}_frA{i}_{kind}" for i in range(N_FRAMES)
+                                              for kind in ("particles", "par_mask")]
+    assert all(annotations is None and scalebar is False for _, annotations, scalebar in saved)
+    for frame in band["frames"]:
+        assert frame["image_file"] == f"{SAMPLE_ID}_fr{frame['frame_id']}_particles.png"
+        frame_particles = [p for p in ledger["particles"] if p["frame_id"] == frame["frame_id"]]
+        assert [mark[3] for mark in frame["particle_marks_px"]] == [p["id"] for p in frame_particles]
 
 
 def test_collection_stops_at_the_frame_reaching_the_target(tmp_path: Path, fake_microscope):
@@ -336,18 +350,16 @@ def test_size_statistics_after_eds(tmp_path: Path, fake_microscope):
     )
 
 
-def test_eds_after_size_statistics(tmp_path: Path, fake_microscope, monkeypatch):
-    sample_dir = _collect(tmp_path, n_par_target=1)
-    psd_ledger = SampleLedger.from_json_file(str(sample_dir / "ledger.json"))
-    max_psd_id = max(p.id for p in psd_ledger.particles)
-    assert psd_ledger.configs.measurement_cfg.type == MeasurementConfig.PARTICLE_STATS_MEAS_TYPE_KEY
+def _run_eds(tmp_path: Path, monkeypatch, eds_frames=()) -> None:
+    """EDS acquisition (5 spectra, 3 particles of 20 µm²) on the sample, the frames searched by EDS being eds_frames."""
 
     class _FakeEDSController(eds_test._FakeEMController):
         """Particle counters start at 1, as those of the particle finder; particles of 20 µm²."""
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            self.particle_finder = SimpleNamespace(current_par_area_um2=20.0, current_par_coordinates_mm=None)
+            self.particle_finder = SimpleNamespace(current_par_area_um2=20.0, current_par_coordinates_mm=None,
+                                                   pending_eds_frames=list(eds_frames))
 
         def get_XSp_coords(self, next_spectrum_id):
             success, spots, particle_cntr = super().get_XSp_coords(next_spectrum_id)
@@ -368,6 +380,15 @@ def test_eds_after_size_statistics(tmp_path: Path, fake_microscope, monkeypatch)
         is_acquisition=True, verbose=False, results_dir=str(tmp_path), sample_id=SAMPLE_ID,
     )
     analyzer.run_collection_and_quantification(quantify=False)
+
+
+def test_eds_after_size_statistics(tmp_path: Path, fake_microscope, monkeypatch):
+    sample_dir = _collect(tmp_path, n_par_target=1)
+    psd_ledger = SampleLedger.from_json_file(str(sample_dir / "ledger.json"))
+    max_psd_id = max(p.id for p in psd_ledger.particles)
+    assert psd_ledger.configs.measurement_cfg.type == MeasurementConfig.PARTICLE_STATS_MEAS_TYPE_KEY
+
+    _run_eds(tmp_path, monkeypatch)
 
     ledger = SampleLedger.from_json_file(str(sample_dir / "ledger.json"))
     # EDS particles get the ids after the particle size statistics ones, which are kept with their statistics
@@ -504,3 +525,28 @@ def test_measurement_stopping_on_precision_limited_by_frames(tmp_path: Path, fak
     assert all(band.n_frames > 1 for band in result.bands)
     parents = {frame.frame_id for frame in result.bands[0].frames}
     assert all(frame.frame_id.rsplit("_", 1)[0] in parents for frame in result.bands[1].frames)
+
+
+
+def test_frames_searched_by_eds_counted_in_the_statistics(tmp_path: Path, fake_microscope, monkeypatch):
+    sample_dir = _collect(tmp_path, n_par_target=1)
+    psd_result = SampleLedger.from_json_file(str(sample_dir / "ledger.json")).particle_stats
+    eds_frames = [
+        ((3.0, 20.0, 200.0), ParticleStatsFrame(
+            frame_id=f"EDS-B{i}", frame_width_um=200.0, pixel_size_um=0.1, area_um2=2.4e4, n_particles=4,
+            particle_areas_um2=[10.0, 20.0, 40.0, 80.0], particle_edge_corrections=[1.0, 1.0, 1.1, 1.2],
+        ))
+        for i in range(6)
+    ]
+    _run_eds(tmp_path, monkeypatch, eds_frames)
+
+    ledger = SampleLedger.from_json_file(str(sample_dir / "ledger.json"))
+    [scan] = ledger.eds_size_scans  # saved with the spectra
+    assert [f.frame_id for f in scan.frames] == [f"EDS-B{i}" for i in range(6)]
+    result = ledger.particle_stats
+    # The EDS frames count the particles measured by EDS, which are left out
+    assert result.n_par_by_selection == {"size_stats": len(psd_result.particle_ids), "eds_frames": 24}
+    assert result.particle_ids == psd_result.particle_ids
+    assert len(result.eds_scans) == 1 and result.eds_scans[0].number_density_per_mm2 > 0
+    assert result.size_stats.n_par_analysed == len(psd_result.particle_ids) + 24
+    assert any(p.selection == "auto" for p in ledger.particles)  # still in the ledger

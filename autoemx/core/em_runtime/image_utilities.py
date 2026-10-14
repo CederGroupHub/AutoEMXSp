@@ -151,6 +151,36 @@ def draw_annotations(color_image, im_annotations):
     return color_image
 
 
+def particle_mark_annotations(particle_marks, im_width, text_margin=30, text_pos_scale=0.9):
+    """
+    Annotations of the particles marked in a frame: a circle around each and, if it has one, its particle id at
+    the top-right of the circle (at its centre near the top or right edge of the image).
+
+    Parameters
+    ----------
+    particle_marks : sequence of (x, y, radius, particle_id or None)
+        Particles, in pixels (see ``ParticleStatsFrame.particle_marks_px``).
+    im_width : int
+        Image width, in pixels.
+
+    Returns
+    -------
+    list of dict
+        Annotations for :func:`draw_annotations`.
+    """
+    annotations = []
+    for x, y, radius, particle_id in particle_marks:
+        annotation = {cnst.ANNOTATION_CIRCLE_KEY: (int(radius), (int(x), int(y)), 2)}
+        if particle_id is not None:
+            x_text = int(x + radius * text_pos_scale)
+            y_text = int(y - radius * text_pos_scale)
+            if x_text > im_width - text_margin or y_text < text_margin:
+                x_text, y_text = int(x), int(y)
+            annotation[cnst.ANNOTATION_TEXT_KEY] = (str(particle_id), (x_text, y_text))
+        annotations.append(annotation)
+    return annotations
+
+
 def xsp_spot_annotation(spectrum_id, xy_center):
     """Annotation of an X-ray spectrum spot: red dot with the spectrum ID at its top-left."""
     x, y = int(xy_center[0]), int(xy_center[1])

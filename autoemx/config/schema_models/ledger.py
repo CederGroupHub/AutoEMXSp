@@ -24,7 +24,7 @@ from autoemx.config.runtime_configs import (
     SampleSubstrateConfig,
 )
 from .acquisition import ParticleInfo, SpectrumEntry
-from .particle_stats import ParticleStatsProgress, ParticleStatsResult
+from .particle_stats import ParticleSizeBand, ParticleStatsProgress, ParticleStatsResult
 from .quantification import QuantificationConfig, QuantificationResult
 
 
@@ -127,6 +127,7 @@ class SampleLedger(BaseModel):
     particles: List[ParticleInfo] = Field(default_factory=list)
     particle_stats: Optional[ParticleStatsResult] = None
     particle_stats_progress: Optional[ParticleStatsProgress] = None
+    eds_size_scans: List[ParticleSizeBand] = Field(default_factory=list)
     active_quant: Optional[int] = None
     quantifications: List[QuantificationConfig] = Field(default_factory=list)
 

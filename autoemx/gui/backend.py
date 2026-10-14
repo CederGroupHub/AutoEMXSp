@@ -739,8 +739,8 @@ def build_acq_specs() -> List[ParamSpec]:
         "asample.els_substrate": "Substrate elements, fitted but not quantified unless also listed among the sample elements. They are never identified as sample elements either: list only elements you do not want quantified.",
         "aacq.n_spectra": "Number of spectra collected per sample.",
         "aimg.saved_images_extension": "Format of the saved SEM images (png: light; tif: lossless, larger).",
-        "aimg.annotate_particle_images": "Draw the spectrum spots and scale bar on the particle images. If off, annotated copies can be made with Annotate_Particle_Images.py.",
-        "aimg.save_raw_images": "Also save the non-annotated version of annotated images (frames, and particles if annotated).",
+        "aimg.annotate_particle_images": "Draw the spectrum spots on particle images, the particles found on frame images, and a scale bar. If off, annotated copies can be made with Annotate_Particle_Images.py.",
+        "aimg.save_raw_images": "Also save the non-annotated version of annotated images.",
         "aacq.quantify_spectra": "Quantify spectra during acquisition, and stop when the clustering converges (between min and max spectra). Not recommended on slow microscope computers.",
         "aquant.use_project_specific_std_dict": "Load the P/B standards from the results folder.",
         "aquant.is_known_phase_mixture": "The samples are mixtures of known phases (their candidate phases): quantified with the P/B values of their standards, and their intermixing is characterized.",
@@ -783,7 +783,7 @@ def build_acq_specs() -> List[ParamSpec]:
         ParamSpec("aacq", "brightness", "brightness", "float_opt", None),
         ParamSpec("aimg", "saved_images_extension", "image format", "choice", dflt.saved_images_extension,
                   choices=list(MeasurementConfig.ALLOWED_IMAGE_EXTENSIONS)),
-        ParamSpec("aimg", "annotate_particle_images", "annotate particle images", "bool", dflt.annotate_particle_images),
+        ParamSpec("aimg", "annotate_particle_images", "annotate particle and frame images", "bool", dflt.annotate_particle_images),
         ParamSpec("aimg", "save_raw_images", "save raw copies of annotated images", "bool", dflt.save_raw_images),
     ]
     powder_choices = {
@@ -847,7 +847,7 @@ def build_acq_specs() -> List[ParamSpec]:
         "par_spot_spacing": "random: unbiased spot selection; maximized: spots spread over the particle.",
         "min_par_pixels": "Particle size statistics: minimum number of pixels of a particle for its area to be measured. Smaller particles are measured in a finer size band.",
         "size_stats_plot_format": "File format of the particle size distribution plot.",
-        "include_eds_auto_particles": "Particle size statistics also include the particles measured by EDS with automatic particle selection.",
+        "include_eds_auto_particles": "Particle size statistics also include the particles counted in the frames searched by EDS (automatic particle selection).",
         "grid_spot_spacing_um": "Distance between the spots of the acquisition grid.",
         "min_xsp_spots_distance_um": "Offset of the grid when it does not contain enough spots.",
         "image_frame_width_um": "Width of the image frames. Empty = 10 × grid spot spacing.",

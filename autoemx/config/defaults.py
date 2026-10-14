@@ -81,12 +81,12 @@ saved_images_extension : str
     Image extension used when saving SEM frames.
     Default is `'png'`.
 save_raw_images : bool
-    Whether to also save the non-annotated version of annotated SEM images (frame images, and
-    particle images when ``annotate_particle_images`` is True). Default is `False`.
+    Whether to also save the non-annotated version of annotated SEM images (when
+    ``annotate_particle_images`` is True). Default is `False`.
 annotate_particle_images : bool
-    Whether to draw the X-ray spectrum spots (dot + spectrum ID) and a scale bar on the particle
-    images saved during acquisition. If False, raw particle images are saved; annotated copies can
-    be made afterwards with ``Annotate_Particle_Images.py``. Default is `False`.
+    Whether to annotate the images saved during acquisition: X-ray spectrum spots on particle images,
+    particles found on frame images, and a scale bar. If False, raw images are saved; annotated copies
+    can be made afterwards with ``Annotate_Particle_Images.py``. Default is `False`.
 Default values of runner parameters (also used by the configuration classes with the same default).
 
 sample_halfwidth_mm : float

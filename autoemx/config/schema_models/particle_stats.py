@@ -63,6 +63,14 @@ class ParticleStatsFrame(BaseModel):
     """
     One frame analysed by a particle size statistics measurement: ``center_mm`` (stage position of its centre, if
     known), frame width and pixel size, ``area_um2`` (total area of the frame) and ``n_particles`` (particles found).
+
+    Frames searched by EDS (``SampleLedger.eds_size_scans``) also give the area (``particle_areas_um2``) and
+    frame-edge correction (``particle_edge_corrections``) of each particle valid for the statistics found in them,
+    whether measured by EDS or not.
+
+    ``image_file`` is the frame image (in the ``SEM images`` folder of the sample), saved without annotations
+    unless ``MeasurementConfig.annotate_particle_images``; ``particle_marks_px`` are the particles to mark on it
+    (x, y, radius in pixels, and particle id or None), drawn by ``autoemx.runners.annotate_particle_images``.
     """
 
     frame_id: str
@@ -71,8 +79,24 @@ class ParticleStatsFrame(BaseModel):
     pixel_size_um: float
     area_um2: float
     n_particles: int
+    particle_areas_um2: Optional[List[float]] = None
+    particle_edge_corrections: Optional[List[float]] = None
+    image_file: Optional[str] = None
+    particle_marks_px: Optional[List[Tuple[int, int, int, Optional[int]]]] = None
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def validate_particle_lists(self) -> "ParticleStatsFrame":
+        lists = (self.particle_areas_um2, self.particle_edge_corrections)
+        if any(values is not None for values in lists):
+            if any(values is None or len(values) != self.n_particles for values in lists):
+                raise ValueError("particle_areas_um2 and particle_edge_corrections must both give n_particles values")
+            if any(not np.isfinite(a) or a <= 0 for a in self.particle_areas_um2):
+                raise ValueError("particle_areas_um2 must be finite and positive")
+            if any(not np.isfinite(c) or c < 1 for c in self.particle_edge_corrections):
+                raise ValueError("particle_edge_corrections must be finite and at least 1")
+        return self
 
     @field_validator("frame_width_um", "pixel_size_um", "area_um2")
     @classmethod
@@ -102,7 +126,8 @@ class ParticleSizeBand(BaseModel):
     any later left out of the statistics, see ``ParticleStatsResult.excluded_particle_ids``).
 
     ``frames`` are the frames analysed in the band (not recorded before AutoEMX 1.6.0); ``n_frames`` and
-    ``scanned_area_um2`` are their number and total area.
+    ``scanned_area_um2`` are their number and total area. The same model describes the frames searched by EDS
+    (``SampleLedger.eds_size_scans``), whose particles are listed in each frame instead of ``particle_ids``.
 
     ``number_density_per_mm2`` (particles found in the band, left-out ones excepted and corrected for those
     touching the frame edge, per mm² scanned) weights the
@@ -177,6 +202,8 @@ class ParticleStatsResult(BaseModel):
     (selection 'size_stats') and, if ``powder_meas_cfg.include_eds_auto_particles``, the particles measured by EDS
     with automatic particle selection (selection 'auto'). ``powder_meas_cfg`` holds the settings at the start of
     the measurement. ``bands`` are the size bands searched by the measurement, largest particles first.
+    ``eds_scans`` are the frames searched by EDS on the same sample (``SampleLedger.eds_size_scans``) included in
+    the statistics: they then replace the particles measured by EDS, which they count.
 
     ``size_stats`` are number-weighted by size band: each band counts in proportion to the number of particles per
     unit area scanned in it, whatever the number of particles collected in each band, and each particle in
@@ -190,8 +217,10 @@ class ParticleStatsResult(BaseModel):
     :func:`autoemx.core.particle_statistics.bootstrap_confidence_intervals`). ``precision_reached`` tells whether
     a measurement stopping on precision (``powder_meas_cfg.size_stats_ci_tolerance``) reached it (None otherwise,
     and for recalculated statistics). ``excluded_particle_ids`` and ``excluded_frame_ids`` are the particles and
-    frames left out when the statistics were recalculated (``autoemx.runners.process_particle_statistics``); the
-    bands keep the frames, scanned area and particles of the measurement.
+    frames left out when the statistics were recalculated (``autoemx.runners.process_particle_statistics``), and
+    ``overlapping_frame_ids`` the frames left out because they overlap a larger frame counting the same particle
+    sizes (see :func:`autoemx.core.particle_statistics.overlapping_frame_ids`); the bands keep the frames,
+    scanned area and particles of the measurement.
     """
 
     autoemx_version: str = AUTOEMX_VERSION
@@ -206,16 +235,17 @@ class ParticleStatsResult(BaseModel):
     confidence_intervals_95: Dict[str, Tuple[float, float]] = Field(default_factory=dict)
     precision_reached: Optional[bool] = None
     bands: List[ParticleSizeBand] = Field(default_factory=list)
+    eds_scans: List[ParticleSizeBand] = Field(default_factory=list)
     excluded_particle_ids: List[int] = Field(default_factory=list)
     excluded_frame_ids: List[str] = Field(default_factory=list)
+    overlapping_frame_ids: List[str] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")
 
     @field_validator("particle_ids")
     @classmethod
     def validate_particle_ids(cls, v: List[int]) -> List[int]:
-        if not v:
-            raise ValueError("particle_ids cannot be empty")
+        # Empty for a sample measured only by EDS (its statistics come from the frames searched by EDS)
         if len(v) != len(set(v)):
             raise ValueError("particle_ids must be unique")
         return v

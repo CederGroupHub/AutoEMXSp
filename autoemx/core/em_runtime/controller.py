@@ -578,6 +578,7 @@ class EM_Controller:
         self.microscope_ctrl.move_to_pos(pos)
         if hasattr(self.frame_navigator, '_current_pos'):
             self.frame_navigator._current_pos = pos
+            self.frame_navigator.current_pos_is_measured = True
     
     
     def convert_pixel_pos_to_mm(self, pos_pixels):

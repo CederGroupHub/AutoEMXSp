@@ -32,10 +32,15 @@ way it was imaged:
   :math:`w \times h` in a :math:`W \times H` frame) is counted
   :math:`c = WH / ((W-w-7)(H-h-7))` times, the Miles-Lantuéjoul correction
   [Miles1974]_ [Lantuejoul1978]_.
-- **Bands.** Each band counts in proportion to its particles per unit area scanned,
-  :math:`\sum c_i / S_b`, not to the number collected in it.
-- **EDS particles** of the same sample, chosen automatically, are included in the
-  band of their size (``include_eds_auto_particles``), without changing its weight.
+- **Scanned area.** Each particle counts :math:`c` divided by the area of the frames
+  able to measure its size, so that each size counts in proportion to its particles
+  per unit area, not to the number collected.
+- **EDS.** The frames searched by EDS (automatic particle selection) on the same
+  sample count as extra area, with all the particles in them
+  (``include_eds_auto_particles``). A sample measured only by EDS also gets
+  statistics.
+- **Overlapping frames** counting the same particle sizes are counted once, keeping
+  the largest frame.
 
 The unweighted statistics are kept in ``ledger.json`` for comparison.
 
@@ -70,7 +75,8 @@ Output
 (with each particle's ``Weight``), ``<sample>_Par_size_stats.csv`` (with
 ``*_CI95_low/high``), and a plot of the weighted distribution
 (``size_stats_plot_format``). An interrupted measurement resumes when run again
-with the same settings.
+with the same settings. Frame images are saved without annotations;
+``Annotate_Particle_Images.py`` draws the particles found from the ledger.
 
 
 References
