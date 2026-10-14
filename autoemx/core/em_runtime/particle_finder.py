@@ -108,20 +108,34 @@ def plan_size_bands_um(
     d_max_um: float,
     im_width_px: int,
     min_par_pixels: int,
+    frame_width_range_um: Optional[Tuple[float, float]] = None,
 ) -> List[Tuple[float, float, float]]:
     """
     Size bands of a particle size statistics measurement, as ``(d_min, d_max, frame_width)`` in µm, largest first.
 
-    Each band is searched with the frame width matched to its largest particles
-    (:func:`frame_width_um_from_max_area`), and goes down to the smallest particles covering ``min_par_pixels``
-    pixels at that frame width; the next band starts there, until ``d_min_um``. ``get_particle_stats`` applies the
-    same rule with the frame widths set by the microscope (which may clip them to its range).
+    Bands are planned from the smallest particles up, since they are the hardest to find: the first band is
+    searched with the largest frame in which particles of ``d_min_um`` still cover ``min_par_pixels`` pixels, and
+    goes up to the largest particles fitting that frame (a tenth of its width); the next band starts there, and so
+    on. A band whose frame reaches :data:`MAX_FRAME_WIDTH_UM` (or the largest frame of the microscope) takes all the
+    particles left, up to ``d_max_um``. Any narrow remainder is thus measured with the largest frames.
+
+    Parameters
+    ----------
+    d_min_um, d_max_um : float
+        Diameter range, in µm.
+    im_width_px : int
+        Width of the frame images, in pixels.
+    min_par_pixels : int
+        Minimum number of pixels of a particle for its area to be measured.
+    frame_width_range_um : (float, float), optional
+        Smallest and largest frame width of the microscope, in µm. If its smallest frame is too large for the
+        smallest particles to cover ``min_par_pixels`` pixels, the first band starts above ``d_min_um``.
 
     Raises
     ------
     ValueError
         If the limits are not finite and positive, or the frames are too narrow in pixels for particles of
-        ``min_par_pixels`` pixels to be smaller than the largest particles of a band.
+        ``min_par_pixels`` pixels to fit them.
     """
     if not np.isfinite(d_min_um) or not np.isfinite(d_max_um):
         raise ValueError("Diameter limits must be finite")
@@ -129,22 +143,33 @@ def plan_size_bands_um(
         raise ValueError("Diameter limits must be positive")
     if d_max_um < d_min_um:
         raise ValueError("d_max_um must be greater than or equal to d_min_um")
+    # Smallest valid diameter per µm of frame width
+    pixel_limit_per_fw = min_valid_diameter_um(1.0 / im_width_px, min_par_pixels)
+    if pixel_limit_per_fw * FRAME_WIDTH_PER_MAX_DIAMETER >= 1:
+        raise ValueError(
+            f"Frames of {im_width_px} pixels are too narrow to measure particles of {min_par_pixels} pixels: "
+            "reduce min_par_pixels"
+        )
+    min_fw_um, max_fw_um = frame_width_range_um if frame_width_range_um is not None else (0.0, np.inf)
+    max_fw_um = min(max_fw_um, MAX_FRAME_WIDTH_UM)
 
     bands: List[Tuple[float, float, float]] = []
-    d_hi = float(d_max_um)
+    d_lo = float(d_min_um)
     while True:
-        fw_um = frame_width_um_from_max_area(diameter_um_to_area_um2(d_hi))
-        d_pixels_um = min_valid_diameter_um(fw_um / im_width_px, min_par_pixels)
-        if d_pixels_um >= d_hi:
-            raise ValueError(
-                f"Frames of {im_width_px} pixels are too narrow to measure particles of {min_par_pixels} pixels: "
-                "reduce min_par_pixels"
-            )
-        d_lo = max(float(d_min_um), d_pixels_um)
+        fw_um = d_lo / pixel_limit_per_fw  # largest frame for the smallest particles of the band
+        is_largest_frame = fw_um >= max_fw_um
+        fw_um = max(min(fw_um, max_fw_um), min_fw_um)
+        d_lo = max(d_lo, pixel_limit_per_fw * fw_um)
+        d_hi = fw_um / FRAME_WIDTH_PER_MAX_DIAMETER
+        if is_largest_frame or d_hi >= d_max_um:
+            d_hi = float(d_max_um)
+        if d_lo > d_hi * (1 + 1e-12):  # only if the microscope cannot zoom in enough for the particles left
+            break
         bands.append((d_lo, d_hi, fw_um))
-        if d_lo <= d_min_um * (1.0 + 1e-12):
-            return bands
-        d_hi = d_lo
+        if d_hi >= d_max_um:
+            break
+        d_lo = d_hi
+    return bands[::-1]
 
 
 def diameter_um_to_area_um2(diameter_um: float) -> float:
@@ -152,10 +177,15 @@ def diameter_um_to_area_um2(diameter_um: float) -> float:
     return float(np.pi * (diameter_um / 2.0) ** 2)
 
 
+#: Frame width of particle size statistics relative to the largest particles it measures, and largest frame width.
+FRAME_WIDTH_PER_MAX_DIAMETER = 10.0
+MAX_FRAME_WIDTH_UM = 500.0
+
+
 def frame_width_um_from_max_area(max_area_par: float) -> float:
     """Search-frame width (µm) from maximum accepted particle area (µm²)."""
     max_par_radius = np.sqrt(max_area_par / np.pi)
-    return float(min(20.0 * max_par_radius, 500.0))
+    return float(min(FRAME_WIDTH_PER_MAX_DIAMETER * 2.0 * max_par_radius, MAX_FRAME_WIDTH_UM))
 
 #%% Electron Microscope Particle Finder class    
 class EM_Particle_Finder:
@@ -1834,6 +1864,16 @@ class EM_Particle_Finder:
         self._ledger.particle_stats_progress = None
         return None
 
+    def _frame_width_range_um(self) -> Optional[Tuple[float, float]]:
+        """Smallest and largest frame width of the microscope, in µm (None if not known)."""
+        try:
+            if EM_driver.is_microscope_connected():
+                min_fw_mm, max_fw_mm = EM_driver.get_range_frame_width()
+                return float(min_fw_mm) * 1000.0, float(max_fw_mm) * 1000.0
+        except Exception:
+            pass
+        return None
+
     def _plan_band_frames(
         self, navigator, progress: ParticleStatsProgress, band_idx: int, fw_mm: float, reuse_grid: bool = False
     ) -> bool:
@@ -1957,11 +1997,12 @@ class EM_Particle_Finder:
         """
         Analyze frames to collect and save particle size statistics.
 
-        With automatic navigation, the diameter range is split into size bands
-        (largest first). Each band is searched with an FOV matched to its largest
-        particles, and goes down to the smallest particles covering
-        ``powder_meas_cfg.min_par_pixels`` pixels at that FOV; finer bands are
-        searched in subframes of the frames visited (see :func:`plan_size_bands_um`).
+        With automatic navigation, the diameter range is split into size bands,
+        planned from the smallest particles up (see :func:`plan_size_bands_um`):
+        each band is searched with the largest FOV in which its smallest particles
+        cover ``powder_meas_cfg.min_par_pixels`` pixels, up to the largest particles
+        fitting that FOV. Bands are collected largest first, finer bands in
+        subframes of the frames visited.
         The bands, with the number and total area of the frames analysed in each,
         are recorded with the statistics in the sample ledger. The statistics are
         weighted by band, by the particles found per unit area scanned (see
@@ -2025,41 +2066,49 @@ class EM_Particle_Finder:
                 ))
             self._collect_size_band(progress.bands[0], n_par_target)
         else:
-            band_idx = 0
-            d_hi = d_max_um
-            while True:
+            plan = plan_size_bands_um(d_min_um, d_max_um, self._im_width, min_par_pixels, self._frame_width_range_um())
+            if not plan or plan[-1][0] > d_min_um * (1 + 1e-9):
+                logger.warning(
+                    f"⚠️ Particles smaller than {plan[-1][0] if plan else d_max_um:.4g} µm cannot be measured with at "
+                    f"least {min_par_pixels} pixels at the smallest frame width of the microscope: they are left out."
+                )
+            if progress.bands and (
+                len(progress.bands) > len(plan)
+                or not all(
+                    # Same upper bound; the lower one only raised by the microscope (smallest frame it can set)
+                    np.isclose(band.d_max_um, planned[1]) and band.d_min_um >= planned[0] * (1 - 1e-9)
+                    for band, planned in zip(progress.bands, plan)
+                )
+            ):
+                logger.warning("⚠️ The interrupted measurement used other size bands: a new one starts.")
+                progress = ParticleStatsProgress(n_par_target=n_par_target, powder_meas_cfg=powder_meas_cfg)
+                self._stats_progress = progress
+            for band_idx, (d_lo, d_hi, fw_planned_um) in enumerate(plan):
                 if band_idx < len(progress.bands):
-                    band = progress.bands[band_idx]
                     if band_idx == len(progress.bands) - 1:
                         # Band interrupted (or last one recorded): continue in the frames not analysed yet
                         if not self._continue_size_band(navigator, progress, band_idx, n_par_target):
                             break
-                else:
-                    fw_mm = frame_width_um_from_max_area(diameter_um_to_area_um2(d_hi)) / 1000.0
-                    if not self._plan_band_frames(navigator, progress, band_idx, fw_mm, reuse_grid=True):
-                        break
-                    # Frame width set by the microscope (clipped to its range): gives the smallest valid particles
-                    fw_um = float(
-                        navigator.grid_search_fw_mm if navigator.grid_search_fw_mm is not None else fw_mm
-                    ) * 1000.0
-                    d_pixels_um = min_valid_diameter_um(fw_um / self._im_width, min_par_pixels)
-                    if d_pixels_um >= d_hi:
-                        logger.warning(
-                            f"⚠️ Particles smaller than {d_hi:.4g} µm cannot be measured with at least "
-                            f"{min_par_pixels} pixels at the smallest frame width: they are left out."
-                        )
-                        break
-                    band = ParticleSizeBand(
-                        d_min_um=max(d_min_um, d_pixels_um), d_max_um=d_hi, frame_width_um=fw_um,
-                        n_frames=0, scanned_area_um2=0.0,
-                    )
-                    progress.bands.append(band)
-                    self._collect_in_band(band, band_idx, n_par_target)
-
-                if band.d_min_um <= d_min_um * (1.0 + 1e-12):
+                    continue
+                if not self._plan_band_frames(navigator, progress, band_idx, fw_planned_um / 1000.0, reuse_grid=True):
                     break
-                d_hi = band.d_min_um
-                band_idx += 1
+                # Frame width set by the microscope (clipped to its range): gives the smallest valid particles
+                fw_um = float(
+                    navigator.grid_search_fw_mm if navigator.grid_search_fw_mm is not None else fw_planned_um / 1000.0
+                ) * 1000.0
+                d_pixels_um = min_valid_diameter_um(fw_um / self._im_width, min_par_pixels)
+                if d_pixels_um >= d_hi:
+                    logger.warning(
+                        f"⚠️ Particles smaller than {d_hi:.4g} µm cannot be measured with at least "
+                        f"{min_par_pixels} pixels at the frame width set by the microscope: they are left out."
+                    )
+                    break
+                band = ParticleSizeBand(
+                    d_min_um=max(d_lo, d_pixels_um), d_max_um=d_hi, frame_width_um=fw_um,
+                    n_frames=0, scanned_area_um2=0.0,
+                )
+                progress.bands.append(band)
+                self._collect_in_band(band, band_idx, n_par_target)
 
         precision_reached = None
         if powder_meas_cfg.size_stats_ci_tolerance is not None:

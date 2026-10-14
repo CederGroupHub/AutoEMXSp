@@ -24,24 +24,31 @@ from autoemx.utils.helper import AlphabetMapper
 import autoemx.utils.constants as cnst
 
 
-def test_size_bands_from_minimum_particle_pixels():
+def test_size_bands_planned_from_the_smallest_particles():
     # A particle of 80 pixels has a diameter of ~10 pixels
     assert min_valid_diameter_um(0.5, 80) == pytest.approx(2 * 0.5 * np.sqrt(80 / np.pi))
+    pixel_limit = min_valid_diameter_um(1 / 1920, 80)  # per µm of frame width
 
     bands = plan_size_bands_um(0.1, 50.0, im_width_px=1920, min_par_pixels=80)
     assert len(bands) == 3
-    assert bands[0][1] == 50.0 and bands[-1][0] == 0.1
+    assert bands[0][1] == 50.0 and bands[-1][0] == pytest.approx(0.1)
+    # Smallest band: the largest frame in which the smallest particles still have 80 pixels
+    assert bands[-1][2] == pytest.approx(0.1 / pixel_limit)
     for i, (d_lo, d_hi, fw_um) in enumerate(bands):
-        assert fw_um == pytest.approx(frame_width_um_from_max_area(diameter_um_to_area_um2(d_hi)))
-        assert d_lo == pytest.approx(max(0.1, min_valid_diameter_um(fw_um / 1920, 80)))  # smallest valid particles
-        if i:
-            assert d_hi == bands[i - 1][0]  # contiguous, largest first
-    # Frames 10 x the largest particle: each band spans 1920 / (20 * sqrt(80 / pi)) ~ 19 x in diameter
-    assert bands[1][1] / bands[1][0] == pytest.approx(1920 / (20 * np.sqrt(80 / np.pi)))
+        assert pixel_limit * fw_um <= d_lo * (1 + 1e-9)  # all particles of the band have enough pixels
+        if i:  # largest first: each band ends where the previous (larger) one starts
+            assert d_hi == pytest.approx(bands[i - 1][0])
+            assert d_hi == pytest.approx(fw_um / 10)  # up to the largest particles fitting the frame
+    assert bands[0][2] == 500.0  # the largest frame takes all the particles left
 
+    # Narrow remainder of a range: measured with the largest frames, not with tiny ones
+    assert [round(fw) for _, _, fw in plan_size_bands_um(2.0, 100.0, 1920, 80)] == [500, 380]
     # More pixels per particle (or fewer per frame) -> narrower bands
     assert len(plan_size_bands_um(0.1, 50.0, im_width_px=1920, min_par_pixels=800)) > len(bands)
-    assert plan_size_bands_um(2.0, 2.0, im_width_px=1920, min_par_pixels=80) == [(2.0, 2.0, 20.0)]
+    assert plan_size_bands_um(5.0, 5.0, im_width_px=1920, min_par_pixels=80) == [(5.0, 5.0, 500.0)]
+    # A microscope that cannot zoom in enough: the smallest particles cannot be measured
+    limited = plan_size_bands_um(0.1, 50.0, im_width_px=1920, min_par_pixels=80, frame_width_range_um=(100.0, 2000.0))
+    assert limited[-1][2] == 100.0 and limited[-1][0] == pytest.approx(pixel_limit * 100.0)
     with pytest.raises(ValueError, match="reduce min_par_pixels"):
         plan_size_bands_um(0.1, 50.0, im_width_px=100, min_par_pixels=80)
 

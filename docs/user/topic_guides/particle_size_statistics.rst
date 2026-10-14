@@ -15,10 +15,11 @@ Size bands
 ----------
 
 Particle size is the area-equivalent diameter, :math:`d = 2\sqrt{A/\pi}`. A frame
-(10 × the largest diameter) only measures particles covering at least
-``min_par_pixels`` pixels (default 80, ~10 pixels across). Wider size ranges are
-split into **size bands**, each with frames matched to its sizes, and
-``n_par_target`` particles are collected in each band.
+only measures particles covering at least ``min_par_pixels`` pixels (default 80,
+~10 pixels across) and at most a tenth of its width. Wider size ranges are split
+into **size bands**, planned from the smallest particles up, the hardest to find:
+each band uses the largest frame (up to 500 µm) in which its smallest particles
+still have enough pixels. ``n_par_target`` particles are collected in each band.
 
 
 Corrections

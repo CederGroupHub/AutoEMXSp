@@ -258,8 +258,7 @@ def test_size_bands_recorded(tmp_path: Path, fake_microscope, monkeypatch):
             assert d_lo - 1e-9 <= particle["eq_diameter_um"] <= d_hi + 1e-9
             assert particle["area_um"] / pixel_size_um**2 >= min_pixels - 1e-6  # enough pixels for a valid area
             assert ("_" in particle["frame_id"]) == (i > 0)  # finer bands: subframes
-        if band["d_min_um"] > _d_um(min_area):
-            assert band["d_min_um"] == pytest.approx(min_valid_diameter_um(pixel_size_um, min_pixels))
+        assert min_valid_diameter_um(pixel_size_um, min_pixels) <= band["d_min_um"] * (1 + 1e-9)
     assert [pid for band in bands for pid in band["particle_ids"]] == result["particle_ids"] == list(particles)
 
     # Statistics weighted by band: each band by its particles per unit area scanned
@@ -550,3 +549,23 @@ def test_frames_searched_by_eds_counted_in_the_statistics(tmp_path: Path, fake_m
     assert len(result.eds_scans) == 1 and result.eds_scans[0].number_density_per_mm2 > 0
     assert result.size_stats.n_par_analysed == len(psd_result.particle_ids) + 24
     assert any(p.selection == "auto" for p in ledger.particles)  # still in the ledger
+
+
+
+def test_interrupted_measurement_with_other_bands_restarted(tmp_path: Path, fake_microscope, monkeypatch):
+    # E.g. interrupted with an earlier version of AutoEMX, which planned other size bands
+    monkeypatch.setattr(_FakeEMController, "use_frame_navigator", True)
+    monkeypatch.setattr(particle_finder_mod, "STATS_SAVE_EVERY_N_FRAMES", 1)
+    _failing_after(N_FRAMES + 1, monkeypatch)
+    sample_dir = _collect(tmp_path, n_par_target=10**6, **TWO_BANDS)
+    ledger_path = sample_dir / "ledger.json"
+    ledger = SampleLedger.from_json_file(str(ledger_path))
+    ledger.particle_stats_progress.bands[0].d_min_um *= 0.5  # same largest size, but wider
+    ledger.to_json_file(str(ledger_path))
+
+    _failing_after(10**6, monkeypatch)
+    _collect(tmp_path, n_par_target=10**6, **TWO_BANDS)
+    result = SampleLedger.from_json_file(str(ledger_path)).particle_stats
+    expected = plan_size_bands_um(_d_um(1e-3), _d_um(1e4), 1920, 20)
+    assert [(b.d_min_um, b.d_max_um) for b in result.bands] == pytest.approx([(lo, hi) for lo, hi, _ in expected])
+    assert [b.n_frames for b in result.bands] == [N_FRAMES, N_FRAMES]  # all frames analysed again

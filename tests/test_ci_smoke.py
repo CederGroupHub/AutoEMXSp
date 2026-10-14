@@ -80,7 +80,7 @@ from test_particle_stats_multiscale import (  # noqa: F401
     test_diameter_area_and_frame_width_helpers,
     test_lowercase_alphabet_mapper,
     test_save_particle_statistics_from_particle_info,
-    test_size_bands_from_minimum_particle_pixels,
+    test_size_bands_planned_from_the_smallest_particles,
 )
 from test_particle_selection_list_mode import (  # noqa: F401
     test_go_to_next_particle_by_coordinates_increments_id,
