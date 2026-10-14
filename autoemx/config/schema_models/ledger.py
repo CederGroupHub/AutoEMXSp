@@ -24,6 +24,7 @@ from autoemx.config.runtime_configs import (
     SampleSubstrateConfig,
 )
 from .acquisition import ParticleInfo, SpectrumEntry
+from .particle_stats import ParticleStatsProgress, ParticleStatsResult
 from .quantification import QuantificationConfig, QuantificationResult
 
 
@@ -124,6 +125,8 @@ class SampleLedger(BaseModel):
     configs: LedgerConfigs
     spectra: List[SpectrumEntry]
     particles: List[ParticleInfo] = Field(default_factory=list)
+    particle_stats: Optional[ParticleStatsResult] = None
+    particle_stats_progress: Optional[ParticleStatsProgress] = None
     active_quant: Optional[int] = None
     quantifications: List[QuantificationConfig] = Field(default_factory=list)
 
@@ -182,6 +185,13 @@ class SampleLedger(BaseModel):
         particle_ids = [particle.id for particle in self.particles]
         if len(particle_ids) != len(set(particle_ids)):
             raise ValueError("ParticleInfo.id values must be unique within a ledger")
+        for name, stats in (("particle_stats", self.particle_stats), ("particle_stats_progress", self.particle_stats_progress)):
+            if stats is None:
+                continue
+            band_ids = [pid for band in stats.bands for pid in band.particle_ids]
+            unknown_ids = sorted(set(getattr(stats, "particle_ids", []) + band_ids) - set(particle_ids))
+            if unknown_ids:
+                raise ValueError(f"{name} references particle ids not in the ledger: {unknown_ids}")
 
         config_ids = [cfg.quantification_id for cfg in self.quantifications]
         if len(config_ids) != len(set(config_ids)):

@@ -14,3 +14,4 @@ not step-by-step instructions.
    clustering_modes
    number_of_clusters
    mixture_decomposition
+   particle_size_statistics

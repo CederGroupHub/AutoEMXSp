@@ -5,6 +5,7 @@ from .acquisition import AcquisitionDetails, Coordinate2D, ParticleInfo, Spectru
 from .clustering import AitchisonParams, ClusteringAnalysis, ClusteringConfig, ClusteringResult, ClusterMergeParams, DBSCANParams, MixtureParams
 from .fitting import FitResult, FittedPeakResult
 from .ledger import LedgerConfigs, LedgerVersionError, SampleLedger
+from .particle_stats import ParticleSelection, ParticleSizeBand, ParticleSizeStats, ParticleStatsFrame, ParticleStatsProgress, ParticleStatsResult
 from .quantification import (
     QuantificationConfig,
     QuantificationDiagnostics,
@@ -35,6 +36,12 @@ __all__ = [
     "FittedPeakResult",
     "LedgerConfigs",
     "ParticleInfo",
+    "ParticleSelection",
+    "ParticleSizeBand",
+    "ParticleSizeStats",
+    "ParticleStatsFrame",
+    "ParticleStatsProgress",
+    "ParticleStatsResult",
     "QuantificationConfig",
     "QuantificationDiagnostics",
     "QuantificationResult",

@@ -46,6 +46,7 @@ from autoemx.config.schema_models import (
 )
 from autoemx.utils.legacy.ledger_bootstrap import create_analyzer_ledger_from_legacy_data_csv
 from autoemx.utils.legacy.legacy_config_loader import has_legacy_data_csv
+from autoemx.core import particle_statistics
 from autoemx.core.quantifier import XSp_Quantifier
 from .reference_matching import ReferenceMatchingModule
 from .standards import StandardsModule
@@ -426,8 +427,14 @@ class LedgerModule:
         frame_id: Optional[str] = None,
         coordinates: Optional[Coordinate2D] = None,
         image_pixel_size_um: Optional[float] = None,
+        selection: Optional[str] = None,
     ) -> None:
-        """Create or update the ParticleInfo entry for a particle in the ledger."""
+        """
+        Create or update the ParticleInfo entry for a particle in the ledger.
+
+        ``selection`` (how the particle was chosen) is only set if not recorded yet: a particle keeps the selection
+        it was first recorded with (e.g. a 'size_stats' particle later measured by EDS from a list).
+        """
         eq_diameter_um = (
             LedgerModule._eq_diameter_um_from_area(area_um) if area_um is not None else None
         )
@@ -442,6 +449,8 @@ class LedgerModule:
                     particle.coordinates = coordinates
                 if image_pixel_size_um is not None:
                     particle.image_pixel_size_um = image_pixel_size_um
+                if particle.selection is None and selection is not None:
+                    particle.selection = selection
                 return
         ledger.particles.append(
             ParticleInfo(
@@ -451,6 +460,7 @@ class LedgerModule:
                 frame_id=frame_id,
                 coordinates=coordinates,
                 image_pixel_size_um=image_pixel_size_um,
+                selection=selection,
             )
         )
 
@@ -505,14 +515,16 @@ class LedgerModule:
         return changed
 
     def _attach_particle_stats_ledger(self: Any) -> None:
-        """Create or load a SampleLedger and attach it to the particle finder for PSD."""
+        """
+        Create or load a SampleLedger and attach it to the particle finder for PSD.
+
+        The particles already in the ledger (e.g. measured by EDS, or by an earlier PSD run) are kept, and the new
+        ones get the following ids. The configs of an existing ledger are kept: the PSD settings are stored with
+        its result (``SampleLedger.particle_stats``).
+        """
         ledger = LedgerModule._load_existing_ledger(self)
         if ledger is None:
             ledger = create_sample_ledger(self.sample_result_dir, self.sample_id, LedgerModule._build_ledger_configs(self))
-        else:
-            # Fresh PSD run replaces prior particle geometry records.
-            ledger.particles = []
-            ledger.configs = LedgerModule._build_ledger_configs(self)
         ledger_path = LedgerModule._get_ledger_path(self)
         ledger.to_json_file(ledger_path)
 
@@ -521,6 +533,31 @@ class LedgerModule:
             particle_finder = getattr(self.EM_controller, "particle_finder", None)
         if particle_finder is not None:
             particle_finder.attach_stats_ledger(ledger, ledger_path=ledger_path)
+
+    def _refresh_particle_stats(self: Any) -> None:
+        """
+        Recalculate the particle size statistics of the ledger, if any, to include the particles just measured by EDS
+        (with the particles and frames left out, and the setting include_eds_auto_particles, of the statistics).
+        """
+        ledger = LedgerModule._load_existing_ledger(self)
+        if ledger is None or ledger.particle_stats is None:
+            return
+        previous = ledger.particle_stats
+        result = particle_statistics.recalculate_particle_stats(
+            ledger,
+            previous.excluded_particle_ids,
+            previous.excluded_frame_ids,
+            previous.powder_meas_cfg.include_eds_auto_particles,
+        )
+        if result is None or result.particle_ids == previous.particle_ids:
+            return
+        ledger.particle_stats = result
+        ledger.to_json_file(LedgerModule._get_ledger_path(self))
+        if self.verbose:
+            logger.info(
+                "ℹ️ Particle size statistics updated with the particles measured by EDS (%d particles).",
+                result.size_stats.n_par_analysed,
+            )
 
     def _configure_list_particle_selection(self: Any) -> None:
         """Validate and attach list-mode particle targets to the particle finder."""
@@ -578,6 +615,7 @@ class LedgerModule:
                 frame_id=frame_id,
                 coordinates=particle_coordinates,
                 image_pixel_size_um=image_pixel_size_um,
+                selection=self.powder_meas_cfg.par_selection_mode,
             )
         ledger.to_json_file(LedgerModule._get_ledger_path(self))
 
@@ -1133,6 +1171,10 @@ class LedgerModule:
             next_spectrum_id = 0
             _particle_id_offset = 0
 
+        # New particles get ids after those already in the ledger (e.g. from particle size statistics)
+        if _existing_ledger is not None and _existing_ledger.particles:
+            _particle_id_offset = max(_particle_id_offset, max(p.id for p in _existing_ledger.particles))
+
         return {
             "tot_n_spectra": tot_n_spectra,
             "next_spectrum_id": next_spectrum_id,
@@ -1397,13 +1439,16 @@ class LedgerModule:
     
         try:
             ledger = LedgerModule._load_or_create_ledger(self)
-            ledger.configs = LedgerConfigs.model_validate({
-                cnst.MICROSCOPE_CFG_KEY: spectrum_collection_info[cnst.MICROSCOPE_CFG_KEY],
-                cnst.SAMPLE_CFG_KEY: spectrum_collection_info[cnst.SAMPLE_CFG_KEY],
-                cnst.MEASUREMENT_CFG_KEY: spectrum_collection_info[cnst.MEASUREMENT_CFG_KEY],
-                cnst.SAMPLESUBSTRATE_CFG_KEY: spectrum_collection_info[cnst.SAMPLESUBSTRATE_CFG_KEY],
-                cnst.PLOT_CFG_KEY: spectrum_collection_info.get(cnst.PLOT_CFG_KEY, self.plot_cfg.model_dump(mode="json")),
-            })
+            # The configs describe the spectra (read by quantification). A particle size statistics measurement
+            # stores its settings with its result instead, so it only sets them in a new ledger.
+            if is_XSp_measurement or self._last_acq_ledger_created:
+                ledger.configs = LedgerConfigs.model_validate({
+                    cnst.MICROSCOPE_CFG_KEY: spectrum_collection_info[cnst.MICROSCOPE_CFG_KEY],
+                    cnst.SAMPLE_CFG_KEY: spectrum_collection_info[cnst.SAMPLE_CFG_KEY],
+                    cnst.MEASUREMENT_CFG_KEY: spectrum_collection_info[cnst.MEASUREMENT_CFG_KEY],
+                    cnst.SAMPLESUBSTRATE_CFG_KEY: spectrum_collection_info[cnst.SAMPLESUBSTRATE_CFG_KEY],
+                    cnst.PLOT_CFG_KEY: spectrum_collection_info.get(cnst.PLOT_CFG_KEY, self.plot_cfg.model_dump(mode="json")),
+                })
 
             # Persist an initial quantification+clustering descriptor at acquisition start
             # so user-provided clustering inputs (e.g., sample['cnd'] -> ref_formulae)

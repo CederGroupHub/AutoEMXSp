@@ -14,7 +14,7 @@ FrameNavigator
 Created on 2026
 @author: Andrea
 """
-from typing import List, Optional, Sequence, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple
 
 import time
 import numpy as np
@@ -358,6 +358,21 @@ class FrameNavigator:
             (str(label), (float(pos[0]), float(pos[1])), fw)
             for pos, label in zip(self.frame_pos_mm, self.frame_labels)
         ]
+
+    def skip_frames(self, frame_labels: Iterable[str]) -> None:
+        """
+        Remove frames from the planned frames, by label (e.g. frames already analysed by an interrupted particle
+        size statistics measurement), and restart from the first remaining frame.
+        """
+        skipped = {str(label) for label in frame_labels}
+        kept = [
+            (pos, label) for pos, label in zip(self.frame_pos_mm, self.frame_labels) if str(label) not in skipped
+        ]
+        self.frame_pos_mm = [pos for pos, _ in kept]
+        self.frame_labels = [label for _, label in kept]
+        self.num_frames = len(kept)
+        self._sync_band_frame_descriptors()
+        self.reset_frame_cursor()
 
     def get_visited_band_frames(self) -> List[FrameDescriptor]:
         """Return frames visited during the current size band (in visit order)."""

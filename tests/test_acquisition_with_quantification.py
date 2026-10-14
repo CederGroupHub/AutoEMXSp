@@ -129,6 +129,8 @@ def test_acquisition_with_quantification(tmp_path: Path, monkeypatch):
 
     # Particle 1 is skipped after its first (low-count) spectrum
     assert [s["acquisition_details"]["particle_id"] for s in spectra] == [0, 0, 1, 2, 2]
+    # Particles record how they were chosen
+    assert [(p["id"], p["selection"]) for p in ledger["particles"]] == [(0, "auto"), (1, "auto"), (2, "auto")]
     # Every spectrum is quantified exactly once, in the same quantification run
     assert all(len(s["quantification_results"]) == 1 for s in spectra)
     assert {s["quantification_results"][0]["quantification_id"] for s in spectra} == {0}

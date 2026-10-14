@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Literal, Optional, Tuple
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import numpy as np
@@ -84,6 +84,12 @@ class ParticleInfo(BaseModel):
     ``image_pixel_size_um`` is the pixel size of the particle image saved with the
     spectrum spots (``SEM images/<sample>_par<id>_fr<frame>_xyspots``), in which the
     ``SpotCoordinates.pixel_coordinates`` of its spectra are given.
+    ``selection`` is how the particle was chosen: found by a particle size statistics measurement
+    ('size_stats'), or measured by EDS with particle selection mode 'auto', 'manual' or 'list'
+    (None in ledgers saved before AutoEMX recorded it).
+    ``edge_correction`` is the Miles-Lantuéjoul correction of a particle found by particle size statistics: the
+    inverse of the fraction of frame positions where it would not touch the frame edge (particles touching it are
+    left out), by which its weight is multiplied so that large particles are not under-counted.
     """
 
     id: int
@@ -94,6 +100,8 @@ class ParticleInfo(BaseModel):
     image_pixel_size_um: Optional[float] = None
     clusters: List[int] = Field(default_factory=list)
     composition: Optional[str] = None
+    selection: Optional[Literal["size_stats", "auto", "manual", "list"]] = None
+    edge_correction: Optional[float] = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -120,6 +128,13 @@ class ParticleInfo(BaseModel):
             return None
         normalized = v.strip()
         return normalized if normalized else None
+
+    @field_validator("edge_correction")
+    @classmethod
+    def validate_edge_correction(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and (not np.isfinite(v) or v < 1):
+            raise ValueError("edge_correction must be finite and at least 1 when set")
+        return v
 
 
 class SpectrumEntry(BaseModel):

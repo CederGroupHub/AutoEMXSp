@@ -27,6 +27,7 @@ Submodules
    autoemx.runners.fit_and_quantify_spectrum
    autoemx.runners.fit_and_quantify_spectrum_from_ledger
    autoemx.runners.modify_standards_file
+   autoemx.runners.process_particle_statistics
    autoemx.runners.publish_standards
    autoemx.runners.quantify_external_spectra
    autoemx.runners.reinitialize_ledger

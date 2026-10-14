@@ -791,6 +791,7 @@ def build_acq_specs() -> List[ParamSpec]:
         "par_segmentation_model": list(PowderMeasurementConfig.AVAILABLE_PAR_SEGMENTATION_MODELS),
         "par_feature_selection": list(PowderMeasurementConfig.AVAILABLE_FEATURE_SELECTION),
         "par_spot_spacing": list(PowderMeasurementConfig.AVAILABLE_SPOT_SPACING_SELECTION),
+        "size_stats_plot_format": ["png", "svg", "pdf", "jpg", "tif"],
     }
     for key, values in powder_choices.items():
         _CHOICES[f"apowder.{key}"] = values
@@ -822,6 +823,9 @@ def build_acq_specs() -> List[ParamSpec]:
         "par_xy_spots_thresh": ("particle spot brightness threshold", ""),
         "par_feature_selection": ("particle spot selection", ""),
         "par_spot_spacing": ("particle spot spacing", ""),
+        "min_par_pixels": ("min particle pixels (size statistics)", "px"),
+        "size_stats_plot_format": ("size distribution plot format", ""),
+        "include_eds_auto_particles": ("include EDS particles in size statistics", ""),
         "grid_spot_spacing_um": ("grid spot spacing", "µm"),
         "min_xsp_spots_distance_um": ("min distance between spectrum spots", "µm"),
         "image_frame_width_um": ("image frame width", "µm"),
@@ -841,6 +845,9 @@ def build_acq_specs() -> List[ParamSpec]:
         "par_xy_spots_thresh": "8-bit brightness (rescaled within each particle) of the brightest, thickest regions, where spectra are acquired.",
         "par_feature_selection": "random: random spots within the bright regions; peaks: the brightest spots.",
         "par_spot_spacing": "random: unbiased spot selection; maximized: spots spread over the particle.",
+        "min_par_pixels": "Particle size statistics: minimum number of pixels of a particle for its area to be measured. Smaller particles are measured in a finer size band.",
+        "size_stats_plot_format": "File format of the particle size distribution plot.",
+        "include_eds_auto_particles": "Particle size statistics also include the particles measured by EDS with automatic particle selection.",
         "grid_spot_spacing_um": "Distance between the spots of the acquisition grid.",
         "min_xsp_spots_distance_um": "Offset of the grid when it does not contain enough spots.",
         "image_frame_width_um": "Width of the image frames. Empty = 10 × grid spot spacing.",

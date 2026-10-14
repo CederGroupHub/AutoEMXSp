@@ -54,7 +54,11 @@ def collect_particle_statistics(
     results_dir: Optional[str] = None
 ) -> None:
     """
-    Batch acquisition (and optional quantification) of X-ray spectra for a list of powder samples.
+    Particle size statistics of a list of powder samples, measured at the electron microscope.
+
+    For each sample, particles are detected in frames scanned over the sample until ``n_par_target`` particles are
+    found in each size band (see ``EM_Particle_Finder.get_particle_stats``). The statistics are stored in the
+    sample ledger (``ledger.json``) and saved as particle sizes, statistics and histogram files in the sample folder.
 
     Parameters
     ----------
@@ -63,7 +67,7 @@ def collect_particle_statistics(
             - 'ID' (str): Sample identifier (SampleConfig.ID).
             - 'pos' (tuple of float): (x, y) stage coordinates in mm (SampleConfig.center_pos).
     n_par_target : int
-        Target amount of particles to analyse
+        Target number of particles to analyse, in each size band.
     microscope_ID : str, optional
         Identifier for the microscope hardware.
         Must correspond to a calibration folder in `./XSp_calibs/Microscopes/<ID>` (MicroscopeConfig.ID).
@@ -129,8 +133,8 @@ def collect_particle_statistics(
             
     Returns
     -------
-    comp_analyzer : EMXSp_Composition_Analyzer
-        The composition analysis object containing the results and methods for further analysis.
+    None
+        Results are saved in the folder of each sample.
     """
     
     # --- Configuration objects
@@ -141,12 +145,6 @@ def collect_particle_statistics(
         is_auto_BC=auto_adjust_brightness_contrast,
         brightness=brightness,
         contrast=contrast
-    )
-
-    measurement_cfg = MeasurementConfig(
-        type=MeasurementConfig.PARTICLE_STATS_MEAS_TYPE_KEY,
-        working_distance = working_distance,
-        is_manual_navigation=is_manual_navigation,
     )
 
     if powder_meas_cfg_kwargs:

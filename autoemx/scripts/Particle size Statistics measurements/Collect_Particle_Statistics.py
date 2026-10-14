@@ -297,6 +297,8 @@ powder_meas_cfg_kwargs = dict(
     min_area_par=min_area_par,
     par_segmentation_model = par_segmentation_model,
     par_brightness_thresh=100,
+    min_par_pixels=80,  # Minimum pixels of a particle for its area to be measured (sets the size bands)
+    include_eds_auto_particles=True,  # Also include particles measured by EDS with automatic particle selection
 )
 
 

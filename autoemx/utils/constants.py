@@ -125,6 +125,7 @@ STDEV_DF_KEY = '_std' # Added to elements
 # Particle statistics keys
 PAR_AREA_UM_KEY = 'Area (μm²)'
 PAR_EQ_D_KEY = 'Equivalent Diameter (μm)'
+PAR_WEIGHT_KEY = 'Weight'
 
 
 

@@ -417,6 +417,22 @@ class PowderMeasurementConfig(BaseModel):
         par_feature_selection (str): 'random' for random selection of points within bright regions, 'peaks' for brightest peak spots (default: 'random').
         par_spot_spacing (str): 'random' for unbiased spot selecton, 'maximized' for maximized spot spacing over particle (default: 'random').
         par_spot_selection_mode (str): 'auto' for built-in spot selection, 'callback' to supply spots via xsp_spot_selector (default: 'auto').
+        min_par_pixels (int): Minimum number of pixels covered by a particle for its area to be measured in particle
+            size statistics (default: 80, i.e. a diameter of about 10 pixels). Smaller particles are measured in
+            frames of a finer size band (see EM_Particle_Finder.get_particle_stats).
+        size_stats_plot_format (str): File format of the particle size distribution plot: 'png' (default), 'svg',
+            'pdf', 'jpg' or 'tif'.
+        size_stats_ci_tolerance (float, optional): Particle size statistics stop when the 95 % confidence interval of
+            each of size_stats_ci_quantities is within ± this fraction of its value (e.g. 0.05), n_par_target then
+            being the minimum number of particles per size band. None (default): stop at n_par_target.
+        size_stats_ci_quantities (list of str): Statistics whose precision is checked: 'D10', 'D50', 'D90', 'D43',
+            'Dv10', 'Dv50', 'Dv90' (default: ['D50']).
+        size_stats_max_n_frames (int): Maximum number of frames analysed when stopping on precision (default: 500).
+        size_stats_max_time_min (float, optional): Maximum duration, in minutes, of a measurement stopping on
+            precision (default: None, no limit).
+        include_eds_auto_particles (bool): Whether particle size statistics also include the particles of the sample
+            measured by EDS with par_selection_mode 'auto' (default: True). Particles chosen manually or from a
+            list are never included, since their choice is not unbiased.
     """
     DEFAULT_PAR_SEGMENTATION_MODEL: ClassVar[str] = "threshold_bright"
     AVAILABLE_SPOT_SELECTION_MODES: ClassVar[Tuple[str, ...]] = ('auto', 'callback')
@@ -437,6 +453,15 @@ class PowderMeasurementConfig(BaseModel):
     par_xy_spots_thresh: int = 100
     par_feature_selection: str = 'random'
     par_spot_spacing: str = 'random'
+    min_par_pixels: int = 80
+    size_stats_plot_format: Literal['png', 'svg', 'pdf', 'jpg', 'tif'] = 'png'
+    size_stats_ci_tolerance: Optional[float] = None
+    size_stats_ci_quantities: List[Literal['D10', 'D50', 'D90', 'D43', 'Dv10', 'Dv50', 'Dv90']] = Field(
+        default_factory=lambda: ['D50']
+    )
+    size_stats_max_n_frames: int = 500
+    size_stats_max_time_min: Optional[float] = None
+    include_eds_auto_particles: bool = True
 
     AVAILABLE_PAR_SEGMENTATION_MODELS: ClassVar[List[str]] = ["threshold_bright"] + par_seg_models.AVAILABLE_SEGMENTATION_MODELS
     AVAILABLE_FEATURE_SELECTION: ClassVar[Tuple[str, ...]] = ('random', 'peaks')
@@ -492,6 +517,16 @@ class PowderMeasurementConfig(BaseModel):
             raise ValueError("max_n_par_per_frame must be positive.")
         if self.max_spectra_per_par <= 0:
             raise ValueError("max_spectra_per_par must be positive.")
+        if self.min_par_pixels < 1:
+            raise ValueError("min_par_pixels must be at least 1.")
+        if self.size_stats_ci_tolerance is not None and not (0 < self.size_stats_ci_tolerance < 1):
+            raise ValueError("size_stats_ci_tolerance must be between 0 and 1 (a fraction, e.g. 0.05).")
+        if not self.size_stats_ci_quantities:
+            raise ValueError("size_stats_ci_quantities cannot be empty.")
+        if self.size_stats_max_n_frames < 1:
+            raise ValueError("size_stats_max_n_frames must be positive.")
+        if self.size_stats_max_time_min is not None and self.size_stats_max_time_min <= 0:
+            raise ValueError("size_stats_max_time_min must be positive.")
         if self.par_mask_margin < 0:
             raise ValueError("par_mask_margin must be non-negative.")
         if not (0 <= self.par_brightness_thresh <= 255):

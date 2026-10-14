@@ -17,5 +17,6 @@ Submodules
    autoemx.config.schema_models.detector_model
    autoemx.config.schema_models.fitting
    autoemx.config.schema_models.ledger
+   autoemx.config.schema_models.particle_stats
    autoemx.config.schema_models.quantification
    autoemx.config.schema_models.standards

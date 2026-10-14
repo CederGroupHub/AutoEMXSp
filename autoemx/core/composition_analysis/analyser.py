@@ -464,9 +464,9 @@ class EMXSp_Composition_Analyzer:
         sample_substrate_cfg: SampleSubstrateConfig,
         quant_cfg: Optional[QuantificationOptionsConfig] = QuantificationOptionsConfig(),
         initial_clustering_cfg: Optional[Any] = None,
-        powder_meas_cfg: Optional[PowderMeasurementConfig] = PowderMeasurementConfig(),
-        bulk_meas_cfg: Optional[BulkMeasurementConfig] = BulkMeasurementConfig(),
-        exp_stds_cfg: Optional[ExpStandardsConfig] = ExpStandardsConfig(),
+        powder_meas_cfg: Optional[PowderMeasurementConfig] = None,
+        bulk_meas_cfg: Optional[BulkMeasurementConfig] = None,
+        exp_stds_cfg: Optional[ExpStandardsConfig] = None,
         plot_cfg: Optional[PlotConfig] = PlotConfig(),
         is_acquisition: bool = False,
         standards_dict: Optional[Union[EDSStandardsFile, Dict[str, Any]]] = None,
@@ -509,11 +509,14 @@ class EMXSp_Composition_Analyzer:
             list(particle_coords_mm) if particle_coords_mm is not None else None
         )
 
+        # Powder, bulk and standard settings given separately replace those in measurement_cfg
         measurement_cfg = measurement_cfg.model_copy(
             update={
                 "powder_meas_cfg": powder_meas_cfg if powder_meas_cfg is not None else measurement_cfg.powder_meas_cfg,
                 "bulk_meas_cfg": bulk_meas_cfg if bulk_meas_cfg is not None else measurement_cfg.bulk_meas_cfg,
-                "exp_stds_cfg": exp_stds_cfg if exp_stds_cfg is not None else measurement_cfg.exp_stds_cfg,
+                "exp_stds_cfg": (
+                    exp_stds_cfg if exp_stds_cfg is not None else measurement_cfg.exp_stds_cfg or ExpStandardsConfig()
+                ),
             }
         )
         is_XSp_measurement = measurement_cfg.type != measurement_cfg.PARTICLE_STATS_MEAS_TYPE_KEY
@@ -2331,6 +2334,8 @@ class EMXSp_Composition_Analyzer:
             par_str = ''
         if n_spectra_collected_this_session > 0:
             logger.info(f'✅ {n_spectra_collected_this_session} new spectra collected (total: {tot_n_spectra}{par_str}).')
+            if self.sample_cfg.is_particle_acquisition:
+                LedgerModule._refresh_particle_stats(self)
         else:
             logger.info(f'✅ {tot_n_spectra} total spectra available{par_str}.')
         process_time = (time.time() - self.start_process_time) / 60

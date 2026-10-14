@@ -16,3 +16,11 @@ Subpackages
    autoemx.core.em_runtime
    autoemx.core.fitter
    autoemx.core.quantifier
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 4
+
+   autoemx.core.particle_statistics

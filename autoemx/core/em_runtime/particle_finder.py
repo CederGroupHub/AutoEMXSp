@@ -54,9 +54,7 @@ import warnings
 
 # Third-party imports
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -75,7 +73,14 @@ from autoemx.utils.helper import (
 from autoemx.config import (
     PowderMeasurementConfig,
 )
-from autoemx.config.ledger_schemas import Coordinate2D, ParticleInfo
+from autoemx.config.ledger_schemas import (
+    Coordinate2D,
+    ParticleInfo,
+    ParticleSizeBand,
+    ParticleStatsFrame,
+    ParticleStatsProgress,
+)
+from autoemx.core import particle_statistics
 import autoemx.utils.constants as cnst
 from autoemx import microscope_drivers as EM_driver
 import autoemx.core.em_runtime.particle_segmentation_models as par_seg_models
@@ -83,15 +88,39 @@ import autoemx.core.em_runtime.particle_segmentation_models as par_seg_models
 from autoemx._logging import get_logger
 logger = get_logger(__name__)
 
+#: Particles whose bounding box is within this many pixels of the frame edge are left out of particle size statistics
+#: (their size is not known), and the others corrected accordingly (see particle_statistics.edge_correction_factor).
+FRAME_EDGE_MARGIN_PX = 3
 
-def split_diameter_range_um(
+#: A particle size statistics measurement in progress is saved to the sample ledger every this many frames (and at
+#: the end of each size band), so that it can be resumed if interrupted.
+STATS_SAVE_EVERY_N_FRAMES = 5
+
+
+def min_valid_diameter_um(pixel_size_um: float, min_par_pixels: int) -> float:
+    """Equivalent diameter (µm) of a particle covering ``min_par_pixels`` pixels of size ``pixel_size_um``."""
+    return float(2.0 * pixel_size_um * np.sqrt(min_par_pixels / np.pi))
+
+
+def plan_size_bands_um(
     d_min_um: float,
     d_max_um: float,
-    max_decade: float = 10.0,
-) -> List[Tuple[float, float]]:
-    """Split a diameter range into bands of at most one order of magnitude.
+    im_width_px: int,
+    min_par_pixels: int,
+) -> List[Tuple[float, float, float]]:
+    """
+    Size bands of a particle size statistics measurement, as ``(d_min, d_max, frame_width)`` in µm, largest first.
 
-    Bands are returned largest-first. Example: ``0.5..50`` → ``[(5, 50), (0.5, 5)]``.
+    Each band is searched with the frame width matched to its largest particles
+    (:func:`frame_width_um_from_max_area`), and goes down to the smallest particles covering ``min_par_pixels``
+    pixels at that frame width; the next band starts there, until ``d_min_um``. ``get_particle_stats`` applies the
+    same rule with the frame widths set by the microscope (which may clip them to its range).
+
+    Raises
+    ------
+    ValueError
+        If the limits are not finite and positive, or the frames are too narrow in pixels for particles of
+        ``min_par_pixels`` pixels to be smaller than the largest particles of a band.
     """
     if not np.isfinite(d_min_um) or not np.isfinite(d_max_um):
         raise ValueError("Diameter limits must be finite")
@@ -99,21 +128,22 @@ def split_diameter_range_um(
         raise ValueError("Diameter limits must be positive")
     if d_max_um < d_min_um:
         raise ValueError("d_max_um must be greater than or equal to d_min_um")
-    if max_decade <= 1.0:
-        raise ValueError("max_decade must be greater than 1")
 
-    if np.isclose(d_min_um, d_max_um):
-        return [(float(d_min_um), float(d_max_um))]
-
-    bands: List[Tuple[float, float]] = []
-    hi = float(d_max_um)
-    while hi > d_min_um * (1.0 + 1e-12):
-        lo = max(float(d_min_um), hi / max_decade)
-        bands.append((lo, hi))
-        if lo <= d_min_um + 1e-12:
-            break
-        hi = lo
-    return bands
+    bands: List[Tuple[float, float, float]] = []
+    d_hi = float(d_max_um)
+    while True:
+        fw_um = frame_width_um_from_max_area(diameter_um_to_area_um2(d_hi))
+        d_pixels_um = min_valid_diameter_um(fw_um / im_width_px, min_par_pixels)
+        if d_pixels_um >= d_hi:
+            raise ValueError(
+                f"Frames of {im_width_px} pixels are too narrow to measure particles of {min_par_pixels} pixels: "
+                "reduce min_par_pixels"
+            )
+        d_lo = max(float(d_min_um), d_pixels_um)
+        bands.append((d_lo, d_hi, fw_um))
+        if d_lo <= d_min_um * (1.0 + 1e-12):
+            return bands
+        d_hi = d_lo
 
 
 def diameter_um_to_area_um2(diameter_um: float) -> float:
@@ -284,6 +314,10 @@ class EM_Particle_Finder:
         self._list_target_index: int = 0
         self._list_mode_absolute_ids: bool = False
         self._particles_by_id: Dict[int, ParticleInfo] = {}
+        # Particle size statistics measurement in progress, and the size band being collected
+        self._stats_progress: Optional[ParticleStatsProgress] = None
+        self._stats_band: Optional[ParticleSizeBand] = None
+        self._stats_max_n_frames: Optional[int] = None  # frame limit of a measurement stopping on precision
 
     @property
     def is_manual_particle_selection(self) -> bool:
@@ -794,8 +828,10 @@ class EM_Particle_Finder:
         # Mask is always saved when collecting particles. Avoids double saving
         save_image = save_image and not self.EM.measurement_cfg.type == self.EM.measurement_cfg.PARTICLE_STATS_MEAS_TYPE_KEY
         if persist_mask and (self.development_mode or save_image):
-            draw_scalebar(par_mask, self.EM.pixel_size_um)
-            cv2.imwrite(mask_img_path, par_mask)
+            # Scale bar drawn on a copy: the mask itself must stay binary for the particle detection
+            mask_to_save = par_mask.copy()
+            draw_scalebar(mask_to_save, self.EM.pixel_size_um)
+            cv2.imwrite(mask_img_path, mask_to_save)
         
         return par_mask, mask_img_path
     
@@ -894,7 +930,7 @@ class EM_Particle_Finder:
             True if the particle is at or near the edge of the image frame, False otherwise.
         '''
         # Apply margin to account for detection tolerances
-        pixel_margin = 3
+        pixel_margin = FRAME_EDGE_MARGIN_PX
     
         # Check if the particle's bounding box touches or is near any image edge
         is_particle_at_frame_edge = any([
@@ -1190,7 +1226,7 @@ class EM_Particle_Finder:
         # cv2.imshow('CV Image 2', cv2.bitwise_and(par_image, thresholded_image))
         min_area_pixels = int(0.1 / self.EM.pixel_size_um ** 2)
         if self.development_mode and self.results_dir:
-            eroded_par_mask = draw_scalebar(thresholded_image, self.EM.pixel_size_um)
+            eroded_par_mask = draw_scalebar(thresholded_image.copy(), self.EM.pixel_size_um)
             cv2.imwrite(os.path.join(self.results_dir, self._sample_id + f'_par{self.tot_par_cntr}_fr{self.EM.current_frame_label}_maskXY.png'), eroded_par_mask)
         return thresholded_image, min_area_pixels
 
@@ -1590,131 +1626,364 @@ class EM_Particle_Finder:
         if ledger_path is not None:
             self._ledger.to_json_file(ledger_path)
 
-    def _apply_size_band(self, d_min_um: float, d_max_um: float) -> float:
-        """Update area filters and search FOV for one diameter band; return FOV in mm."""
-        min_area = diameter_um_to_area_um2(d_min_um)
-        max_area = diameter_um_to_area_um2(d_max_um)
-        fw_um = frame_width_um_from_max_area(max_area)
-        self.powder_meas_cfg.min_area_par = min_area
-        self.powder_meas_cfg.max_area_par = max_area
-        self.powder_meas_cfg.par_search_frame_width_um = fw_um
-        return fw_um / 1000.0
+    def _set_size_band_area_limits(self, d_min_um: float, d_max_um: float, frame_width_um: float) -> None:
+        """Set the particle area limits (and search frame width) of one size band."""
+        self.powder_meas_cfg.min_area_par = diameter_um_to_area_um2(d_min_um)
+        self.powder_meas_cfg.max_area_par = diameter_um_to_area_um2(d_max_um)
+        self.powder_meas_cfg.par_search_frame_width_um = frame_width_um
 
-    def _collect_particle_stats_until(self, n_par_target_total: int) -> None:
-        """Scan frames until ``analyzed_pars`` reaches ``n_par_target_total`` or frames end."""
-        while len(self.analyzed_pars) < n_par_target_total:
-            previous_n_par = len(self.analyzed_pars)
-            par_were_found = self._move_and_get_particles_stats_in_frame()
-            if par_were_found is None:
-                logger.warning(
-                    f"⚠️ Could not find {n_par_target_total} particles. "
-                    f"Completed statistics using {len(self.analyzed_pars)} particles."
-                )
-                break
-            if par_were_found is False:
-                if self.verbose:
-                    logger.warning("⚠️ No particle was found in this frame")
+    def _persist_stats_progress(self) -> None:
+        """Save the particle size statistics measurement in progress (and its particles) to the attached ledger."""
+        if self._ledger is not None and self._stats_progress is not None:
+            self._ledger.particle_stats_progress = self._stats_progress
+            self._persist_stats_ledger()
+
+    def _record_stats_frame(self, frame_image_shape: Tuple[int, ...], particle_ids: List[int]) -> None:
+        """Record the frame just analysed in the size band being collected, saving the progress regularly."""
+        band = self._stats_band
+        if band is None:
+            return
+        im_height, im_width = frame_image_shape[:2]
+        pixel_size_um = float(self.EM.pixel_size_um)
+        position = getattr(getattr(self.EM, "frame_navigator", None), "_current_pos", None)
+        band.add_frame(
+            ParticleStatsFrame(
+                frame_id=str(self.EM.current_frame_label) if self.EM.current_frame_label is not None else "",
+                center_mm=Coordinate2D(x=float(position[0]), y=float(position[1])) if position is not None else None,
+                frame_width_um=im_width * pixel_size_um,
+                pixel_size_um=pixel_size_um,
+                area_um2=float(im_height * im_width * pixel_size_um**2),
+                n_particles=len(particle_ids),
+            ),
+            particle_ids,
+        )
+        if band.n_frames % STATS_SAVE_EVERY_N_FRAMES == 0:
+            self._persist_stats_progress()
+
+    def _collect_size_band(self, band: ParticleSizeBand, n_par_target: int) -> None:
+        """Analyse frames until ``band`` holds ``n_par_target`` particles or no frame is left, recording each frame."""
+        self._stats_band = band
+        try:
+            while len(band.particle_ids) < n_par_target:
+                if self._stats_max_n_frames is not None and self._stats_progress is not None and sum(
+                    b.n_frames for b in self._stats_progress.bands
+                ) >= self._stats_max_n_frames:
+                    break
+                n_par_before = len(band.particle_ids)
+                par_were_found = self._move_and_get_particles_stats_in_frame()
+                if par_were_found is None:
+                    logger.warning(
+                        f"⚠️ Could not find {n_par_target} particles in this size band. "
+                        f"Completed it with {len(band.particle_ids)} particles."
+                    )
+                    break
+                if par_were_found is False:
+                    if self.verbose:
+                        logger.warning("⚠️ No particle was found in this frame")
+                elif self.verbose:
+                    n_par_found_frame = len(band.particle_ids) - n_par_before
+                    n_par_band = len(band.particle_ids)
+                    logger.info(
+                        f"{n_par_found_frame} particle{'s' if n_par_found_frame != 1 else ''} "
+                        f"{'were' if n_par_found_frame != 1 else 'was'} found in this frame."
+                    )
+                    logger.info(
+                        f"A total of {n_par_band} particle{'s' if n_par_band != 1 else ''} "
+                        f"{'have' if n_par_band != 1 else 'has'} now been analyzed in this size band. "
+                        f"{max(n_par_target - n_par_band, 0)} more to go."
+                    )
+        finally:
+            self._stats_band = None
+        self._persist_stats_progress()
+
+    def _resume_stats_progress(
+        self, powder_meas_cfg: PowderMeasurementConfig, n_par_target: int
+    ) -> Optional[ParticleStatsProgress]:
+        """Measurement interrupted in the attached ledger, to resume if it has the same target and settings."""
+        progress = self._ledger.particle_stats_progress if self._ledger is not None else None
+        if progress is None:
+            return None
+        if progress.n_par_target == n_par_target and progress.powder_meas_cfg == powder_meas_cfg:
+            n_frames = sum(band.n_frames for band in progress.bands)
+            n_par = sum(len(band.particle_ids) for band in progress.bands)
+            logger.info(
+                f"ℹ️ Resuming the interrupted particle size statistics measurement "
+                f"({n_frames} frames and {n_par} particles already analysed)."
+            )
+            return progress
+        logger.warning(
+            "⚠️ An interrupted particle size statistics measurement with different settings is discarded: "
+            "a new one starts (the particles it found stay in the ledger, left out of the new statistics)."
+        )
+        self._ledger.particle_stats_progress = None
+        return None
+
+    def _plan_band_frames(
+        self, navigator, progress: ParticleStatsProgress, band_idx: int, fw_mm: float, reuse_grid: bool = False
+    ) -> bool:
+        """
+        Plan the frames of a size band: the sample grid (first band) or subframes of the frames recorded in the
+        previous band. Returns False if the previous band has no frame.
+        """
+        if band_idx == 0:
+            if (
+                reuse_grid
+                and navigator.grid_search_fw_mm is not None
+                and np.isclose(float(navigator.grid_search_fw_mm), fw_mm, rtol=1e-6, atol=1e-9)
+            ):
+                navigator.reset_frame_cursor()
             else:
+                navigator.configure_top_level_particle_frames(fw_mm)
+            return True
+        parent_frames = self._band_frame_descriptors(progress.bands[band_idx - 1])
+        if not parent_frames:
+            logger.warning("⚠️ No parent frames from the previous size band; skipping remaining finer bands.")
+            return False
+        navigator.configure_particle_subframes(parent_frames, fw_mm)
+        return True
+
+    def _collect_in_band(self, band: ParticleSizeBand, band_idx: int, n_par_target: int) -> None:
+        """Set the particle area limits of a size band and collect its particles."""
+        self._set_size_band_area_limits(band.d_min_um, band.d_max_um, band.frame_width_um)
+        if self.verbose:
+            print_double_separator(
+                f"Size band {band_idx + 1}: {band.d_min_um:.4g}–{band.d_max_um:.4g} µm (FOV {band.frame_width_um:.3g} µm)"
+            )
+        self._collect_size_band(band, n_par_target)
+
+    def _continue_size_band(
+        self, navigator, progress: ParticleStatsProgress, band_idx: int, n_par_target: int
+    ) -> bool:
+        """Collect more particles in a recorded size band, in its frames not analysed yet. False if none planned."""
+        band = progress.bands[band_idx]
+        if not self._plan_band_frames(navigator, progress, band_idx, band.frame_width_um / 1000.0):
+            return False
+        navigator.skip_frames([frame.frame_id for frame in band.frames])
+        self._collect_in_band(band, band_idx, n_par_target)
+        return True
+
+    def _size_stats_precision(self, progress: ParticleStatsProgress) -> Dict[str, float]:
+        """Relative half-width of the 95 % confidence interval of the statistics whose precision is checked."""
+        cfg = progress.powder_meas_cfg
+        particles = particle_statistics.select_size_stats_particles(
+            self.analyzed_pars, cfg.include_eds_auto_particles,
+            size_stats_ids=[pid for band in progress.bands for pid in band.particle_ids],
+        )
+        weights, _ = particle_statistics.band_particle_weights(particles, progress.bands)
+        if not np.any(weights > 0):
+            return {name: float("inf") for name in cfg.size_stats_ci_quantities}
+        eq_diameters_um = particle_statistics.particle_sizes_dataframe(particles)[cnst.PAR_EQ_D_KEY].to_numpy()
+        return particle_statistics.ci_relative_half_widths(
+            particle_statistics.compute_particle_size_stats(eq_diameters_um, weights),
+            particle_statistics.bootstrap_confidence_intervals(particles, progress.bands),
+            cfg.size_stats_ci_quantities,
+        )
+
+    def _collect_until_precise(self, progress: ParticleStatsProgress, navigator) -> bool:
+        """
+        Collect more particles in every size band (about 50 % more per round) until the confidence intervals of
+        ``powder_meas_cfg.size_stats_ci_quantities`` are within ``size_stats_ci_tolerance``, the frame or time
+        limit is reached, or no frame is left. Returns whether the precision was reached.
+        """
+        cfg = progress.powder_meas_cfg
+        start_time = time.time()
+        self._stats_max_n_frames = cfg.size_stats_max_n_frames
+        try:
+            while True:
+                half_widths = self._size_stats_precision(progress)
+                summary = ", ".join(f"{name} ±{100 * hw:.1f} %" for name, hw in half_widths.items())
+                if all(hw <= cfg.size_stats_ci_tolerance for hw in half_widths.values()):
+                    logger.info(f"✅ Precision reached: {summary} (95 % confidence).")
+                    return True
+                n_frames = sum(band.n_frames for band in progress.bands)
+                elapsed_min = (time.time() - start_time) / 60
+                if n_frames >= cfg.size_stats_max_n_frames or (
+                    cfg.size_stats_max_time_min is not None and elapsed_min >= cfg.size_stats_max_time_min
+                ):
+                    logger.warning(f"⚠️ Frame or time limit reached before the precision: {summary}.")
+                    return False
                 if self.verbose:
-                    tot_n_par_found = len(self.analyzed_pars)
-                    n_par_found_frame = tot_n_par_found - previous_n_par
-                    plural_frame = n_par_found_frame != 1
-                    plural_total = tot_n_par_found != 1
-                    logger.info(
-                        f"{n_par_found_frame} particle{'s' if plural_frame else ''} "
-                        f"{'were' if plural_frame else 'was'} found in this frame."
-                    )
-                    logger.info(
-                        f"A total of {tot_n_par_found} particle{'s' if plural_total else ''} "
-                        f"{'have' if plural_total else 'has'} now been analyzed. "
-                        f"{n_par_target_total - tot_n_par_found} more to go."
-                    )
+                    logger.info(f"ℹ️ Precision {summary} (target ±{100 * cfg.size_stats_ci_tolerance:.1f} %): "
+                                "collecting more particles.")
+                n_frames_before = n_frames
+                for band_idx, band in enumerate(progress.bands):
+                    n_target = len(band.particle_ids) + max(len(band.particle_ids) // 2, 1)
+                    if navigator is None:
+                        self._collect_in_band(band, band_idx, n_target)
+                    elif not self._continue_size_band(navigator, progress, band_idx, n_target):
+                        break
+                if sum(band.n_frames for band in progress.bands) == n_frames_before:
+                    logger.warning(f"⚠️ No frame left before reaching the precision: {summary}.")
+                    return False
+        finally:
+            self._stats_max_n_frames = None
+
+    @staticmethod
+    def _band_frame_descriptors(band: ParticleSizeBand) -> List[Tuple[str, Tuple[float, float], float]]:
+        """Frames recorded in a band, as frame-navigator descriptors (label, centre in mm, frame width in mm)."""
+        return [
+            (frame.frame_id, (frame.center_mm.x, frame.center_mm.y), frame.frame_width_um / 1000.0)
+            for frame in band.frames if frame.center_mm is not None
+        ]
 
     def get_particle_stats(self, n_par_target):
         """
         Analyze frames to collect and save particle size statistics.
 
-        Large diameter ranges are automatically split into decade bands (largest
-        first). Each band uses an FOV matched to its maximum particle size.
+        With automatic navigation, the diameter range is split into size bands
+        (largest first). Each band is searched with an FOV matched to its largest
+        particles, and goes down to the smallest particles covering
+        ``powder_meas_cfg.min_par_pixels`` pixels at that FOV; finer bands are
+        searched in subframes of the frames visited (see :func:`plan_size_bands_um`).
+        The bands, with the number and total area of the frames analysed in each,
+        are recorded with the statistics in the sample ledger. The statistics are
+        weighted by band, by the particles found per unit area scanned (see
+        :func:`autoemx.core.particle_statistics.band_particle_weights`).
         Top-level frames use normal labels (``A0``); finer bands use hierarchical
         ids (``A0_a0``) for sub-frames inside visited parent FOVs.
+
+        Each frame analysed is recorded in its band, and the measurement in
+        progress is saved to the sample ledger regularly
+        (``SampleLedger.particle_stats_progress``). A measurement interrupted with
+        the same target and settings is resumed: completed bands are kept, and the
+        interrupted band continues in the frames not analysed yet. With different
+        settings, a new measurement starts.
+
+        Particles already in the sample ledger (measured by EDS, or by an earlier
+        measurement) are kept; new particles get the following ids. The statistics
+        use the particles found by this measurement and, if
+        ``powder_meas_cfg.include_eds_auto_particles``, the particles measured by
+        EDS with automatic particle selection.
+
+        With powder_meas_cfg.size_stats_ci_tolerance, the measurement then
+        goes on, collecting about 50 % more particles in every band per round,
+        until the 95 % confidence intervals of
+        powder_meas_cfg.size_stats_ci_quantities are within the tolerance
+        (or the frame or time limit is reached, or no frame is left).
 
         Parameters
         ----------
         n_par_target : int
-            Target number of particles to analyze **per size band**.
+            Target number of particles to find **per size band** (particles
+            already in the ledger are not counted); the minimum when stopping
+            on precision.
 
         Returns
         -------
         pandas.DataFrame or None
             Summary statistics DataFrame, or None if no particles were found.
         """
+        # Settings of the measurement (size bands change the area limits below)
+        powder_meas_cfg = self.powder_meas_cfg.model_copy(deep=True)
+        n_par_target = int(n_par_target)
+        progress = self._resume_stats_progress(powder_meas_cfg, n_par_target)
+        if progress is None:
+            progress = ParticleStatsProgress(n_par_target=n_par_target, powder_meas_cfg=powder_meas_cfg)
+        self._stats_progress = progress
+
         d_min_um = 2.0 * np.sqrt(self.powder_meas_cfg.min_area_par / np.pi)
         d_max_um = 2.0 * np.sqrt(self.powder_meas_cfg.max_area_par / np.pi)
-        bands = split_diameter_range_um(d_min_um, d_max_um)
+        min_par_pixels = self.powder_meas_cfg.min_par_pixels
 
         is_manual = bool(
             getattr(getattr(self.EM, "measurement_cfg", None), "is_manual_navigation", False)
         )
         navigator = getattr(self.EM, "frame_navigator", None)
 
-        if is_manual or navigator is None or len(bands) == 1:
-            if len(bands) == 1 and navigator is not None and not is_manual:
-                fw_mm = self._apply_size_band(bands[0][0], bands[0][1])
-                if (
-                    navigator.grid_search_fw_mm is None
-                    or not np.isclose(float(navigator.grid_search_fw_mm), fw_mm, rtol=1e-6, atol=1e-9)
-                ):
-                    navigator.configure_top_level_particle_frames(fw_mm)
-                else:
-                    navigator.reset_frame_cursor()
-            self._collect_particle_stats_until(int(n_par_target))
+        if is_manual or navigator is None:
+            # Frames chosen by the user: one band, particles of at least min_par_pixels pixels in each frame
+            if not progress.bands:
+                progress.bands.append(ParticleSizeBand(
+                    d_min_um=d_min_um, d_max_um=d_max_um, n_frames=0, scanned_area_um2=0.0,
+                ))
+            self._collect_size_band(progress.bands[0], n_par_target)
         else:
-            parent_frames = None
-            for band_idx, (d_lo, d_hi) in enumerate(bands):
-                fw_mm = self._apply_size_band(d_lo, d_hi)
-                if self.verbose:
-                    print_double_separator(
-                        f"Size band {band_idx + 1}/{len(bands)}: "
-                        f"{d_lo:.4g}–{d_hi:.4g} µm "
-                        f"(FOV {fw_mm * 1000:.3g} µm)"
-                    )
-                if band_idx == 0:
-                    navigator.configure_top_level_particle_frames(fw_mm)
+            band_idx = 0
+            d_hi = d_max_um
+            while True:
+                if band_idx < len(progress.bands):
+                    band = progress.bands[band_idx]
+                    if band_idx == len(progress.bands) - 1:
+                        # Band interrupted (or last one recorded): continue in the frames not analysed yet
+                        if not self._continue_size_band(navigator, progress, band_idx, n_par_target):
+                            break
                 else:
-                    if not parent_frames:
+                    fw_mm = frame_width_um_from_max_area(diameter_um_to_area_um2(d_hi)) / 1000.0
+                    if not self._plan_band_frames(navigator, progress, band_idx, fw_mm, reuse_grid=True):
+                        break
+                    # Frame width set by the microscope (clipped to its range): gives the smallest valid particles
+                    fw_um = float(
+                        navigator.grid_search_fw_mm if navigator.grid_search_fw_mm is not None else fw_mm
+                    ) * 1000.0
+                    d_pixels_um = min_valid_diameter_um(fw_um / self._im_width, min_par_pixels)
+                    if d_pixels_um >= d_hi:
                         logger.warning(
-                            "⚠️ No parent frames from the previous size band; "
-                            "skipping remaining finer bands."
+                            f"⚠️ Particles smaller than {d_hi:.4g} µm cannot be measured with at least "
+                            f"{min_par_pixels} pixels at the smallest frame width: they are left out."
                         )
                         break
-                    navigator.configure_particle_subframes(parent_frames, fw_mm)
+                    band = ParticleSizeBand(
+                        d_min_um=max(d_min_um, d_pixels_um), d_max_um=d_hi, frame_width_um=fw_um,
+                        n_frames=0, scanned_area_um2=0.0,
+                    )
+                    progress.bands.append(band)
+                    self._collect_in_band(band, band_idx, n_par_target)
 
-                band_target = len(self.analyzed_pars) + int(n_par_target)
-                self._collect_particle_stats_until(band_target)
-                parent_frames = navigator.get_visited_band_frames()
-                self._persist_stats_ledger()
+                if band.d_min_um <= d_min_um * (1.0 + 1e-12):
+                    break
+                d_hi = band.d_min_um
+                band_idx += 1
 
-        n_par_analysed = len(self.analyzed_pars)
-        if n_par_analysed == 0:
+        precision_reached = None
+        if powder_meas_cfg.size_stats_ci_tolerance is not None:
+            precision_reached = self._collect_until_precise(progress, navigator if not is_manual else None)
+
+        size_bands = progress.bands
+        run_particle_ids = [pid for band in size_bands for pid in band.particle_ids]
+        stats_particles = particle_statistics.select_size_stats_particles(
+            self.analyzed_pars,
+            powder_meas_cfg.include_eds_auto_particles,
+            size_stats_ids=run_particle_ids,
+        )
+        # The measurement ends: its result replaces the record in progress
+        self._stats_progress = None
+        if self._ledger is not None:
+            self._ledger.particle_stats_progress = None
+        if not run_particle_ids:
             logger.error(
                 '❌ Could not find any particle. Please check your sample, '
                 'or change the contrast/brightness values.'
             )
+            self._persist_stats_ledger()
             return None
 
+        if self._ledger is not None:
+            result = particle_statistics.build_particle_stats_result(
+                stats_particles, powder_meas_cfg, n_par_target=n_par_target, bands=size_bands
+            )
+            result.precision_reached = precision_reached
+            self._ledger.particle_stats = result
         self._persist_stats_ledger()
-        return self.save_particle_statistics()
+        return self.save_particle_statistics(
+            particles=stats_particles, bands=size_bands,
+            confidence_intervals=self._ledger.particle_stats.confidence_intervals_95 if self._ledger is not None else None,
+        )
 
-    def save_particle_statistics(self, output_file_suffix=''):
+    def save_particle_statistics(self, output_file_suffix='', particles=None, bands=None, confidence_intervals=None):
         """
-        Process ParticleInfo records, compute summary statistics,
-        export results, and produce a particle size histogram.
+        Compute the size statistics of the analysed particles and save the particle sizes, the statistics and the
+        histogram in the sample folder (see :func:`autoemx.core.particle_statistics.save_particle_statistics`).
 
         Parameters
         ----------
         output_file_suffix : str, optional
             String added to output file name
+        particles : list of ParticleInfo, optional
+            Particles included in the statistics (default: all the analysed particles).
+        bands : list of ParticleSizeBand, optional
+            Size bands of the measurement, to weight the statistics by band.
+        confidence_intervals : dict, optional
+            95 % confidence intervals of the statistics (default: computed).
 
         Returns
         -------
@@ -1725,147 +1994,13 @@ class EM_Particle_Finder:
             output_dir = os.path.dirname(self.results_dir)
         else:
             output_dir = self.results_dir
-
-        if not self.analyzed_pars:
-            raise ValueError("No particles available to save statistics from")
-
-        par_IDs = np.array([p.id for p in self.analyzed_pars], dtype=int)
-        frame_labels = np.array(
-            [p.frame_id if p.frame_id is not None else "" for p in self.analyzed_pars],
-            dtype=str,
-        )
-        areas_um = np.array(
-            [float(p.area_um) for p in self.analyzed_pars if p.area_um is not None],
-            dtype=float,
-        )
-        if len(areas_um) != len(self.analyzed_pars):
-            raise ValueError("All ParticleInfo records must have area_um set for PSD export")
-
-        eq_diam_um = np.array(
-            [
-                float(p.eq_diameter_um)
-                if p.eq_diameter_um is not None
-                else float(2.0 * np.sqrt(float(p.area_um) / np.pi))
-                for p in self.analyzed_pars
-            ],
-            dtype=float,
+        return particle_statistics.save_particle_statistics(
+            self.analyzed_pars if particles is None else particles, output_dir, self._sample_id,
+            output_file_suffix=output_file_suffix, verbose=self.verbose, bands=bands,
+            image_format=self.powder_meas_cfg.size_stats_plot_format,
+            confidence_intervals=confidence_intervals,
         )
 
-        n_par_analysed = len(areas_um)
-
-        if n_par_analysed > 1 and np.isclose(areas_um.min(), np.partition(areas_um, 1)[1]):
-            logger.warning(
-                '⚠ The 2 smallest particles have identical area.\n'
-                '   This may indicate they are only 1–2 pixels in size.\n'
-                '   Frame width is set based on maximum acceptable particle size.\n'
-                '   Consider reducing the maximum particle size so that the minimum\n'
-                '   acceptable size is within ~1 order of magnitude.'
-            )
-
-        particle_data = pd.DataFrame({
-            cnst.PAR_ID_DF_KEY: par_IDs,
-            cnst.FRAME_ID_DF_KEY: frame_labels,
-            cnst.PAR_AREA_UM_KEY: areas_um,
-            cnst.PAR_EQ_D_KEY: eq_diam_um,
-        })
-        particle_data.to_csv(
-            os.path.join(output_dir, f"{self._sample_id}_{cnst.PARTICLE_SIZES_FILENAME}{output_file_suffix}.csv"),
-            header=True,
-            index=False,
-        )
-
-        par_size_distr = {
-            'Measure': 'Equivalent particle diameter in μm',
-            'n_par_analysed': n_par_analysed,
-            'mean': np.mean(eq_diam_um),
-            'stdev': np.std(eq_diam_um),
-            'median': np.median(eq_diam_um),
-            'max': np.max(eq_diam_um),
-            'min': np.min(eq_diam_um),
-            'D10': np.percentile(eq_diam_um, 10),
-            'D25': np.percentile(eq_diam_um, 25),
-            'D75': np.percentile(eq_diam_um, 75),
-            'D90': np.percentile(eq_diam_um, 90),
-        }
-
-        stats_df = pd.DataFrame(par_size_distr, index=[0])
-        stats_df.to_csv(
-            os.path.join(output_dir, f"{self._sample_id}_{cnst.PARTICLE_STATS_FILENAME}{output_file_suffix}.csv"),
-            header=True,
-            index=False,
-        )
-
-        if self.verbose:
-            print_double_separator("📊 Computed statistics:")
-            logger.info(stats_df.T.to_string(header=False))
-
-        self._save_particle_size_histogram(
-            eq_diam_um,
-            results_dir=output_dir,
-            _sample_id=self._sample_id,
-            verbose=self.verbose,
-            output_file_suffix=output_file_suffix,
-        )
-
-        return stats_df
-
-
-    def _save_particle_size_histogram(self, diameters_um, results_dir=None, _sample_id=None, verbose=False, output_file_suffix = '', bins=20):
-        """
-        Save a histogram plot of particle equivalent diameters.
-    
-        This function generates and saves a histogram of the particle size distribution.
-        The plot is saved as a PNG file in the specified results directory, with the file name based on the sample ID.
-        Optionally, the plot can be displayed interactively.
-    
-        Parameters
-        ----------
-        diameters_um : array-like
-            Array of equivalent particle diameters in micrometers (μm).
-        results_dir : str, optional
-            Directory where the histogram PNG file will be saved. If None, uses `self.results_dir`.
-        _sample_id : str, optional
-            Identifier for the sample, used in the output file name. If None, uses `self._sample_id`.
-        verbose : bool, optional
-            If True, displays the plot interactively. Default is False.
-        output_file_suffix : str, optional
-            String added to output file name
-        bins : int, optional
-            Number of bins to use in the histogram. Default is 20.
-    
-        Returns
-        -------
-        None
-    
-        Notes
-        -----
-        - The histogram is always saved as a PNG file with the name '{_sample_id}_Par_size_distribution_hist.png'.
-        - The function uses matplotlib for plotting.
-    
-        Potential Improvements / TODO
-        -----------------------------
-        - Allow user to specify output file format (e.g., SVG, PDF).
-        - Add option to overlay statistics (mean, median, percentiles) on the plot.
-        - Enable saving both linear and logarithmic scale histograms.
-        - Allow customization of plot colors and style.
-        - Return the matplotlib Figure object for further manipulation if desired.
-        - Add error handling for file I/O issues.
-        """
-        if results_dir is None:
-            results_dir = self.results_dir
-        if _sample_id is None:
-            _sample_id = self._sample_id
-    
-        plt.figure()
-        plt.hist(diameters_um, bins=bins, edgecolor='black')
-        plt.xlabel('Equivalent Diameter (μm)')
-        plt.ylabel('Counts')
-        plt.title('Particle size distribution')
-        out_path = os.path.join(results_dir, f'{_sample_id}_{cnst.PARTICLE_STAT_HIST_FILENAME}{output_file_suffix}.png')
-        plt.savefig(out_path)
-        plt.close()
-        
-    
     def _move_and_get_particles_stats_in_frame(self, frame_image=None, pixel_size=None, results_dir=None):
         """
         Move to the next frame and analyze it to detect and characterize particles on the substrate.
@@ -1939,12 +2074,17 @@ class EM_Particle_Finder:
         frame_label = str(self.EM.current_frame_label) if self.EM.current_frame_label is not None else None
         for i in range(1, num_labels):  # Skip the background component (index 0)
             par_area_pixels = stats[i, cv2.CC_STAT_AREA]
-            if self._is_particle_area_ok(par_area_pixels) and not self.is_particle_at_frame_edge(stats, i):
+            if (
+                par_area_pixels >= self.powder_meas_cfg.min_par_pixels  # enough pixels for a valid area
+                and self._is_particle_area_ok(par_area_pixels)
+                and not self.is_particle_at_frame_edge(stats, i)
+            ):
                 # If particle is within size limits and is not at the edge, consider it in the statistics
                 par_area_um = float(par_area_pixels * self.EM.pixel_size_um**2)
                 eq_diameter_um = float(2.0 * np.sqrt(par_area_um / np.pi))
                 abs_mm = self.EM.convert_pixel_pos_to_mm(centroids[i])
-                global_par_id = len(self.analyzed_pars)
+                # Ids follow those of the particles already in the ledger (e.g. measured by EDS)
+                global_par_id = max((p.id for p in self.analyzed_pars), default=-1) + 1
                 self.analyzed_pars.append(
                     ParticleInfo(
                         id=global_par_id,
@@ -1952,6 +2092,11 @@ class EM_Particle_Finder:
                         eq_diameter_um=eq_diameter_um,
                         coordinates=Coordinate2D(x=float(abs_mm[0]), y=float(abs_mm[1])),
                         frame_id=frame_label,
+                        selection="size_stats",
+                        edge_correction=particle_statistics.edge_correction_factor(
+                            int(stats[i, cv2.CC_STAT_WIDTH]), int(stats[i, cv2.CC_STAT_HEIGHT]),
+                            self._im_width, self._im_height, FRAME_EDGE_MARGIN_PX,
+                        ),
                     )
                 )
                 # Store stats locally to draw circles
@@ -1959,6 +2104,9 @@ class EM_Particle_Finder:
                 par_centroids.append(centroids[i])
                 par_cntr += 1
                 
+        # Record the frame for the statistics (frames without particles included)
+        self._record_stats_frame(frame_image.shape, [p.id for p in self.analyzed_pars[len(self.analyzed_pars) - par_cntr:]])
+
         # Save image to visualize selected particles
         text_margin = 30  # pixel margin to determine where to annotate image with particle numbers
         text_pos_scale = 0.9
