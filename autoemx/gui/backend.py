@@ -738,7 +738,7 @@ def build_acq_specs() -> List[ParamSpec]:
         "aacq.brightness": "Brightness, used when automatic brightness/contrast is off.",
         "asample.els_substrate": "Substrate elements, fitted but not quantified unless also listed among the sample elements. They are never identified as sample elements either: list only elements you do not want quantified.",
         "aacq.n_spectra": "Number of spectra collected per sample.",
-        "aimg.saved_images_extension": "Format of the saved SEM images (png: light; tif: lossless, larger).",
+        "aimg.saved_images_extension": "Format of the saved SEM images. png and tif are both lossless (png smaller); avoid jpg for images to reanalyse.",
         "aimg.annotate_particle_images": "Draw the spectrum spots on particle images, the particles found on frame images, and a scale bar. If off, annotated copies can be made with Annotate_Particle_Images.py.",
         "aimg.save_raw_images": "Also save the non-annotated version of annotated images.",
         "aacq.quantify_spectra": "Quantify spectra during acquisition, and stop when the clustering converges (between min and max spectra). Not recommended on slow microscope computers.",

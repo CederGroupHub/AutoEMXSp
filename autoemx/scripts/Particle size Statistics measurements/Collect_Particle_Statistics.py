@@ -283,7 +283,7 @@ microscope_type = 'SEM'
 sample_substrate_type = 'Ctape'
 sample_substrate_shape = 'circle'
 sample_substrate_width_mm = 12 # Al stub
-saved_images_extension = 'tif' # High-resolution output.
+saved_images_extension = 'png' # png or tif: both lossless (8-bit), png compressed and smaller. Avoid jpg for images to reanalyse.
 
 # =============================================================================
 # Powder sample options

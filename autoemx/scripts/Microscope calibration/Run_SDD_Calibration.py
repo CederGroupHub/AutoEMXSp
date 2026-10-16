@@ -108,7 +108,7 @@ beam_energy = 15  # keV
 auto_adjust_brightness_contrast = True
 contrast = None  # 4.3877  # Used if auto_adjust_brightness_contrast = False
 brightness = None  # 0.4504  # Used if auto_adjust_brightness_contrast = False
-saved_images_extension = 'png'  # Default lightweight output. Set 'tif' for higher-resolution/larger files.
+saved_images_extension = 'png' # png or tif: both lossless (8-bit), png compressed and smaller. Avoid jpg for images to reanalyse.
 annotate_particle_images = False # If False, particle images are saved without spectrum spots; annotate copies afterwards with Annotate_Particle_Images.py
 save_raw_images = False # Saves also the non-annotated version of annotated images (frames, and particles if annotate_particle_images = True).
 

@@ -19,7 +19,7 @@ import autoemx.core.em_runtime.particle_finder as particle_finder_mod
 import autoemx.utils.constants as cnst
 import test_acquisition_with_quantification as eds_test
 from autoemx.config.ledger_io import create_sample_ledger
-from autoemx.config.ledger_schemas import LedgerConfigs, ParticleInfo, ParticleStatsFrame, SampleLedger
+from autoemx.config.ledger_schemas import LedgerConfigs, ParticleInfo, ParticleSizeBand, ParticleStatsFrame, SampleLedger
 from autoemx.config.runtime_configs import (
     MeasurementConfig,
     MicroscopeConfig,
@@ -28,6 +28,7 @@ from autoemx.config.runtime_configs import (
     SampleConfig,
     SampleSubstrateConfig,
 )
+from autoemx.core.em_runtime import image_utilities
 from autoemx.core.em_runtime.particle_finder import (
     EM_Particle_Finder,
     min_valid_diameter_um,
@@ -35,6 +36,7 @@ from autoemx.core.em_runtime.particle_finder import (
 )
 from autoemx.runners.collect_particle_statistics import collect_particle_statistics
 from autoemx.runners.process_particle_statistics import process_particle_statistics
+from autoemx.runners.reanalyze_particle_statistics import reanalyze_particle_statistics
 
 from _image_helpers import load_grayscale_image
 from ci_paths import INPUTS_DIR
@@ -91,6 +93,7 @@ class _FakeEMController:
     """Visits N_FRAMES frames (or the frames of _FakeFrameNavigator, if used), each showing the example frame image."""
 
     use_frame_navigator = False
+    write_images = False  # save the frame images (as during acquisition), e.g. to reanalyse them
 
     def __init__(self, configs, sample_id, results_dir, **kwargs):
         image, pixel_size_um = load_grayscale_image(INPUTS_DIR / "example_frame_image.tif")
@@ -99,6 +102,8 @@ class _FakeEMController:
         self.im_height, self.im_width = image.shape
         self.pixel_size_um = pixel_size_um
         self.measurement_cfg = configs.measurement_cfg
+        self.microscope_cfg = configs.microscope_cfg
+        self.results_dir = results_dir
         self.is_initialized = True
         self.microscope_ctrl = _FakeMicroscopeCtrl()
         self.frame_navigator = _FakeFrameNavigator() if self.use_frame_navigator else None
@@ -113,6 +118,12 @@ class _FakeEMController:
     def initialise_sample_navigator(self, **kwargs): pass
     def save_frame_image(self, filename, **kwargs):
         self.saved_images.append((filename, kwargs.get("im_annotations"), kwargs.get("scalebar")))
+        if self.write_images and kwargs.get("frame_image") is not None:
+            image_utilities.save_frame_image(
+                kwargs["frame_image"], self.pixel_size_um, self.im_width, self.im_height, self.sample_id,
+                self.microscope_cfg, filename, self.results_dir, im_annotations=kwargs.get("im_annotations"),
+                scalebar=bool(kwargs.get("scalebar")), image_extension=self.measurement_cfg.saved_images_extension,
+            )
 
     def adjust_BCF(self): pass
 
@@ -569,3 +580,74 @@ def test_interrupted_measurement_with_other_bands_restarted(tmp_path: Path, fake
     expected = plan_size_bands_um(_d_um(1e-3), _d_um(1e4), 1920, 20)
     assert [(b.d_min_um, b.d_max_um) for b in result.bands] == pytest.approx([(lo, hi) for lo, hi, _ in expected])
     assert [b.n_frames for b in result.bands] == [N_FRAMES, N_FRAMES]  # all frames analysed again
+
+
+
+# --- Reanalysis from the saved frame images ------------------------------------------------------------------------
+
+def _images_with_an_empty_frame(monkeypatch, empty_call: int = 2):
+    """The example image, except an empty frame (no particle) at the empty_call-th image."""
+    image, _ = load_grayscale_image(INPUTS_DIR / "example_frame_image.tif")
+    n_calls = {"n": 0}
+
+    def get_image_data(*args):
+        n_calls["n"] += 1
+        return np.zeros_like(image) if n_calls["n"] == empty_call else image
+
+    monkeypatch.setattr(particle_finder_mod.EM_driver, "get_image_data", get_image_data, raising=False)
+
+
+def test_every_frame_saved_and_reanalysed(tmp_path: Path, fake_microscope, monkeypatch):
+    monkeypatch.setattr(_FakeEMController, "write_images", True)
+    _images_with_an_empty_frame(monkeypatch)
+    sample_dir = _collect(tmp_path, n_par_target=10**6)
+    images_dir = sample_dir / cnst.IMAGES_DIR
+    measured = SampleLedger.from_json_file(str(sample_dir / "ledger.json")).particle_stats
+    [band] = measured.bands
+    # Every frame saved, the one without particles too
+    assert [f.n_particles == 0 for f in band.frames] == [False, True, False]
+    assert all((images_dir / f.image_file).exists() for f in band.frames)
+
+    # Same settings: same statistics
+    reanalyze_particle_statistics(SAMPLE_ID, str(tmp_path), verbose=False)
+    ledger = SampleLedger.from_json_file(str(sample_dir / "ledger.json"))
+    result = ledger.particle_stats
+    assert [f.n_particles for f in result.bands[0].frames] == [f.n_particles for f in band.frames]
+    assert result.size_stats.model_dump() == pytest.approx(measured.size_stats.model_dump())
+    assert [f.image_file for f in result.bands[0].frames] == [f.image_file for f in band.frames]
+    assert len(ledger.particles) == len(result.particle_ids)  # the particles of the measurement replaced
+    assert (sample_dir / f"{SAMPLE_ID}_{cnst.PARTICLE_STATS_FILENAME}_reanalysed.csv").exists()
+
+    # Brighter threshold: fewer particles, setting recorded
+    reanalyze_particle_statistics(SAMPLE_ID, str(tmp_path), par_brightness_thresh=200, verbose=False)
+    result = SampleLedger.from_json_file(str(sample_dir / "ledger.json")).particle_stats
+    assert result.size_stats.n_par_analysed < measured.size_stats.n_par_analysed
+    assert result.powder_meas_cfg.par_brightness_thresh == 200
+
+    # A frame whose image is missing is left out
+    (images_dir / band.frames[2].image_file).unlink()
+    reanalyze_particle_statistics(SAMPLE_ID, str(tmp_path), verbose=False)
+    result = SampleLedger.from_json_file(str(sample_dir / "ledger.json")).particle_stats
+    assert [f.frame_id for f in result.bands[0].frames] == [band.frames[0].frame_id, band.frames[1].frame_id]
+
+
+def test_eds_frames_reanalysed(tmp_path: Path, fake_microscope, monkeypatch):
+    monkeypatch.setattr(_FakeEMController, "write_images", True)
+    sample_dir = _collect(tmp_path, n_par_target=1)
+    ledger_path = sample_dir / "ledger.json"
+    ledger = SampleLedger.from_json_file(str(ledger_path))
+    frame = ledger.particle_stats.bands[0].frames[0]
+    # An EDS search frame recorded without particles, whose saved image (the example image) has some
+    scan = ParticleSizeBand(d_min_um=_d_um(10.0), d_max_um=_d_um(100.0), frame_width_um=frame.frame_width_um,
+                            n_frames=0, scanned_area_um2=0.0)
+    scan.add_frame(frame.model_copy(update={"frame_id": "EDS-B0", "n_particles": 0, "particle_areas_um2": [],
+                                            "particle_edge_corrections": [], "particle_marks_px": []}), [])
+    ledger.eds_size_scans = [scan]
+    ledger.to_json_file(str(ledger_path))
+
+    reanalyze_particle_statistics(SAMPLE_ID, str(tmp_path), verbose=False)
+    ledger = SampleLedger.from_json_file(str(ledger_path))
+    [eds_frame] = ledger.eds_size_scans[0].frames
+    assert eds_frame.frame_id == "EDS-B0" and eds_frame.image_file == frame.image_file
+    assert eds_frame.n_particles > 0 and all(a >= 10.0 for a in eds_frame.particle_areas_um2)
+    assert ledger.particle_stats.n_par_by_selection["eds_frames"] == eds_frame.n_particles

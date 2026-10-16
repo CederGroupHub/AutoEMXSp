@@ -76,8 +76,10 @@ Output
 (with each particle's ``Weight``), ``<sample>_Par_size_stats.csv`` (with
 ``*_CI95_low/high``), and a plot of the weighted distribution
 (``size_stats_plot_format``). An interrupted measurement resumes when run again
-with the same settings. Frame images are saved without annotations;
-``Annotate_Particle_Images.py`` draws the particles found from the ledger.
+with the same settings. Every frame image is saved, without annotations:
+``Annotate_Particle_Images.py`` draws the particles found from the ledger, and
+``Reanalyse_Particle_Stats.py`` segments the frames again with other settings (e.g.
+brightness threshold) and rebuilds the statistics.
 
 
 References

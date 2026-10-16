@@ -29,6 +29,7 @@ Submodules
    autoemx.runners.modify_standards_file
    autoemx.runners.process_particle_statistics
    autoemx.runners.publish_standards
+   autoemx.runners.reanalyze_particle_statistics
    autoemx.runners.quantify_external_spectra
    autoemx.runners.reinitialize_ledger
    autoemx.runners.set_active_analysis

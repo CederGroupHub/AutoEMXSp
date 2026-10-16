@@ -109,7 +109,7 @@ def collect_particle_statistics(
         Default is `0.4504` (MicroscopeConfig.brightness).
     saved_images_extension : str, optional
         File extension for saved SEM images. Allowed: `'png'`, `'tif'`, `'jpg'`, `'webp'`.
-        Default is `'png'` (lightweight output). Use `'tif'` for higher-resolution/larger files.
+        `'png'` and `'tif'` are both lossless (8-bit), `'png'` smaller; avoid `'jpg'` for images to reanalyse.
         Default is taken from defaults (MeasurementConfig.saved_images_extension).
     save_raw_images : bool, optional
         If True, also save raw (unannotated) SEM images alongside annotated frames.

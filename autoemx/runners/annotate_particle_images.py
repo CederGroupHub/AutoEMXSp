@@ -49,7 +49,13 @@ from PIL import Image
 
 import autoemx.utils.constants as cnst
 from autoemx.config.ledger_io import load_sample_ledger
-from autoemx.core.em_runtime.image_utilities import draw_annotations, particle_mark_annotations, xsp_spot_annotation
+from autoemx.core.em_runtime.image_utilities import (
+    RAW_IMAGE_SUFFIX,
+    draw_annotations,
+    load_raw_saved_image,
+    particle_mark_annotations,
+    xsp_spot_annotation,
+)
 from autoemx.utils.helper import draw_scalebar, get_sample_dir, parse_xsp_spots_image_name
 
 # Configure logging
@@ -62,7 +68,6 @@ logging.basicConfig(
 __all__ = ["annotate_particle_images"]
 
 _IMAGE_EXTENSIONS = (".png", ".tif", ".tiff", ".jpg", ".jpeg", ".webp", ".bmp")
-_RAW_SUFFIX = "_raw"
 
 
 def _resolve_sample_dir(
@@ -84,17 +89,6 @@ def _resolve_sample_dir(
     if not ledger_path.exists():
         raise FileNotFoundError(f"No {ledger_path.name} found in {sample_dir}. Is this an AutoEMX sample folder?")
     return sample_dir
-
-
-def _load_raw_image(path: Path) -> np.ndarray:
-    """RGB array of the un-annotated version of an image."""
-    raw_sidecar = path.with_name(f"{path.stem}{_RAW_SUFFIX}{path.suffix}")
-    source = raw_sidecar if raw_sidecar.exists() else path
-    with Image.open(source) as im:
-        # Two-page TIFFs saved during acquisition hold the annotated image first and the raw image second
-        if source == path and getattr(im, "n_frames", 1) > 1:
-            im.seek(1)
-        return np.array(im.convert("RGB"))
 
 
 def _pixel_size_from_metadata(path: Path) -> Optional[float]:
@@ -189,7 +183,7 @@ def annotate_particle_images(
     n_without_spots = 0
     n_without_scale = 0
     for path in sorted(images_dir.iterdir()):
-        if path.suffix.lower() not in _IMAGE_EXTENSIONS or path.stem.endswith(_RAW_SUFFIX):
+        if path.suffix.lower() not in _IMAGE_EXTENSIONS or path.stem.endswith(RAW_IMAGE_SUFFIX):
             continue
         parsed = parse_xsp_spots_image_name(path.stem)
         if parsed is None:
@@ -211,7 +205,7 @@ def annotate_particle_images(
         if out_path.exists() and not overwrite:
             continue
 
-        image = _load_raw_image(path)
+        image = load_raw_saved_image(path)
         draw_annotations(image, [xsp_spot_annotation(sid, xy) for sid, xy, _ in spots])
         if scalebar:
             pixel_size = pixel_size_by_particle.get(particle_id) or _pixel_size_from_metadata(path)
@@ -232,7 +226,7 @@ def annotate_particle_images(
         out_path = out_dir / frame.image_file
         if not path.exists() or (out_path.exists() and not overwrite):
             continue
-        image = _load_raw_image(path)
+        image = load_raw_saved_image(path)
         draw_annotations(image, particle_mark_annotations(frame.particle_marks_px, image.shape[1]))
         if scalebar:
             image = draw_scalebar(image, frame.pixel_size_um)

@@ -783,7 +783,13 @@ class EM_Particle_Finder:
             the EDS detector direction).
           - To do this, add a control '_is_particle_shadowed()' together with '_is_particle_area_ok()' to select valid particles.
         '''
-        if EM_driver.is_microscope_connected():
+        if frame_image is not None and pixel_size is not None:
+            # Image given (e.g. a saved frame reanalysed): used even at the microscope
+            self._im_height, self._im_width = frame_image.shape
+            self.EM.pixel_size_um = pixel_size
+            if results_dir:
+                self.results_dir = results_dir
+        elif EM_driver.is_microscope_connected():
             self._check_EM_controller_initialization()
             move_to_frame_success = self.EM.go_to_next_frame()
             if move_to_frame_success:
@@ -792,17 +798,13 @@ class EM_Particle_Finder:
             else:
                 # No more frames are available
                 return None
-        elif frame_image is not None and pixel_size is not None:
-            self._im_height, self._im_width = frame_image.shape
-            self.EM.pixel_size_um = pixel_size
-            if results_dir:
-                self.results_dir = results_dir
         else:
             raise ValueError('Function "_get_particles_coordinates_in_frame()" must be run at the microscope, or it needs to be passed both image and its pixel size')
         
         
         ### Select particles on substrate
-        # Apply a Gaussian blur to remove single bright pixels
+        # Apply a Gaussian blur to remove single bright pixels (the image as acquired is saved below)
+        acquired_image = frame_image
         frame_image = cv2.GaussianBlur(frame_image, (5, 5), 0)
         
         # Get mask of particles on substrate
@@ -843,12 +845,14 @@ class EM_Particle_Finder:
         # cv2.imshow('Filtered mask', par_mask)
         
         
-        # Save the frame image (annotated with the identified particles only if annotate_particle_images), and count
-        # the particles of the frame for particle size statistics
+        # Save the frame image analysed (annotated with the identified particles only if annotate_particle_images),
+        # and count the particles of the frame for particle size statistics
         particle_marks = [
             (int(center[0]), int(center[1]), int(rad), None) for rad, center in zip(par_radius_pixels, par_pos_pixels)
         ]
-        image_file = self._save_frame_images(f"{self._sample_id}_fr{self.EM.current_frame_label}", None, particle_marks)
+        image_file = self._save_frame_images(
+            f"{self._sample_id}_fr{self.EM.current_frame_label}", acquired_image, particle_marks
+        )
         self._record_eds_search_frame(frame_image.shape, num_labels, stats, image_file, particle_marks)
         
         
@@ -2216,7 +2220,14 @@ class EM_Particle_Finder:
         - If at least one particle is found, the microscope focus/contrast/brightness is refreshed if needed.
         """
     
-        if EM_driver.is_microscope_connected():
+        is_acquired = frame_image is None or pixel_size is None
+        if not is_acquired:
+            # Image given (e.g. a saved frame reanalysed): used even at the microscope
+            self._im_height, self._im_width = frame_image.shape
+            self.EM.pixel_size_um = pixel_size
+            if results_dir:
+                self.results_dir = results_dir
+        elif EM_driver.is_microscope_connected():
             self._check_EM_controller_initialization()
             move_to_frame_success = self.EM.go_to_next_frame()
             if move_to_frame_success:
@@ -2227,11 +2238,6 @@ class EM_Particle_Finder:
             else:
                 # No more frames are available
                 return None
-        elif frame_image is not None and pixel_size is not None:
-            self._im_height, self._im_width = frame_image.shape
-            self.EM.pixel_size_um = pixel_size
-            if results_dir:
-                self.results_dir = results_dir
         else:
             raise ValueError('This function must be run at the microscope, or it needs to be passed both image and its pixel size')
         
@@ -2283,27 +2289,27 @@ class EM_Particle_Finder:
                 par_cntr += 1
                 
         # Save the frame images (without annotations, unless annotate_particle_images), and record the frame for the
-        # statistics, with the particles to mark on its image (frames without particles included)
+        # statistics, with the particles to mark on its image. Frames without particles are saved too, so that the
+        # measurement can be reanalysed (see autoemx.runners.reanalyze_particle_statistics)
         new_particles = self.analyzed_pars[len(self.analyzed_pars) - par_cntr:]
         particle_marks = [
             (int(center[0]), int(center[1]), int(np.sqrt(area / np.pi) * 1.1), particle.id)
             for center, area, particle in zip(par_centroids, par_areas, new_particles)
         ]
-        image_file = None
-        if par_cntr > 0:
-            image_file = self._save_frame_images(
-                f"{self._sample_id}_fr{frame_label if frame_label is not None else self.EM.current_frame_label}",
-                frame_image, particle_marks, mask_image=self.prepare_mask_for_visualization(par_mask),
-            )
+        image_file = self._save_frame_images(
+            f"{self._sample_id}_fr{frame_label if frame_label is not None else self.EM.current_frame_label}",
+            frame_image, particle_marks, mask_image=self.prepare_mask_for_visualization(par_mask),
+        )
         self._record_stats_frame(frame_image.shape, [p.id for p in new_particles], image_file, particle_marks)
 
         # Return True if at least 1 particle was found
         if par_cntr == 0:
-            if save_mask_img and os.path.exists(mask_img_path):
+            # Mask image written above only in development mode (particle statistics masks are saved as _par_mask)
+            if save_mask_img and self.development_mode and os.path.exists(mask_img_path):
                 os.remove(mask_img_path)
             return False
         else:
-            if not self.EM.measurement_cfg.is_manual_navigation and (time.time() - self.EM.microscope_ctrl._last_EM_adjustment_time > self.EM.microscope_ctrl.refresh_time):
+            if is_acquired and not self.EM.measurement_cfg.is_manual_navigation and (time.time() - self.EM.microscope_ctrl._last_EM_adjustment_time > self.EM.microscope_ctrl.refresh_time):
                 # Adjust EM focus, contrast and brightness, but only if a particle is actually present
                 self.EM.adjust_BCF()
             return True

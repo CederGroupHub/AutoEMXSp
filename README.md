@@ -164,6 +164,7 @@ This repository includes a collection of scripts that streamline the use of **Au
 ### 📊 Particle Size Distribution Measurements
 - **Collect_Particle_Statistics.py** — Analyse sample, collecting particle size statistics and distribution.
 - **Process_Particle_Stats_Files.py** — Filter out particles from acquired particle size data and recompute the statistics.
+- **Reanalyse_Particle_Stats.py** — Segment the saved frame images of a particle size measurement again with other settings and rebuild the statistics.
 
 ### 🛠️ Calibration of Your Instrument
 - **Run_SDD_Calibration.py** — Calibrate the energy scale of the SDD detector.

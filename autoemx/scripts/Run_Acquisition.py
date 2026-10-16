@@ -66,7 +66,7 @@ is_auto_substrate_detection = True # Whether to activate automated detection of 
 auto_adjust_brightness_contrast = True # Use automatic adjustments of brightness and contrast
 contrast = None  # Used if auto_adjust_brightness_contrast = False
 brightness = None  # Used if auto_adjust_brightness_contrast = False
-saved_images_extension = 'png' # Default lightweight output. Set 'tif' for higher-resolution/larger files.
+saved_images_extension = 'png' # png or tif: both lossless (8-bit), png compressed and smaller. Avoid jpg for images to reanalyse.
 annotate_particle_images = False # If False, particle and frame images are saved without annotations and scale bar.
                                  # Annotated copies can be made afterwards with Annotate_Particle_Images.py.
 save_raw_images = False # Saves also the non-annotated version of annotated images (if annotate_particle_images = True).

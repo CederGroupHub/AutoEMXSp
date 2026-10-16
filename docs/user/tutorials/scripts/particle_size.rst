@@ -66,7 +66,9 @@ Fill in the following fields:
 	``A0``); finer bands scan sub-frames inside visited parent FOVs with hierarchical
 	ids such as ``A0_a0``. Results are stored in ``ledger.json``, and saved as
 	Par_sizes / Par_size_stats CSV files and a size distribution plot. An interrupted
-	measurement is resumed by running it again with the same settings.
+	measurement is resumed by running it again with the same settings. Every frame
+	image is saved, so that the measurement can be reanalysed with other segmentation
+	settings (``Reanalyse_Particle_Stats.py``).
 
 - ``Carbon Tape Diameter (mm)``
 	Used to estimate the effective sample area to scan over the carbon tape.

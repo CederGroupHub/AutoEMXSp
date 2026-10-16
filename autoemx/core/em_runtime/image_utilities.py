@@ -23,6 +23,7 @@ Created on 2026
 @author: Andrea
 """
 import os
+from pathlib import Path
 import json
 import warnings
 import numpy as np
@@ -149,6 +150,25 @@ def draw_annotations(color_image, im_annotations):
                 cv2.LINE_AA
             )
     return color_image
+
+
+#: Suffix of the raw copy of an annotated image saved in a format without pages (e.g. ``<name>_raw.png``).
+RAW_IMAGE_SUFFIX = "_raw"
+
+
+def load_raw_saved_image(path):
+    """
+    RGB array of the un-annotated version of an image saved by :func:`save_frame_image`: its ``_raw`` copy if
+    present, the second (raw) page of a two-page TIFF, or the image itself.
+    """
+    path = Path(path)
+    raw_sidecar = path.with_name(f"{path.stem}{RAW_IMAGE_SUFFIX}{path.suffix}")
+    source = raw_sidecar if raw_sidecar.exists() else path
+    with Image.open(source) as im:
+        # Two-page TIFFs saved during acquisition hold the annotated image first and the raw image second
+        if source == path and getattr(im, "n_frames", 1) > 1:
+            im.seek(1)
+        return np.array(im.convert("RGB"))
 
 
 def particle_mark_annotations(particle_marks, im_width, text_margin=30, text_pos_scale=0.9):
@@ -323,7 +343,7 @@ def save_frame_image(frame_image, pixel_size_um, im_width, im_height,
     else:
         image.save(save_path, format=ext.upper())
     if save_raw_copy:
-        raw_path = os.path.join(results_dir, f"{filename}_raw.{ext}")
+        raw_path = os.path.join(results_dir, f"{filename}{RAW_IMAGE_SUFFIX}.{ext}")
         raw_image.save(raw_path, format=ext.upper())
 
 
