@@ -50,6 +50,7 @@ logger = get_logger(__name__)
 
 __all__ = [
     "SizeObservations",
+    "size_result_label",
     "bootstrap_confidence_intervals",
     "EdsSearchFrame",
     "edge_correction_factor",
@@ -805,7 +806,8 @@ def recalculate_particle_stats(
     ledger : SampleLedger
         Ledger of the sample (not modified).
     particles_to_filter : iterable of (frame_id, index), optional
-        Particles to leave out. Default (None): those left out of the active result.
+        Particles to leave out. Default (None): those left out of the active result, in the frames segmented by the
+        same segmentation (particles are numbered per segmentation).
     frame_ids_to_filter : iterable of str, optional
         IDs of the frames whose particles are left out (exact matches). Default (None): those left out of the active
         result.
@@ -822,14 +824,23 @@ def recalculate_particle_stats(
     """
     defaults = default_result_inputs(ledger, include_eds_auto_particles)
     include = defaults["include_eds_auto_particles"]
-    if particles_to_filter is None:
-        particles_to_filter = defaults["particles_to_filter"]
     if frame_ids_to_filter is None:
         frame_ids_to_filter = defaults["frame_ids_to_filter"]
     measurement_id = defaults["measurement_id"] if measurement_id is _UNSET else measurement_id
     segmentation_id = defaults["segmentation_id"] if segmentation_id is _UNSET else segmentation_id
     if eds_segmentation_id is _UNSET:
         eds_segmentation_id = defaults["eds_segmentation_id"] if include else None
+    if particles_to_filter is None:
+        # Particles are numbered per segmentation: those left out of the active result only in frames segmented alike
+        def same_segmentation(frame_id: str) -> bool:
+            frame = ledger.frame(frame_id)
+            if frame is None:
+                return False
+            if frame.purpose == "eds_search":
+                return eds_segmentation_id == defaults["eds_segmentation_id"]
+            return segmentation_id == defaults["segmentation_id"]
+
+        particles_to_filter = [key for key in defaults["particles_to_filter"] if same_segmentation(key[0])]
     inputs = size_stats_inputs(ledger, measurement_id, segmentation_id, eds_segmentation_id, include)
 
     frames = {f.frame_id: f for scan in inputs.bands + inputs.eds_scans for f in scan.frames}
@@ -1119,3 +1130,27 @@ def save_particle_statistics(
         size_stats=stats, image_format=image_format,
     )
     return stats_df
+
+
+def size_result_label(ledger, result) -> str:
+    """Readable name of a statistics result: id, measurement, segmentations, particles, frames and particles left out,
+    e.g. 'Result 2 · measurement 0 · SAM2 · 80 px · 412 particles · active'."""
+    parts = [f"Result {result.result_id}"]
+    if result.measurement_id is not None:
+        parts.append(f"measurement {result.measurement_id}")
+    segmentation = ledger.segmentation(result.segmentation_id)
+    if segmentation is not None:
+        parts.append(segmentation.label)
+    if result.eds_segmentation_id is not None:
+        eds = ledger.segmentation(result.eds_segmentation_id)
+        if result.eds_segmentation_id == result.segmentation_id or eds is None:
+            parts.append("+ EDS frames")
+        else:
+            parts.append(f"{'+ ' if segmentation is not None else ''}EDS frames {eds.label}")
+    parts.append(f"{result.size_stats.n_par_analysed} particles")
+    n_out = len(result.excluded_frame_ids) + len(result.excluded_particles)
+    if n_out:
+        parts.append(f"{len(result.excluded_frame_ids)} frame(s), {len(result.excluded_particles)} particle(s) left out")
+    if result.result_id == ledger.active_size_result:
+        parts.append("active")
+    return " · ".join(parts)

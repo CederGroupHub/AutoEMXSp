@@ -4,7 +4,8 @@ Particle size statistics
 ========================
 
 How AutoEMX turns the particles measured in SEM frames into statistics of the sample.
-To run a measurement, see the :ref:`particle size tutorial <particle_size_tutorial>`.
+To run a measurement, see the tutorials :ref:`in the GUI <gui_particle_size_tutorial>` or
+:ref:`with scripts <particle_size_tutorial>`.
 
 .. contents:: On this page
    :local:
@@ -20,6 +21,26 @@ only measures particles covering at least ``min_par_pixels`` pixels (default 80,
 into **size bands**, planned from the smallest particles up, the hardest to find:
 each band uses the largest frame (up to 500 µm) in which its smallest particles
 still have enough pixels. ``n_par_target`` particles are collected in each band.
+
+
+Segmentation models
+-------------------
+
+Particles are found in each frame by a segmentation model (``par_segmentation_model``):
+
+- ``threshold_bright`` (default): pixels brighter than ``par_brightness_thresh``. Fast, but
+  touching particles are measured as one.
+- ``SAM2`` [Ravi2024]_ and ``microSAM`` [Archit2025]_: segment each particle on its own.
+  Optional, install with ``pip install "autoemx[segmentation]"`` (SAM2) or
+  ``python -m autoemx.utils.install_segmentation micro-sam`` (microSAM). Agglomerates,
+  surface features and particles partly hidden by others are left out. Model options go in
+  ``par_segmentation_params``, e.g. ``{"pred_iou_thresh": 0.7}``.
+- ``Rettenberger2024`` [Rettenberger2024]_, or your own model (see the
+  :ref:`particle size tutorial <particle_size_tutorial>`).
+
+Each model gives its own result. Segment the frames again with another model, compare the
+results and choose one (:ref:`gui_particle_size_tutorial`, or ``Reanalyse_Particle_Stats.py``
+and ``Process_Particle_Stats_Files.py``).
 
 
 Corrections
@@ -46,16 +67,38 @@ way it was imaged:
 The unweighted statistics are kept in ``ledger.json`` for comparison.
 
 
+.. _psd_reported_statistics:
+
 Reported statistics
 -------------------
 
-- **Number-weighted:** mean, standard deviation, D10, D25, D50 (median), D75, D90.
-- **Volume-weighted**, for comparison with laser diffraction (each particle counted
-  as a sphere, :math:`\propto d^3`): ``D43`` (:math:`D[4,3]` [ISO9276]_), ``Dv10``,
-  ``Dv50``, ``Dv90``. They are dominated by the largest particles and need many more
-  of them to be precise.
-- **95 % confidence intervals**, by bootstrap [Efron1993]_: the frames of each band
-  are resampled, with their particles and area. Given once each band has 5 frames.
+All sizes are equivalent diameters, in µm. The GUI (Analysis > Particle sizes) and
+``<sample>_Par_size_stats.csv`` report:
+
+- **Particles**: number of particles measured.
+- **Mean**, **Std. dev.**, **Min**, **Max**: of the diameters.
+- **D10, D25, D50, D75, D90** (number-weighted): the diameters below which 10, 25, 50
+  (the median), 75 and 90 % of the particles are.
+- **D[4,3]**, **Dv10, Dv50, Dv90** (volume-weighted, for comparison with laser
+  diffraction): each particle counted as a sphere, in proportion to :math:`d^3`.
+  ``D43`` is the volume-weighted mean diameter, :math:`D[4,3]` [ISO9276]_; Dv10, Dv50 and
+  Dv90 are the diameters below which 10, 50 and 90 % of the particle volume is. They are
+  dominated by the largest particles and need many more of them to be precise.
+- **Span (D90-D10)/D50** (Compare samples): the width of the distribution.
+
+Columns:
+
+- **Weighted**: with the corrections above, describing the sample. Use these.
+- **95 % CI**: 95 % confidence interval of the weighted value, by bootstrap
+  [Efron1993]_ (the frames of each band are resampled, with their particles and area).
+  Given once each band has 5 frames.
+- **Unweighted**: plain statistics of the particles measured, for comparison.
+
+The plot shows the weighted **number fraction** of particles per diameter bin, the
+**cumulative** number and volume distributions, and D10, D50 and D90. The **Size bands**
+table gives, per band, its diameters, frame width, number of frames, area scanned,
+particles, and particles per mm²; **Frames searched by EDS** the same for the frames
+searched during an EDS acquisition.
 
 Weighted percentiles use type 5 of Hyndman and Fan [Hyndman1996]_.
 
@@ -80,7 +123,7 @@ number in the frame and its ``Weight``), ``<sample>_Par_size_stats.csv`` (with
 - ``frames``: every frame acquired (by a size measurement, or searched by EDS),
   with the particles found in it by each segmentation;
 - ``segmentations``: the segmentation settings used (model, brightness threshold,
-  ``min_par_pixels``), each with an id;
+  ``min_par_pixels``, model options), each with an id;
 - ``size_measurements``: each measurement, with its settings, size bands and frames;
 - ``size_results``: the statistics of the frames of a measurement under a
   segmentation (with or without the frames searched by EDS, frames and particles
@@ -113,5 +156,12 @@ References
    Part 2*.
 .. [Efron1993] B. Efron and R. J. Tibshirani, *An Introduction to the Bootstrap*,
    Chapman & Hall, 1993.
+.. [Ravi2024] N. Ravi et al., "SAM 2: Segment Anything in Images and Videos",
+   arXiv:2408.00714 (2024). https://github.com/facebookresearch/sam2
+.. [Archit2025] A. Archit et al., "Segment Anything for Microscopy", *Nature Methods*
+   **22**, 579–591 (2025). https://doi.org/10.1038/s41592-024-02580-4
+.. [Rettenberger2024] L. Rettenberger et al., "Uncertainty-aware particle segmentation
+   for electron microscopy at varied length scales", *npj Computational Materials*
+   **10**, 124 (2024). https://doi.org/10.1038/s41524-024-01302-w
 .. [Hyndman1996] R. J. Hyndman and Y. Fan, *The American Statistician* **50**,
    361–365 (1996). https://doi.org/10.1080/00031305.1996.10473566

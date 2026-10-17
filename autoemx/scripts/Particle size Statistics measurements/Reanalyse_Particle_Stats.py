@@ -3,8 +3,10 @@
 """
 Reanalyse a particle size statistics measurement from its saved frame images
 
-Segments again the frame images saved in 'SEM images' with other settings (e.g. brightness threshold), and rebuilds
-the statistics of the sample (in ledger.json) with the same size bands and frames. The frames searched by EDS on the
+Segments again the frame images saved in 'SEM images' with other settings (e.g. brightness threshold, or another
+segmentation model such as 'SAM2' or 'microSAM'), and adds the statistics of the sample (in ledger.json) with the same
+size bands and frames as a new result (earlier results are kept: list and choose them with
+Process_Particle_Stats_Files.py). The frames searched by EDS on the
 sample are reanalysed too. The statistics are also saved with the suffix '_reanalysed'.
 
 Created on Fri Oct 16 2026
@@ -22,7 +24,8 @@ results_path = 'input'  # Base directory where data is saved. It can find sample
 # Segmentation settings (None: those of the measurement)
 # --------------------------
 par_brightness_thresh = None   # 8-bit brightness above which pixels belong to particles
-par_segmentation_model = None  # e.g. 'threshold_bright'
+par_segmentation_model = None  # e.g. 'threshold_bright', 'SAM2', 'microSAM' (optional installs)
+par_segmentation_params = None # Options of the model, e.g. {'checkpoint': 'facebook/sam2.1-hiera-small'} for SAM2
 min_par_pixels = None          # Minimum pixels of a particle for its area to be measured (only raised: bands stay)
 include_eds_frames = True      # Also reanalyse the frames searched by EDS on the sample
 
@@ -37,5 +40,6 @@ reanalyze_particle_statistics(
     par_brightness_thresh=par_brightness_thresh,
     par_segmentation_model=par_segmentation_model,
     min_par_pixels=min_par_pixels,
+    par_segmentation_params=par_segmentation_params,
     include_eds_frames=include_eds_frames,
 )

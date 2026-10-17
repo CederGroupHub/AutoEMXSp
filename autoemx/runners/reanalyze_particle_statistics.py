@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Runner: reanalyse a particle size statistics measurement from its saved frame images, with other segmentation
-settings (brightness threshold, segmentation model, minimum number of pixels per particle).
+settings (brightness threshold, segmentation model and its options, minimum number of pixels per particle).
 
 The frames of each size band (and the frames searched by EDS on the sample) are segmented again, as during the
 measurement, from the images saved in ``SEM images``: the results are added to the frames under a segmentation id
@@ -19,7 +19,7 @@ Created on Fri Oct 16 2026
 
 import logging
 import os
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import pandas as pd
 
@@ -40,6 +40,7 @@ def reanalyze_particle_statistics(
     par_brightness_thresh: Optional[int] = None,
     par_segmentation_model: Optional[str] = None,
     min_par_pixels: Optional[int] = None,
+    par_segmentation_params: Optional[Dict[str, Any]] = None,
     include_eds_frames: bool = True,
     output_file_suffix: str = "_reanalysed",
     verbose: bool = True,
@@ -55,6 +56,9 @@ def reanalyze_particle_statistics(
         Folder containing the sample folder (also searched in its subfolders).
     par_brightness_thresh, par_segmentation_model, min_par_pixels : optional
         Segmentation settings to use instead of those of the measurement (see ``PowderMeasurementConfig``).
+    par_segmentation_params : dict, optional
+        Options of the segmentation model (e.g. ``{"checkpoint": "facebook/sam2.1-hiera-small"}`` for SAM2). Default:
+        those of the measurement if the model is the same, else none (the model defaults).
     include_eds_frames : bool, optional
         Whether to also reanalyse the frames searched by EDS on the sample (default: True).
     output_file_suffix : str, optional
@@ -96,6 +100,10 @@ def reanalyze_particle_statistics(
     ) if value is not None}
     base_cfg = (measurement.powder_meas_cfg if measurement is not None
                 else ledger.configs.measurement_cfg.powder_meas_cfg or PowderMeasurementConfig())
+    if par_segmentation_params is not None:
+        overrides["par_segmentation_params"] = dict(par_segmentation_params)
+    elif par_segmentation_model is not None and par_segmentation_model != base_cfg.par_segmentation_model:
+        overrides["par_segmentation_params"] = {}  # options of another model
     cfg = PowderMeasurementConfig.model_validate({**base_cfg.model_dump(), **overrides})
     # Without measurement (sample measured only by EDS), the frames searched by EDS
     include_eds = measurement is None or (base_cfg.include_eds_auto_particles and include_eds_frames)

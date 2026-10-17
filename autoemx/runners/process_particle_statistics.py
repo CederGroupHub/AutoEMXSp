@@ -25,7 +25,9 @@ import pandas as pd
 import autoemx.utils.constants as cnst
 from autoemx.config.ledger_io import load_sample_ledger
 from autoemx.config.ledger_schemas import ParticleInfo, SampleLedger
-from autoemx.core.particle_statistics import recalculate_particle_stats, save_particle_statistics, size_stats_inputs
+from autoemx.core.particle_statistics import (
+    recalculate_particle_stats, save_particle_statistics, size_result_label, size_stats_inputs,
+)
 from autoemx.utils import get_sample_dir
 
 
@@ -36,6 +38,21 @@ def _ledger_with_size_stats_particles(sample_dir: str) -> Optional[SampleLedger]
         return None
     ledger = load_sample_ledger(ledger_path)
     return ledger if ledger.frames else None
+
+
+def list_size_results(sample_ID: str, results_path: str, verbose: bool = True) -> List[str]:
+    """
+    The statistics results of a sample (one per segmentation, recalculation...), to choose the one to recalculate
+    (``result_id`` of ``process_particle_statistics``): id, measurement, segmentation, particles, frames and particles
+    left out. Printed if ``verbose``.
+    """
+    ledger = _ledger_with_size_stats_particles(get_sample_dir(results_path, sample_ID))
+    labels = [size_result_label(ledger, r) for r in ledger.size_results] if ledger is not None else []
+    if verbose:
+        print(f"Particle size statistics results of '{sample_ID}':")
+        for label in labels or ["none"]:
+            print(f"  {label}")
+    return labels
 
 
 def _particles_from_csv(sample_dir: str, sample_ID: str) -> List[ParticleInfo]:

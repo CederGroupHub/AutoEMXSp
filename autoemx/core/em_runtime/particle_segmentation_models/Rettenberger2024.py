@@ -19,6 +19,17 @@ import numpy as np
 from autoemx._logging import get_logger
 logger = get_logger(__name__)
 
+INSTALL_HINT = ("pip install onnxruntime, then clone https://github.com/lrettenberger/"
+                "Uncertainty-Aware-Particle-Segmentation-for-SEM into this module's directory as "
+                "Rettenberg2024_model_data")
+
+
+def is_available() -> bool:
+    """Whether onnxruntime and the model files are installed."""
+    import importlib.util
+    model_path = Path(__file__).resolve().parent / "Rettenberg2024_model_data" / "highmag" / "model_high_mag_maskedrcnn.onnx"
+    return importlib.util.find_spec("onnxruntime") is not None and model_path.exists()
+
 def segment_particles(frame_image: np.ndarray,
                       powder_meas_config : 'PowderMeasurementConfig' = None,
                       save_image: bool = False,

@@ -11,7 +11,7 @@ segmentations can be compared and one chosen.
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -23,7 +23,8 @@ from autoemx.config.runtime_configs import PowderMeasurementConfig
 class SegmentationConfig(BaseModel):
     """
     Settings of a particle segmentation of the frames of a sample: segmentation model, brightness threshold (used by
-    the threshold model) and minimum number of pixels of a particle for its area to be measured. ``source`` tells
+    the threshold model), minimum number of pixels of a particle for its area to be measured, and options of the
+    model (``PowderMeasurementConfig.par_segmentation_params``, e.g. the SAM2 checkpoint). ``source`` tells
     whether frames were segmented with it during an acquisition, or again afterwards from their saved images.
     """
 
@@ -50,7 +51,7 @@ class SegmentationConfig(BaseModel):
     def default_label(self) -> "SegmentationConfig":
         if not self.label:
             self.label = segmentation_label(self.par_segmentation_model, self.par_brightness_thresh,
-                                            self.min_par_pixels)
+                                            self.min_par_pixels, self.model_params)
         return self
 
     def settings(self) -> Dict[str, Any]:
@@ -71,13 +72,19 @@ class SegmentationConfig(BaseModel):
                              source: str = "acquisition") -> "SegmentationConfig":
         """Segmentation with the settings of a measurement."""
         return cls(segmentation_id=segmentation_id, source=source, par_segmentation_model=cfg.par_segmentation_model,
-                   par_brightness_thresh=cfg.par_brightness_thresh, min_par_pixels=cfg.min_par_pixels)
+                   par_brightness_thresh=cfg.par_brightness_thresh, min_par_pixels=cfg.min_par_pixels,
+                   model_params=dict(cfg.par_segmentation_params))
 
 
-def segmentation_label(model: str, threshold: int, min_par_pixels: int) -> str:
-    """Readable name of segmentation settings, e.g. 'threshold_bright · 100 · 80 px'."""
+def segmentation_label(model: str, threshold: int, min_par_pixels: int,
+                       model_params: Optional[Dict[str, Any]] = None) -> str:
+    """Readable name of segmentation settings, e.g. 'threshold_bright · 100 · 80 px', or
+    'SAM2 · 80 px · checkpoint=sam2.1-hiera-small' (model options, values shortened to their last path part)."""
     parts = [model] + ([str(threshold)] if model == PowderMeasurementConfig.DEFAULT_PAR_SEGMENTATION_MODEL else [])
-    return " · ".join(parts + [f"{min_par_pixels} px"])
+    parts.append(f"{min_par_pixels} px")
+    if model_params:
+        parts.append(", ".join(f"{k}={str(v).rsplit('/', 1)[-1]}" for k, v in sorted(model_params.items())))
+    return " · ".join(parts)
 
 
 class FrameSegmentation(BaseModel):

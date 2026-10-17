@@ -11,4 +11,5 @@ shows how to create the app and what it can do.
 
    gui_getting_started
    gui_comp_analysis
+   gui_particle_size
    gui_fit_spectra

@@ -22,5 +22,6 @@ Submodules
 
    autoemx.utils.constants
    autoemx.utils.helper
+   autoemx.utils.install_segmentation
    autoemx.utils.plotting_helpers
    autoemx.utils.unimodality

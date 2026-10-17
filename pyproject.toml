@@ -69,6 +69,13 @@ web = [
 gui = [
     "dash>=2.18,<=4.4.1",
 ]
+# SAM2 particle segmentation model (Hugging Face transformers, Meta's SAM2.1 weights; Apache-2.0). For micro-sam,
+# see autoemx/utils/install_segmentation.py
+segmentation = [
+    "torch>=2.1",
+    "torchvision>=0.16",
+    "transformers>=4.56,<6",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

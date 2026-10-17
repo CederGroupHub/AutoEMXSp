@@ -25,7 +25,9 @@ from dash import ALL, Input, Output, State, ctx, dcc, html, no_update
 
 from autoemx.gui import backend as be
 from autoemx.gui import run_report
-from autoemx.gui.common import JOBS, _chip, _pid, _row_class, _spec, form_values, param_sections
+from autoemx.gui.common import (
+    JOBS, _chip, _pid, _row_class, _spec, form_values, param_sections, segmentation_note_id,
+)
 
 _NOTES = {
     "apowder": "used for powder samples",
@@ -453,6 +455,12 @@ def register(app) -> None:
         sections = ["param-section" + extra[active.get(o["id"]["key"], ON)] for o in ctx.outputs_list[0]]
         rows = [_row_class(_spec(o["id"])) + extra[active.get(_spec(o["id"]).key, ON)] for o in ctx.outputs_list[1]]
         return sections, rows
+
+    for key in ("apowder.par_segmentation_model", "asize.par_segmentation_model"):
+        @app.callback(Output(segmentation_note_id(key), "children"), Input(_pid(key), "value"))
+        def segmentation_note(model):
+            # Shown only when the selected model is not installed
+            return be.segmentation_install_note(model)
 
     @app.callback(Output("a-mode-note", "children"), Input("a-mode", "value"))
     def mode_note(mode):

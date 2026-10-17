@@ -20,6 +20,14 @@ fits), create the double-click app once:
 
 See :ref:`gui_getting_started_tutorial`.
 
+Optional particle segmentation models (see :ref:`particle_size_statistics`), which
+segment touching particles separately:
+
+.. code-block:: bash
+
+   pip install "autoemx[segmentation]"                          # SAM2
+   python -m autoemx.utils.install_segmentation micro-sam      # micro-sam
+
 
 Alternatively, to ensure you are constantly up to date with the package during minor developments, you can clone the GitHub repository and use editable installation. This allows you to access the latest features or bug fixes that are not yet included in the latest release version.
 To do this, follow these steps:

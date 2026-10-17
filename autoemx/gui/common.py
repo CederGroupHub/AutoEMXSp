@@ -208,6 +208,11 @@ def _clear_button(spec: be.ParamSpec) -> html.Button:
                        className="clear-btn", title=f"Clear: use the {spec.placeholder or 'default'} value")
 
 
+def segmentation_note_id(key: str) -> Dict[str, str]:
+    """Id of the note below a segmentation model setting (filled when the selected model is not installed)."""
+    return {"type": "seg-note", "key": key.replace(".", "__")}
+
+
 def _param_control(spec: be.ParamSpec, persist: bool = False) -> html.Div:
     """Control of one parameter. With ``persist``, values set by the user are kept in the browser between sessions."""
     pid = _pid(spec.key)
@@ -233,7 +238,8 @@ def _param_control(spec: be.ParamSpec, persist: bool = False) -> html.Div:
                       placeholder="max", className="param-input", **keep),
         ], className="pair-inputs")
     elif spec.kind == "choice":
-        ctrl = dcc.Dropdown(id=pid, options=[{"label": str(c), "value": c} for c in spec.choices],
+        ctrl = dcc.Dropdown(id=pid, options=[{"label": spec.choice_labels.get(c, str(c)), "value": c}
+                                             for c in spec.choices],
                             value=value, clearable=False, className="param-dd", **keep)
     elif spec.kind == "elements":
         ctrl = dcc.Dropdown(id=pid, options=[], value=value, multi=True, placeholder="default",
@@ -259,10 +265,11 @@ def _param_control(spec: be.ParamSpec, persist: bool = False) -> html.Div:
         if spec.kind in ("int_opt", "float_opt", "pair_opt"):
             parts.append(_clear_button(spec))
         ctrl = html.Div(parts, className="param-ctrl")
-    return html.Div(
-        [html.Label([spec.label, help_icon], className="param-label", title=spec.help), ctrl],
-        id=_row_id(spec.key), className=_row_class(spec),
-    )
+    children = [html.Label([spec.label, help_icon], className="param-label", title=spec.help), ctrl]
+    if spec.name == "par_segmentation_model":
+        # How to install the selected model, if it is not installed: below, the width of the row
+        children.append(html.Div(id=segmentation_note_id(spec.key), className="param-note"))
+    return html.Div(children, id=_row_id(spec.key), className=_row_class(spec))
 
 
 def register_clear_buttons(app) -> None:

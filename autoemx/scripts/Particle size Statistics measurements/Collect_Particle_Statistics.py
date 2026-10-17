@@ -14,7 +14,9 @@ import json
 
 from autoemx.runners.collect_particle_statistics import collect_particle_statistics
 from autoemx.config import PowderMeasurementConfig
-AVAILABLE_SEGMENTATION_MODELS = PowderMeasurementConfig.AVAILABLE_PAR_SEGMENTATION_MODELS
+import autoemx.core.em_runtime.particle_segmentation_models as par_seg_models
+# Models installed (SAM2 and micro-sam are optional installs)
+AVAILABLE_SEGMENTATION_MODELS = [PowderMeasurementConfig.DEFAULT_PAR_SEGMENTATION_MODEL] + par_seg_models.available_models()
 
 #%% Functions
 

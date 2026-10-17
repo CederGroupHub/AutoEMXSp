@@ -816,17 +816,23 @@ def size_frame_figure(image_src: Optional[str], size: Optional[Sequence[int]], m
     for x, y, r, index in marks:
         key = "out" if index in excluded or frame_excluded else ("eds" if is_eds else "in")
         groups[key].append((x, y, r, index))
-        fig.add_shape(type="circle", xref="x", yref="y", x0=x - r, x1=x + r, y0=y - r, y1=y + r,
-                      line=dict(color=FRAME_MARK_COLORS[key], width=2, dash="dot" if key == "out" else "solid"))
     names = {"in": "Counted", "out": "Left out", "eds": "Counted (frame searched by EDS)"}
+    angles = np.linspace(0, 2 * np.pi, 33)
     for key, pts in groups.items():
         if not pts:
             continue
         fig.add_trace(go.Scatter(
-            x=[p[0] for p in pts], y=[p[1] for p in pts], mode="markers", name=names[key],
+            x=[p[0] for p in pts], y=[p[1] for p in pts], mode="markers", name=names[key], legendgroup=key,
             customdata=[p[3] for p in pts],
             marker=dict(color=FRAME_MARK_COLORS[key], size=8, opacity=0.25),  # click target, circle stays visible
             hovertemplate="Particle %{customdata}<extra></extra>",
+        ))
+        # Circles of a group as one line trace (polygons separated by gaps): fast with hundreds of particles
+        xs = np.concatenate([np.append(x + r * np.cos(angles), np.nan) for x, y, r, _ in pts])
+        ys = np.concatenate([np.append(y + r * np.sin(angles), np.nan) for x, y, r, _ in pts])
+        fig.add_trace(go.Scatter(
+            x=xs, y=ys, mode="lines", name=names[key], legendgroup=key, hoverinfo="skip", showlegend=False,
+            line=dict(color=FRAME_MARK_COLORS[key], width=2, dash="dot" if key == "out" else "solid"),
         ))
     fig.update_layout(
         template="plotly_white", margin=dict(l=0, r=0, t=0, b=0), dragmode="pan", uirevision=uirevision,

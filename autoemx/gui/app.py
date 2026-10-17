@@ -14,6 +14,7 @@ Launch with ``python -m autoemx.gui``.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from pathlib import Path
@@ -132,8 +133,9 @@ def _header(results_dir: str) -> html.Div:
     )
 
 
-#: Particle segmentation models (the first one uses a brightness threshold)
-PAR_SEGMENTATION_MODELS = list(PowderMeasurementConfig.AVAILABLE_PAR_SEGMENTATION_MODELS)
+#: Particle segmentation models (the first one uses a brightness threshold), installed or not
+PAR_SEGMENTATION_MODELS = be.par_segmentation_models()
+
 
 PAGES = [("acq", "Acquisition"), ("quant", "Quantification"), ("analysis", "Analysis"),
          ("single", "Single spectrum")]
@@ -297,19 +299,32 @@ def _tabs() -> dcc.Tabs:
                             html.Div([
                                 html.Span("model", className="axis-tag"),
                                 dcc.Dropdown(id="psd-seg-model", clearable=False, className="psd-seg-model",
-                                             options=PAR_SEGMENTATION_MODELS, value=PAR_SEGMENTATION_MODELS[0]),
-                                html.Span("threshold", className="axis-tag"),
-                                dcc.Input(id="psd-seg-thresh", type="number", min=0, max=255, step=1,
-                                          className="param-input psd-seg-input"),
+                                             options=[{"label": be.segmentation_model_label(m), "value": m}
+                                                      for m in PAR_SEGMENTATION_MODELS],
+                                             value=PAR_SEGMENTATION_MODELS[0]),
+                                html.Span([  # threshold model only
+                                    html.Span("threshold", className="axis-tag"),
+                                    dcc.Input(id="psd-seg-thresh", type="number", min=0, max=255, step=1,
+                                              className="param-input psd-seg-input"),
+                                ], id="psd-seg-thresh-box", className="psd-seg-field"),
                                 html.Span("min pixels", className="axis-tag"),
                                 dcc.Input(id="psd-seg-px", type="number", min=1, step=1,
                                           className="param-input psd-seg-input"),
+                                html.Span([  # other models only
+                                    html.Span("options", className="axis-tag"),
+                                    dcc.Input(id="psd-seg-params", type="text", debounce=True,
+                                              placeholder='model defaults, or e.g. {"pred_iou_thresh": 0.7}',
+                                              className="param-input psd-seg-params"),
+                                ], id="psd-seg-params-box", className="psd-seg-field", hidden=True,
+                                    title="Options of the segmentation model, as JSON (see the model's "
+                                          "documentation); empty for its defaults"),
                                 html.Button("Segment again", id="psd-reseg-btn", className="btn btn-small",
                                             title="Segment the frames again from their saved images with these "
                                                   "settings: a new segmentation and its statistics (the earlier ones "
                                                   "are kept)"),
                             ], className="psd-seg-row"),
-                        ], className="psd-seg-box"),
+                            html.Div(id="psd-seg-note", className="param-note"),
+                        ], className="psd-seg-box", open=True),
                         html.Span(id="psd-result-msg"),
                     ], id="psd-result-controls", className="psd-result-controls"),
                     html.Div([
@@ -1145,6 +1160,7 @@ def create_app(results_dir: Optional[str] = None) -> Dash:
         Output("psd-seg-model", "value"),
         Output("psd-seg-thresh", "value"),
         Output("psd-seg-px", "value"),
+        Output("psd-seg-params", "value"),
         Input("sample-dd", "value"),
         Input("data-version", "data"),
     )
@@ -1152,7 +1168,7 @@ def create_app(results_dir: Optional[str] = None) -> Dash:
         # Results of the sample (the active one shown); segmentation settings of the active one to start from
         info = get_info(sample_dir) if sample_dir else None
         if info is None:
-            return [], None, no_update, no_update, no_update
+            return [], None, no_update, no_update, no_update, no_update
         ledger = info.ledger
         result = ledger.size_result
         segmentation = ledger.segmentation(result.segmentation_id if result is not None else None) or ledger.segmentation(
@@ -1160,15 +1176,22 @@ def create_app(results_dir: Optional[str] = None) -> Dash:
         if segmentation is None:
             cfg = ledger.configs.measurement_cfg.powder_meas_cfg or PowderMeasurementConfig()
             model, threshold, px = cfg.par_segmentation_model, cfg.par_brightness_thresh, cfg.min_par_pixels
+            params = cfg.par_segmentation_params
         else:
             model, threshold, px = (segmentation.par_segmentation_model, segmentation.par_brightness_thresh,
                                     segmentation.min_par_pixels)
+            params = segmentation.model_params
         return (be.size_result_options(info), ledger.active_size_result,
-                model if model in PAR_SEGMENTATION_MODELS else no_update, threshold, px)
+                model if model in PAR_SEGMENTATION_MODELS else no_update, threshold, px,
+                json.dumps(params) if params else "")
 
-    @app.callback(Output("psd-seg-thresh", "disabled"), Input("psd-seg-model", "value"))
+    @app.callback(Output("psd-seg-thresh-box", "hidden"), Output("psd-seg-params-box", "hidden"),
+                  Output("psd-seg-note", "children"), Input("psd-seg-model", "value"))
     def threshold_used(model):
-        return model != PAR_SEGMENTATION_MODELS[0]
+        # Fields of the selected model: a brightness threshold for the threshold model, options for the others;
+        # how to install a model not installed
+        return (model != PAR_SEGMENTATION_MODELS[0], model == PAR_SEGMENTATION_MODELS[0],
+                be.segmentation_install_note(model))
 
     @app.callback(
         Output("psd-result-msg", "children"),
@@ -1199,12 +1222,25 @@ def create_app(results_dir: Optional[str] = None) -> Dash:
         State("psd-seg-model", "value"),
         State("psd-seg-thresh", "value"),
         State("psd-seg-px", "value"),
+        State("psd-seg-params", "value"),
         prevent_initial_call=True,
     )
-    def segment_again(_, sample_dir, model, threshold, min_pixels):
+    def segment_again(_, sample_dir, model, threshold, min_pixels, params_text):
         if not sample_dir:
             return no_update, no_update, html.Span("Select a sample first.", className="err")
-        payload = {"par_segmentation_model": model, "par_brightness_thresh": threshold, "min_par_pixels": min_pixels}
+        if be.segmentation_install_hint(model):
+            return no_update, no_update, html.Span(be.segmentation_install_note(model), className="err")
+        params = {}
+        if model != PAR_SEGMENTATION_MODELS[0] and (params_text or "").strip():
+            try:
+                params = json.loads(params_text)
+            except ValueError:
+                params = None
+            if not isinstance(params, dict):
+                return no_update, no_update, html.Span(
+                    'Options must be a JSON object, e.g. {"pred_iou_thresh": 0.7}.', className="err")
+        payload = {"par_segmentation_model": model, "par_brightness_thresh": threshold, "min_par_pixels": min_pixels,
+                   "par_segmentation_params": params}
         try:
             job = JOBS.start("psd_reseg", sample_dir, payload, f"Segmentation of {Path(sample_dir).name}")
         except RuntimeError as exc:
@@ -1335,8 +1371,8 @@ def create_app(results_dir: Optional[str] = None) -> Dash:
             return no_update, no_update, True, no_update
         res = job.result()
         if res is None:
-            return html.Span(f"Recalculating… {job.elapsed():.0f} s", className="running"), no_update, False, \
-                no_update
+            doing = "Segmenting the frames again" if job.kind == "psd_reseg" else "Recalculating"
+            return html.Span(f"{doing}… {job.elapsed():.0f} s", className="running"), no_update, False, no_update
         _info_cache.pop(job.sample_dir, None)
         msg = (html.Span(f"Saved in the sample ledger ({job.elapsed():.0f} s).", className="ok") if res.get("ok")
                else html.Span(f"Not saved: {res.get('error')}", className="err"))

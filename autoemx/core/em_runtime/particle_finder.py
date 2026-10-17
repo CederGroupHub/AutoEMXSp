@@ -192,6 +192,46 @@ def frame_width_um_from_max_area(max_area_par: float) -> float:
     max_par_radius = np.sqrt(max_area_par / np.pi)
     return float(min(FRAME_WIDTH_PER_MAX_DIAMETER * 2.0 * max_par_radius, MAX_FRAME_WIDTH_UM))
 
+
+def is_binary_mask(par_mask: np.ndarray) -> bool:
+    """Whether a particle mask is binary (bool, or uint8 with values 0 and 255 only), not a label image."""
+    if par_mask.dtype == np.bool_:
+        return True
+    return par_mask.dtype == np.uint8 and bool(np.isin(np.unique(par_mask), (0, 255)).all())
+
+
+def label_image_stats(labels: np.ndarray) -> Tuple[int, np.ndarray, np.ndarray]:
+    """
+    Number of labels (background included), statistics and centroids of a label image, as returned by
+    cv2.connectedComponentsWithStats (labels absent from the image have zero statistics).
+    """
+    from scipy import ndimage
+
+    num_labels = int(labels.max()) + 1 if labels.size else 1
+    stats = np.zeros((num_labels, 5), dtype=np.int32)
+    centroids = np.zeros((num_labels, 2), dtype=np.float64)
+    flat = labels.ravel()
+    areas = np.bincount(flat, minlength=num_labels)
+    ys, xs = np.indices(labels.shape)
+    sum_x = np.bincount(flat, weights=xs.ravel(), minlength=num_labels)
+    sum_y = np.bincount(flat, weights=ys.ravel(), minlength=num_labels)
+    present = areas > 0
+    centroids[present, 0] = sum_x[present] / areas[present]
+    centroids[present, 1] = sum_y[present] / areas[present]
+    stats[:, cv2.CC_STAT_AREA] = areas
+    # Bounding boxes: of the particles (labels 1..), and of the background
+    slices = ndimage.find_objects(labels)
+    for label, slc in enumerate(slices, start=1):
+        if slc is None:
+            continue
+        stats[label, cv2.CC_STAT_TOP], stats[label, cv2.CC_STAT_LEFT] = slc[0].start, slc[1].start
+        stats[label, cv2.CC_STAT_HEIGHT] = slc[0].stop - slc[0].start
+        stats[label, cv2.CC_STAT_WIDTH] = slc[1].stop - slc[1].start
+    if present[0]:
+        bg_ys, bg_xs = np.nonzero(labels == 0)
+        stats[0, :4] = (bg_xs.min(), bg_ys.min(), bg_xs.max() - bg_xs.min() + 1, bg_ys.max() - bg_ys.min() + 1)
+    return num_labels, stats, centroids
+
 #%% Electron Microscope Particle Finder class    
 @dataclass
 class StatsProgress:
@@ -1013,7 +1053,7 @@ class EM_Particle_Finder:
                     cv2.drawContours(par_mask, [contour], 0, 255, -1)
                     
         elif self.powder_meas_cfg.par_segmentation_model in self.powder_meas_cfg.AVAILABLE_PAR_SEGMENTATION_MODELS:
-            model_module = par_seg_models.PAR_SEGMENTATION_MODEL_REGISTRY[self.powder_meas_cfg.par_segmentation_model]
+            model_module = par_seg_models.require_model(self.powder_meas_cfg.par_segmentation_model)
             par_mask = model_module.segment_particles(frame_image, self.powder_meas_cfg, save_image, self.EM)
 
         else:
@@ -1025,8 +1065,11 @@ class EM_Particle_Finder:
         # Mask is always saved when collecting particles. Avoids double saving
         save_image = save_image and not self.EM.measurement_cfg.type == self.EM.measurement_cfg.PARTICLE_STATS_MEAS_TYPE_KEY
         if persist_mask and (self.development_mode or save_image):
-            # Scale bar drawn on a copy: the mask itself must stay binary for the particle detection
-            mask_to_save = par_mask.copy()
+            # Scale bar drawn on a copy: the mask itself must stay binary for the particle detection. Label images
+            # are saved as binary masks (cv2 does not write int32 images)
+            mask_to_save = par_mask.copy() if is_binary_mask(par_mask) else np.where(par_mask > 0, 255, 0).astype(np.uint8)
+            if mask_to_save.dtype == np.bool_:
+                mask_to_save = mask_to_save.astype(np.uint8) * 255
             draw_scalebar(mask_to_save, self.EM.pixel_size_um)
             cv2.imwrite(mask_img_path, mask_to_save)
         
@@ -1046,7 +1089,8 @@ class EM_Particle_Finder:
         Parameters
         ----------
         par_mask : np.ndarray
-            Input binary mask (0/255 or bool) or label image (int32).
+            Input binary mask (bool, or uint8 with values 0/255) or label image (any other integer image: an
+            int32 image with labels 0 and 255 only is a label image).
     
         Returns
         -------
@@ -1068,41 +1112,17 @@ class EM_Particle_Finder:
             Centroids of each component. Shape: (num_labels, 2).
         """
     
-        # --- Case 1: Binary image ---
-        if par_mask.dtype == np.bool_ or np.array_equal(np.unique(par_mask), [0, 255]):
+        # --- Case 1: Binary image (bool, or uint8 with values 0 and 255 only) ---
+        if is_binary_mask(par_mask):
             num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
                 par_mask.astype(np.uint8), connectivity=8, ltype=cv2.CV_32S
             )
-    
+
         else:
             # --- Case 2: Already a label image ---
             labels = par_mask.astype(np.int32, copy=False)
-            num_labels = labels.max() + 1
-    
-            stats = np.zeros((num_labels, 5), dtype=np.int32)
-            centroids = np.zeros((num_labels, 2), dtype=np.float64)
-    
-            for label in range(num_labels):
-                mask = labels == label
-                if not np.any(mask):
-                    continue
-    
-                ys, xs = np.where(mask)
-    
-                x_min, x_max = xs.min(), xs.max()
-                y_min, y_max = ys.min(), ys.max()
-                w = x_max - x_min + 1
-                h = y_max - y_min + 1
-                area = mask.sum()
-    
-                stats[label, cv2.CC_STAT_LEFT]   = x_min
-                stats[label, cv2.CC_STAT_TOP]    = y_min
-                stats[label, cv2.CC_STAT_WIDTH]  = w
-                stats[label, cv2.CC_STAT_HEIGHT] = h
-                stats[label, cv2.CC_STAT_AREA]   = area
-    
-                centroids[label] = [xs.mean(), ys.mean()]
-    
+            num_labels, stats, centroids = label_image_stats(labels)
+
         return num_labels, labels, stats, centroids
 
     

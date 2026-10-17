@@ -83,8 +83,9 @@ Fill in the following fields:
 	recommended to maximize Z-contrast.
 	Particles should also be well separated; touching/overlapping particles can
 	be segmented as a single particle.
-	For more complex samples, machine-learning segmentation models are recommended
-	(for example ``Rettenberger2024``).
+	For more complex samples, machine-learning segmentation models are recommended:
+	``SAM2`` and ``microSAM`` segment touching particles separately (optional
+	installs, see :ref:`particle_size_statistics`), or ``Rettenberger2024``.
 	You can also add your own segmentation model (see the advanced section below).
 
 - ``Manual Navigation``
@@ -148,9 +149,19 @@ exclude them before recomputing the size distribution, use:
 Main editable fields in that script are:
 
 - ``sample_ID``: sample folder to process
-- ``input_dir``: parent path where sample folder is stored
-- ``particles_IDs_to_filter``: list of particle IDs to ignore
+- ``results_path``: parent path where sample folder is stored
+- ``show_results_only``: ``True`` to only list the statistics results of the sample
+  (one per segmentation, e.g. per segmentation model) and choose one
+- ``result_id``: the result to recalculate (default: the active one)
+- ``particles_to_filter``: particles to ignore, as ``(Frame ID, Particle #)`` (columns
+  of ``<SampleID>_Par_sizes.csv``)
 - ``frame_IDs_to_filter``: list of frame IDs to ignore (if a full frame is bad, all its particles are ignored)
+- ``particles_IDs_to_filter``: particle IDs to ignore, for samples measured before
+  AutoEMX stored particle sizes in the ledger
+
+The same can be done in the GUI (Analysis > Particle sizes): choose the result, then
+click particles in the frame browser, or tick "Leave this frame out", and
+"Recalculate and save".
 
 The script generates processed outputs with suffix ``_processed``.
 
@@ -195,6 +206,9 @@ To add a new model:
 
 Notes:
 
+- If your model needs extra packages (e.g. torch), import them inside
+	``segment_particles`` and define ``is_available()`` and ``INSTALL_HINT`` (see
+	``SAM2.py``): the model is then only offered where installed.
 - If your model requires external files (for example ONNX weights), keep paths
 	stable and preferably relative to the model file location.
 - If a model name is invalid, AutoEMX falls back to ``threshold_bright``.

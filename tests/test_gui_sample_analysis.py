@@ -783,8 +783,10 @@ def test_size_results_segmentations_and_active(tmp_path: Path):
 
     sample = str(make_measurement_sample(tmp_path / "M", images=True))
     info = get_info(sample)
+    n_particles = info.ledger.size_result.size_stats.n_par_analysed
     assert be.size_result_options(info) == [
-        {"label": "Result 0 · measurement 0 · threshold_bright · 100 · 80 px · active", "value": 0}]
+        {"label": f"Result 0 · measurement 0 · threshold_bright · 100 · 80 px · {n_particles} particles · active",
+         "value": 0}]
 
     # Segmented again (another threshold): a new segmentation and result, made the active one; the first kept
     assert be._run_resegmentation(sample, {"par_brightness_thresh": 200, "par_segmentation_model": "threshold_bright",
@@ -839,10 +841,11 @@ def test_compare_segmentations_and_result_choices(tmp_path: Path):
 
     res = post("..psd-result-dd.options", [("psd-result-dd", "options"), ("psd-result-dd", "value"),
                                            ("psd-seg-model", "value"), ("psd-seg-thresh", "value"),
-                                           ("psd-seg-px", "value")],
+                                           ("psd-seg-px", "value"), ("psd-seg-params", "value")],
                [("sample-dd", "value", sample), ("data-version", "data", 0)], changed=["sample-dd.value"])
     assert [o["value"] for o in res["psd-result-dd"]["options"]] == [1, 0] and res["psd-result-dd"]["value"] == 1
     assert (res["psd-seg-model"]["value"], res["psd-seg-thresh"]["value"]) == ("threshold_bright", 200)
+    assert res["psd-seg-params"]["value"] == ""  # the threshold model has no options
 
     outputs = [("psd-banner", "children"), ("psd-graph", "figure"), ("psd-tables", "children"),
                ("psd-compare-controls", "hidden"), ("psd-compare-samples", "hidden")]
@@ -862,3 +865,57 @@ def test_compare_segmentations_and_result_choices(tmp_path: Path):
                 ("psd-compare", "value", []), ("psd-kind", "value", "cumulative"), ("psd-basis", "value", "number"),
                 ("psd-result-dd", "value", 0)], [("sample-dd", "options", [])], ["psd-result-dd.value"])
     assert "size frames threshold_bright · 100 · 80 px" in str(res["psd-banner"]["children"])
+
+
+def test_segmentation_model_not_installed(tmp_path: Path, monkeypatch):
+    """A model not installed is listed as such; selecting it shows how to install it, and nothing runs with it."""
+    from _psd_helpers import make_measurement_sample
+
+    from autoemx.core.em_runtime.particle_segmentation_models import SAM2
+    from autoemx.gui.app import create_app
+    from autoemx.gui.common import _pid, segmentation_note_id
+
+    monkeypatch.setattr(SAM2, "is_available", lambda: False)
+    assert "SAM2" in be.par_segmentation_models()
+    assert be.segmentation_model_label("SAM2") == "SAM2 (not installed)"
+    assert be.segmentation_model_label("threshold_bright") == "threshold_bright"
+    assert 'pip install "autoemx[segmentation]"' in be.segmentation_install_note("SAM2")
+    assert be.segmentation_install_note("threshold_bright") is None
+    assert be._validate_models({"asize.par_segmentation_model": "SAM2"}) == [be.segmentation_install_note("SAM2")]
+
+    sample = str(make_measurement_sample(tmp_path / "M", images=True))
+    app = create_app("")
+    client = app.server.test_client()
+
+    def post(output, inputs, state=()):
+        key = next(k for k in app.callback_map if k.startswith(output))
+        outs = [{"id": i, "property": p} for i, p in [(o.rsplit(".", 1)[0], o.rsplit(".", 1)[1])
+                                                     for o in key.removeprefix("..").removesuffix("..").split("...")]]
+        body = {"output": key, "outputs": outs if len(outs) > 1 else outs[0],
+                "inputs": [{"id": i, "property": p, "value": v} for i, p, v in inputs],
+                "state": [{"id": i, "property": p, "value": v} for i, p, v in state],
+                "changedPropIds": [f"{inputs[0][0]}.{inputs[0][1]}"]}
+        res = client.post("/_dash-update-component", json=body)
+        assert res.status_code == 200, res.data
+        return res.get_json()["response"]
+
+    # Segment again: the note only for a model not installed, and no job started with it
+    res = post("..psd-seg-thresh-box.hidden", [("psd-seg-model", "value", "SAM2")])
+    assert "not installed" in res["psd-seg-note"]["children"]
+    # Fields of the selected model only: options for SAM2, the threshold for the threshold model
+    assert (res["psd-seg-thresh-box"]["hidden"], res["psd-seg-params-box"]["hidden"]) == (True, False)
+    res = post("..psd-seg-thresh-box.hidden", [("psd-seg-model", "value", "threshold_bright")])
+    assert res["psd-seg-note"]["children"] is None
+    assert (res["psd-seg-thresh-box"]["hidden"], res["psd-seg-params-box"]["hidden"]) == (False, True)
+    res = post("..psd-job-store.data", [("psd-reseg-btn", "n_clicks", 1)],
+               [("sample-dd", "value", sample), ("psd-seg-model", "value", "SAM2"), ("psd-seg-thresh", "value", 100),
+                ("psd-seg-px", "value", 80), ("psd-seg-params", "value", "")])
+    assert "not installed" in str(res["psd-recalc-msg"]["children"]) and "psd-job-store" not in res
+
+    # Acquisition: the same note below the model setting
+    note_id, model_id = segmentation_note_id("asize.par_segmentation_model"), _pid("asize.par_segmentation_model")
+    key = next(k for k in app.callback_map if k.startswith("{") and '"seg-note"' in k and "asize" in k)
+    body = {"output": key, "outputs": {"id": note_id, "property": "children"},
+            "inputs": [{"id": model_id, "property": "value", "value": "SAM2"}], "changedPropIds": []}
+    res = client.post("/_dash-update-component", json=body).get_json()["response"]
+    assert "not installed" in str(res)

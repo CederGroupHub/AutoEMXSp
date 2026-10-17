@@ -452,6 +452,7 @@ class PowderMeasurementConfig(BaseModel):
     par_spot_selection_mode: Literal['auto', 'callback'] = 'auto'
     par_segmentation_model: str = DEFAULT_PAR_SEGMENTATION_MODEL    # "threshold_bright"    
     par_brightness_thresh: int = 100  # in 8-bit image
+    par_segmentation_params: Dict[str, Any] = Field(default_factory=dict)  # options of the segmentation model
     par_xy_spots_thresh: int = 100
     par_feature_selection: str = 'random'
     par_spot_spacing: str = 'random'

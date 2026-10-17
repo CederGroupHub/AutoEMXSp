@@ -482,25 +482,10 @@ def load_particle_sizes(info: SampleInfo, result_id: Optional[int] = None) -> Op
 
 
 def size_result_label(ledger, result) -> str:
-    """Readable name of a statistics result: measurement, segmentations, frames and particles left out."""
-    parts = [f"Result {result.result_id}"]
-    if result.measurement_id is not None:
-        parts.append(f"measurement {result.measurement_id}")
-    segmentation = ledger.segmentation(result.segmentation_id)
-    if segmentation is not None:
-        parts.append(segmentation.label)
-    if result.eds_segmentation_id is not None:
-        eds = ledger.segmentation(result.eds_segmentation_id)
-        if result.eds_segmentation_id == result.segmentation_id or eds is None:
-            parts.append("+ EDS frames")
-        else:
-            parts.append(f"{'+ ' if segmentation is not None else ''}EDS frames {eds.label}")
-    n_out = len(result.excluded_frame_ids) + len(result.excluded_particles)
-    if n_out:
-        parts.append(f"{len(result.excluded_frame_ids)} frame(s), {len(result.excluded_particles)} particle(s) left out")
-    if result.result_id == ledger.active_size_result:
-        parts.append("active")
-    return " · ".join(parts)
+    """Readable name of a statistics result (see particle_statistics.size_result_label)."""
+    from autoemx.core.particle_statistics import size_result_label as label
+
+    return label(ledger, result)
 
 
 def size_result_options(info: SampleInfo) -> List[Dict[str, Any]]:
@@ -654,10 +639,42 @@ def _run_resegmentation(sample_dir: str, payload: Dict[str, Any]) -> Dict[str, A
         par_brightness_thresh=payload.get("par_brightness_thresh"),
         par_segmentation_model=payload.get("par_segmentation_model"),
         min_par_pixels=payload.get("min_par_pixels"),
+        par_segmentation_params=payload.get("par_segmentation_params"),
     )
     if stats is None:
         return {"ok": False, "error": "No particle found with these settings."}
     return {"ok": True}
+
+
+def par_segmentation_models() -> List[str]:
+    """Particle segmentation models offered in the GUI: the threshold model, then every registered model (installed
+    or not: those not installed are labelled so, see segmentation_model_label)."""
+    import autoemx.core.em_runtime.particle_segmentation_models as par_seg_models
+    from autoemx.config.runtime_configs import PowderMeasurementConfig
+
+    return [PowderMeasurementConfig.DEFAULT_PAR_SEGMENTATION_MODEL] + list(par_seg_models.AVAILABLE_SEGMENTATION_MODELS)
+
+
+def segmentation_install_hint(model: Optional[str]) -> Optional[str]:
+    """How to install a segmentation model, or None if it is installed (or unknown)."""
+    import autoemx.core.em_runtime.particle_segmentation_models as par_seg_models
+
+    if model not in par_seg_models.PAR_SEGMENTATION_MODEL_REGISTRY or par_seg_models.is_model_available(model):
+        return None
+    return par_seg_models.install_hint(model) or "see the documentation of the model"
+
+
+def segmentation_model_label(model: str) -> str:
+    """Name of a segmentation model in the dropdowns, e.g. 'SAM2 (not installed)'."""
+    return model + (" (not installed)" if segmentation_install_hint(model) else "")
+
+
+def segmentation_install_note(model: Optional[str]) -> Optional[str]:
+    """Note shown when a model that is not installed is selected: how to install it (then restart the GUI)."""
+    hint = segmentation_install_hint(model)
+    return None if hint is None else f"{model} is not installed. Install it with: {hint} (then restart the GUI)"
+
+
 
 
 # =============================================================================
@@ -673,6 +690,7 @@ class ParamSpec:
     kind: str  # bool, int, float, int_opt, float_opt, choice, text, formulae, elements, flags, pair, pair_opt
     default: Any = None
     choices: Optional[List[Any]] = None
+    choice_labels: Dict[Any, str] = field(default_factory=dict)  # shown instead of the choice (default: itself)
     help: str = ""
     placeholder: str = ""
     unit: str = ""  # shown to the right of the field
@@ -1041,7 +1059,7 @@ def build_acq_specs() -> List[ParamSpec]:
     ]
     powder_choices = {
         "par_selection_mode": ["auto", "manual"],  # 'list' needs particle ids/coordinates (scripts only)
-        "par_segmentation_model": list(PowderMeasurementConfig.AVAILABLE_PAR_SEGMENTATION_MODELS),
+        "par_segmentation_model": par_segmentation_models(),
         "par_feature_selection": list(PowderMeasurementConfig.AVAILABLE_FEATURE_SELECTION),
         "par_spot_spacing": list(PowderMeasurementConfig.AVAILABLE_SPOT_SPACING_SELECTION),
         "size_stats_plot_format": ["png", "svg", "pdf", "jpg", "tif"],
@@ -1050,9 +1068,11 @@ def build_acq_specs() -> List[ParamSpec]:
     multi = {"size_stats_ci_quantities": ["D10", "D50", "D90", "D43", "Dv10", "Dv50", "Dv90"]}
     for key, values in powder_choices.items():
         _CHOICES[f"apowder.{key}"] = values
-    # par_spot_selection_mode 'callback' needs a Python callback (scripts only)
+    # par_spot_selection_mode 'callback' needs a Python callback (scripts only); model options: scripts and
+    # "Segment again" (Analysis > Particle sizes)
     powder = _model_specs("apowder", PowderMeasurementConfig,
-                          [n for n in PowderMeasurementConfig.model_fields if n != "par_spot_selection_mode"])
+                          [n for n in PowderMeasurementConfig.model_fields
+                           if n not in ("par_spot_selection_mode", "par_segmentation_params")])
     script_defaults = {"max_area_par": 10000.0}  # Run_Acquisition.py defaults that differ from the config model
     for spec in powder:
         spec.default = script_defaults.get(spec.name, spec.default)
@@ -1060,6 +1080,8 @@ def build_acq_specs() -> List[ParamSpec]:
             spec.kind, spec.choices = "multi", multi[spec.name]
         if spec.name == "par_search_frame_width_um":
             spec.placeholder = "auto"
+        if spec.name == "par_segmentation_model":
+            spec.choice_labels = {m: segmentation_model_label(m) for m in spec.choices}
     bulk = _model_specs("abulk", BulkMeasurementConfig)
     for spec in bulk:
         if spec.name == "image_frame_width_um":
@@ -1381,6 +1403,9 @@ def _validate_models(values: Dict[str, Any]) -> List[str]:
         errors.append("At least one sample element is required")
     if values.get("filter.quant_flags_accepted") == []:
         errors.append("Accept at least one quant flag")
+    for key, value in values.items():
+        if key.endswith(".par_segmentation_model") and segmentation_install_hint(value):
+            errors.append(segmentation_install_note(value))
     return errors
 
 

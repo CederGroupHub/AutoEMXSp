@@ -79,8 +79,8 @@ What the GUI can do
 
 The GUI has four tabs:
 
-- **Acquisition**: acquire the spectra of a list of samples with the microscope, with every
-  option of the acquisition script, and optionally quantify them during acquisition. Use it on
+- **Acquisition**: acquire the spectra and/or particle sizes of a list of samples with the
+  microscope, with every option of the acquisition script, and optionally quantify them during acquisition. Use it on
   the microscope computer.
 - **Quantification**: quantify the spectra of one or more samples (or only of the samples just
   added to a project), and optionally analyse them right after. It also imports folders of
@@ -90,7 +90,8 @@ The GUI has four tabs:
   results: interactive 3D, ternary and 2D plots of the compositions, clusters and candidate
   phases, tables of clusters and spectra, element distributions, the SEM images with the
   position of every spectrum, and the figures saved by the analysis. Click any point to see its
-  spectrum, fit it, or find it on the SEM image.
+  spectrum, fit it, or find it on the SEM image. **Particle sizes** shows the particle size
+  statistics of a sample, and compares samples and segmentations.
 - **Single spectrum**: fit and quantify one spectrum, of a sample or from an exported file, with
   every fitting option, and inspect the fit peak by peak.
 
@@ -98,6 +99,8 @@ To learn how to use them, follow:
 
 - :ref:`gui_comp_analysis_tutorial`: acquisition, quantification and analysis of samples
   (Acquisition, Quantification and Analysis tabs).
+- :ref:`gui_particle_size_tutorial`: particle size statistics of powders (Acquisition and
+  Analysis tabs).
 - :ref:`gui_fit_spectra_tutorial`: fit and quantify individual spectra, one at a time or in
   batch, from AutoEMX or from other instruments (Single spectrum and Quantification tabs).
 
