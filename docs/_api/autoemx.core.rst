@@ -24,4 +24,5 @@ Submodules
    :maxdepth: 4
 
    autoemx.core.particle_statistics
+   autoemx.core.particle_outlines
    autoemx.core.saved_frames

@@ -6,6 +6,8 @@ Install the optional particle segmentation models in the current Python environm
     python -m autoemx.utils.install_segmentation sam2 [--dry-run]
     python -m autoemx.utils.install_segmentation micro-sam [--dry-run]
 
+pip then warns that micro-sam requires PyQt6, segment-anything-py and trackastra: ignore it (left out on purpose).
+
 ``sam2``: SAM2 through Hugging Face transformers, the ``segmentation`` extra of AutoEMX (torch, torchvision,
 transformers; Apache-2.0 / BSD).
 
@@ -92,6 +94,9 @@ def main(argv=None) -> int:
         if not args.dry_run:
             subprocess.run(command, check=True)
     if not args.dry_run:
+        if args.model == "micro-sam":
+            print("Done. Ignore pip's warnings that micro-sam requires PyQt6, segment-anything-py and trackastra: they "
+                  "are left out on purpose (not needed to segment images).")
         found = gpl_packages_installed()
         if found:
             print(f"Warning: {', '.join(found)} installed (GPL), by another package of this environment.")

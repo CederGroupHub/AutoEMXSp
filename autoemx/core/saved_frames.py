@@ -21,6 +21,7 @@ from autoemx import microscope_drivers as EM_driver
 from autoemx.config.ledger_schemas import FrameRecord, FrameSegmentation, SampleLedger, SegmentationConfig
 from autoemx.config.runtime_configs import MeasurementConfig, PowderMeasurementConfig
 from autoemx.core.em_runtime import image_utilities
+from autoemx.core.particle_outlines import load_outlines, save_outlines
 
 __all__ = ["SavedFrames", "load_frame_image", "resegment_frames", "segment_frames"]
 
@@ -78,11 +79,13 @@ def segment_frames(
     powder_meas_cfg: PowderMeasurementConfig,
     images_dir: str,
     segmentation_id: int,
+    sample_dir: Optional[str] = None,
 ) -> Tuple[Dict[str, FrameSegmentation], List[str]]:
     """
     Segment frames again from their saved images with the segmentation settings of ``powder_meas_cfg``, each among
     the diameters searched in it: the result of segmentation ``segmentation_id`` of each frame (by frame id), and the
-    frames without saved image.
+    frames without saved image. With ``sample_dir``, the outlines of the particles of each frame are saved (see
+    particle_outlines).
     """
     from autoemx.core.em_runtime.particle_finder import EM_Particle_Finder
 
@@ -96,8 +99,12 @@ def segment_frames(
             without_image.append(frame.frame_id)
             continue
         saved_frames.show_frame(frame.label, frame.center_mm, image)
-        results[frame.frame_id] = finder.segment_frame(image, frame.pixel_size_um, frame.search_window_um,
-                                                       segmentation_id)
+        results[frame.frame_id], outlines = finder.segment_frame(image, frame.pixel_size_um, frame.search_window_um,
+                                                                 segmentation_id, with_outlines=True)
+        if sample_dir is not None:
+            save_outlines(sample_dir, segmentation_id, frame.frame_id, outlines)
+        logging.info(f"Frame {frame.frame_id}: {results[frame.frame_id].n_particles} particles "
+                     f"({powder_meas_cfg.par_segmentation_model}).")
     return results, without_image
 
 
@@ -111,7 +118,9 @@ def resegment_frames(
     """
     Segment frames of a sample again, from their saved images, with the segmentation settings of
     ``powder_meas_cfg``: the results are added to the frames (those already segmented with these settings are kept;
-    no result is replaced).
+    no result is replaced), and the outlines of their particles saved (see particle_outlines). Frames already
+    segmented with these settings but without saved outlines (segmented before AutoEMX saved them) are segmented again
+    for their outlines, kept only if the same particles are found.
 
     Returns
     -------
@@ -123,12 +132,36 @@ def resegment_frames(
     segmentation_id = ledger.append_segmentation(
         SegmentationConfig.from_powder_meas_cfg(powder_meas_cfg, 0, source=source))
     to_segment = [f for f in frames if f.segmentation(segmentation_id) is None]
-    if not to_segment:
+    without_outlines = [f for f in frames if f.segmentation(segmentation_id) is not None and f.image_file
+                        and load_outlines(sample_dir, segmentation_id, f.frame_id) is None]
+    if not to_segment and not without_outlines:
         return segmentation_id, []
-    results, without_image = segment_frames(
-        to_segment, SavedFrames(ledger.sample_id, ledger.configs.microscope_cfg.ID), powder_meas_cfg,
-        os.path.join(sample_dir, cnst.IMAGES_DIR), segmentation_id,
-    )
+    saved_frames = SavedFrames(ledger.sample_id, ledger.configs.microscope_cfg.ID)
+    images_dir = os.path.join(sample_dir, cnst.IMAGES_DIR)
+    results, without_image = segment_frames(to_segment, saved_frames, powder_meas_cfg, images_dir, segmentation_id,
+                                            sample_dir)
     for frame_id, result in results.items():
         ledger.add_frame_segmentation(frame_id, result)
+    if without_outlines:
+        _add_missing_outlines(ledger, sample_dir, without_outlines, saved_frames, powder_meas_cfg, images_dir,
+                              segmentation_id)
     return segmentation_id, without_image
+
+
+def _add_missing_outlines(ledger, sample_dir, frames, saved_frames, powder_meas_cfg, images_dir, segmentation_id):
+    """Outlines of frames segmented before they were saved: segmented again, kept if the same particles are found
+    (so that the particles left out, identified by their number in the frame, stay the same)."""
+    from autoemx.core.particle_outlines import outlines_path
+
+    results, _ = segment_frames(frames, saved_frames, powder_meas_cfg, images_dir, segmentation_id, sample_dir)
+    mismatched = []
+    for frame_id, result in results.items():
+        stored = ledger.frame(frame_id).segmentation(segmentation_id)
+        same = (len(result.particle_areas_um2) == len(stored.particle_areas_um2)
+                and np.allclose(result.particle_areas_um2, stored.particle_areas_um2, rtol=1e-6))
+        if not same:
+            os.remove(outlines_path(sample_dir, segmentation_id, frame_id))
+            mismatched.append(frame_id)
+    if mismatched:
+        logging.warning(f"⚠️ Particle outlines not added to frames {mismatched}: segmented again, they give other "
+                        "particles than recorded (shown as circles).")

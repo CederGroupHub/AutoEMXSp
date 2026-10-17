@@ -579,6 +579,8 @@ class SizeFrame:
     marks: List[Tuple[int, int, int, Optional[int]]]
     #: 'included', 'left out' or 'overlapping' (left out: a larger frame counts the same particles)
     status: str
+    #: Segmentation of the particles shown (their outlines: autoemx.core.particle_outlines)
+    segmentation_id: Optional[int] = None
 
 
 def size_frames(info: SampleInfo, data: ParticleSizeData) -> List[SizeFrame]:
@@ -602,7 +604,7 @@ def size_frames(info: SampleInfo, data: ParticleSizeData) -> List[SizeFrame]:
             status = "left out" if frame_id in excluded else "overlapping" if frame_id in overlapping else "included"
             marks = [(x, y, rad, i) for i, (x, y, rad) in enumerate(result.particle_marks_px)]
             frames.append(SizeFrame(frame_id, label, is_eds, result.n_particles, record.area_um2,
-                                    path if path and os.path.exists(path) else None, marks, status))
+                                    path if path and os.path.exists(path) else None, marks, status, segmentation_id))
     return frames
 
 
@@ -2213,6 +2215,12 @@ _JOB_FUNCS = {
 _LEDGER_WRITERS = {"analysis", "quant", "acquisition", "import", "psd", "psd_reseg"}
 
 
+def collapse_redraws(text: str) -> str:
+    """Log text as a terminal shows it: a line redrawn in place (progress bars write '\\r' and the new state, e.g.
+    downloads of model weights) shows only its last state."""
+    return "\n".join(line.rsplit("\r", 1)[-1] if "\r" in line.rstrip("\r") else line.rstrip("\r")
+                     for line in text.replace("\r\n", "\n").split("\n"))
+
 
 @dataclass
 class Job:
@@ -2247,6 +2255,7 @@ class Job:
                 text = fh.read().decode("utf-8", errors="replace")
         except FileNotFoundError:
             return ""
+        text = collapse_redraws(text)
         return text if size <= max_chars else "…\n" + text.split("\n", 1)[-1]
 
     def elapsed(self) -> float:

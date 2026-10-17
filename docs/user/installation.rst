@@ -28,6 +28,12 @@ segment touching particles separately:
    pip install "autoemx[segmentation]"                          # SAM2
    python -m autoemx.utils.install_segmentation micro-sam      # micro-sam
 
+pip then warns that micro-sam requires PyQt6, segment-anything-py and trackastra: ignore
+it, they are left out on purpose.
+
+With an editable installation (see below), install SAM2 from the repository folder
+instead: ``pip install -e ".[segmentation]"``.
+
 
 Alternatively, to ensure you are constantly up to date with the package during minor developments, you can clone the GitHub repository and use editable installation. This allows you to access the latest features or bug fixes that are not yet included in the latest release version.
 To do this, follow these steps:

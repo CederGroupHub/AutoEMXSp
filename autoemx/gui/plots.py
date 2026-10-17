@@ -795,15 +795,17 @@ def psd_comparison_figure(items: Sequence[tuple], kind: str = "cumulative", basi
     return fig
 
 
-FRAME_MARK_COLORS = {"in": "#2ca02c", "out": "#d62728", "eds": "#17becf"}
+FRAME_MARK_COLORS = {"in": "#2ca02c", "out": "#d62728", "eds": "#17becf", "other": "#ffb000"}
 
 
 def size_frame_figure(image_src: Optional[str], size: Optional[Sequence[int]], marks: Sequence[Sequence[Any]],
                       excluded_particles: Iterable[int] = (), is_eds: bool = False,
-                      frame_excluded: bool = False, uirevision: Optional[str] = None) -> go.Figure:
-    """Frame image of a particle size measurement with its particles circled: counted (green, cyan in frames searched
-    by EDS) or left out (red); ``excluded_particles`` are their indices in the frame. Clicking a particle gives its
-    index as customdata."""
+                      frame_excluded: bool = False, uirevision: Optional[str] = None,
+                      outlines: Optional[Dict[str, list]] = None) -> go.Figure:
+    """Frame image of a particle size measurement with its particles outlined (``outlines``, see
+    autoemx.core.particle_outlines; circled if not saved): counted (green, cyan in frames searched by EDS), left out
+    (red), or not counted (amber, dashed: touching the frame edge, or outside the diameters searched); ``excluded_particles``
+    are their indices in the frame. Clicking the centre of a particle gives its index as customdata."""
     if not image_src or not size:
         return _empty_figure("No image saved for this frame")
     width, height = int(size[0]), int(size[1])
@@ -818,6 +820,17 @@ def size_frame_figure(image_src: Optional[str], size: Optional[Sequence[int]], m
         groups[key].append((x, y, r, index))
     names = {"in": "Counted", "out": "Left out", "eds": "Counted (frame searched by EDS)"}
     angles = np.linspace(0, 2 * np.pi, 33)
+    counted_outlines = (outlines or {}).get("counted") or []
+
+    def shape(x, y, r, index):
+        # Outline of the particle if saved, else a circle of its area
+        poly = counted_outlines[index] if index is not None and index < len(counted_outlines) else None
+        if poly:
+            xy = np.asarray(poly, dtype=float).reshape(-1, 2)
+            xy = np.vstack([xy, xy[:1], [np.nan, np.nan]])
+            return xy[:, 0], xy[:, 1]
+        return np.append(x + r * np.cos(angles), np.nan), np.append(y + r * np.sin(angles), np.nan)
+
     for key, pts in groups.items():
         if not pts:
             continue
@@ -827,12 +840,20 @@ def size_frame_figure(image_src: Optional[str], size: Optional[Sequence[int]], m
             marker=dict(color=FRAME_MARK_COLORS[key], size=8, opacity=0.25),  # click target, circle stays visible
             hovertemplate="Particle %{customdata}<extra></extra>",
         ))
-        # Circles of a group as one line trace (polygons separated by gaps): fast with hundreds of particles
-        xs = np.concatenate([np.append(x + r * np.cos(angles), np.nan) for x, y, r, _ in pts])
-        ys = np.concatenate([np.append(y + r * np.sin(angles), np.nan) for x, y, r, _ in pts])
+        # Outlines of a group as one line trace (polygons separated by gaps): fast with hundreds of particles
+        shapes = [shape(*p) for p in pts]
+        xs, ys = np.concatenate([sx for sx, _ in shapes]), np.concatenate([sy for _, sy in shapes])
         fig.add_trace(go.Scatter(
             x=xs, y=ys, mode="lines", name=names[key], legendgroup=key, hoverinfo="skip", showlegend=False,
-            line=dict(color=FRAME_MARK_COLORS[key], width=2, dash="dot" if key == "out" else "solid"),
+            line=dict(color=FRAME_MARK_COLORS[key], width=2 if outlines is None else 1.5,
+                      dash="dot" if key == "out" else "solid"),
+        ))
+    others = [np.asarray(p, dtype=float).reshape(-1, 2) for p in (outlines or {}).get("others") or [] if p]
+    if others:
+        xy = np.vstack([np.vstack([o, o[:1], [np.nan, np.nan]]) for o in others])
+        fig.add_trace(go.Scatter(
+            x=xy[:, 0], y=xy[:, 1], mode="lines", name="Not counted (frame edge or size)", hoverinfo="skip",
+            line=dict(color=FRAME_MARK_COLORS["other"], width=1, dash="dash"),
         ))
     fig.update_layout(
         template="plotly_white", margin=dict(l=0, r=0, t=0, b=0), dragmode="pan", uirevision=uirevision,

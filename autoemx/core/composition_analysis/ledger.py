@@ -51,6 +51,7 @@ from autoemx.config.runtime_configs import PowderMeasurementConfig
 from autoemx.utils.legacy.ledger_bootstrap import create_analyzer_ledger_from_legacy_data_csv
 from autoemx.utils.legacy.legacy_config_loader import has_legacy_data_csv
 from autoemx.core import particle_statistics
+from autoemx.core.particle_outlines import save_outlines
 from autoemx.core.quantifier import XSp_Quantifier
 from .reference_matching import ReferenceMatchingModule
 from .standards import StandardsModule
@@ -538,7 +539,8 @@ class LedgerModule:
     def _store_eds_search_frames(self: Any, ledger: SampleLedger) -> bool:
         """
         Move the frames searched for EDS particles, recorded by the particle finder, to the ledger frames, each with
-        the result of the segmentation of the EDS acquisition (its settings: those of the particle finder), their ids
+        the result of the segmentation of the EDS acquisition (its settings: those of the particle finder) and the
+        outlines of their particles (see particle_outlines), their ids
         made unique (``#2``, ``#3``, ... for a frame searched again by a resumed acquisition, then left out of the
         statistics as overlapping). Returns True if the ledger was modified.
         """
@@ -549,8 +551,8 @@ class LedgerModule:
         cfg = (getattr(particle_finder, "powder_meas_cfg", None) or ledger.configs.measurement_cfg.powder_meas_cfg
                or PowderMeasurementConfig())
         segmentation_id = ledger.append_segmentation(SegmentationConfig.from_powder_meas_cfg(cfg, 0))
-        for (d_min_um, d_max_um, frame_width_um), frame in pending:
-            ledger.add_frame(FrameRecord(
+        for (d_min_um, d_max_um, frame_width_um), frame, *outlines in pending:
+            record = ledger.add_frame(FrameRecord(
                 frame_id=frame.frame_id, label=frame.frame_id.removeprefix("EDS-").split("#")[0],
                 purpose="eds_search", center_mm=frame.center_mm, frame_width_um=frame.frame_width_um,
                 pixel_size_um=frame.pixel_size_um, area_um2=frame.area_um2, search_window_um=(d_min_um, d_max_um),
@@ -562,6 +564,11 @@ class LedgerModule:
                     particle_marks_px=[tuple(m[:3]) for m in frame.particle_marks_px or []],
                 )],
             ))
+            if outlines and outlines[0] is not None:  # outlines of its particles, shown in the GUI
+                try:
+                    save_outlines(self.sample_result_dir, segmentation_id, record.frame_id, outlines[0])
+                except OSError as exc:
+                    logger.warning(f"Particle outlines of frame {record.frame_id} not saved: {exc}")
         pending.clear()
         return True
 

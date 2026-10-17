@@ -138,7 +138,7 @@ def test_models_registered_even_if_not_installed(monkeypatch):
     assert "SAM2" not in par_seg_models.available_models()
     # A configuration (e.g. of a ledger) recorded with the model stays valid
     assert PowderMeasurementConfig(par_segmentation_model="SAM2").par_segmentation_model == "SAM2"
-    with pytest.raises(ImportError, match="autoemx\\[segmentation\\]"):
+    with pytest.raises(ImportError, match="\\[segmentation\\]"):
         par_seg_models.require_model("SAM2")
     monkeypatch.setattr(SAM2, "is_available", lambda: True)
     assert "SAM2" in par_seg_models.available_models()
@@ -296,3 +296,63 @@ def test_real_micro_sam():
         image[_disk(cx, 100, 25)] = 200
     labels = microSAM.segment_particles(image, PowderMeasurementConfig(par_segmentation_model="microSAM"))
     assert labels.dtype == np.int32 and labels.max() >= 1
+
+
+# =============================================================================
+# Particle outlines (shown in the GUI frame browser)
+# =============================================================================
+def test_frame_outlines():
+    from autoemx.core.particle_outlines import frame_outlines, load_outlines, save_outlines
+
+    labels = np.zeros((H, W), np.int32)
+    labels[_disk(60, 60, 20)] = 3
+    labels[_disk(200, 100, 15)] = 1
+    outlines = frame_outlines(labels, counted=[3], others=[1])
+    [counted], [other] = outlines["counted"], outlines["others"]
+    xy = np.asarray(counted).reshape(-1, 2)
+    assert np.allclose(xy.mean(axis=0), (60, 60), atol=2) and np.ptp(xy[:, 0]) == pytest.approx(40, abs=2)
+    assert np.asarray(other).reshape(-1, 2)[:, 0].min() == pytest.approx(185, abs=1)
+
+
+def test_outlines_saved_with_each_segmentation(sample: Path, fake_models):
+    from autoemx.core.particle_outlines import load_outlines
+
+    sample_dir = sample / "S"
+    reanalyze_particle_statistics("S", str(sample), par_segmentation_model="SAM2", verbose=False)
+    ledger = load_sample_ledger(str(sample_dir / "ledger.json"))
+    seg_id = ledger.size_result.segmentation_id
+    for frame in ledger.frames_of("size_stats", 0):
+        outlines = load_outlines(str(sample_dir), seg_id, frame.frame_id)
+        # One outline per particle counted, in the order of the frame's particles
+        assert len(outlines["counted"]) == frame.segmentation(seg_id).n_particles
+        for (x, y, _), poly in zip(frame.segmentation(seg_id).particle_marks_px, outlines["counted"]):
+            xy = np.asarray(poly).reshape(-1, 2)
+            assert xy[:, 0].min() <= x <= xy[:, 0].max() and xy[:, 1].min() <= y <= xy[:, 1].max()
+
+
+def test_missing_outlines_added_only_if_the_same_particles_are_found(sample: Path):
+    import json
+    import shutil
+
+    from autoemx.core.particle_outlines import OUTLINES_DIR, load_outlines
+
+    sample_dir = sample / "S"
+    reanalyze_particle_statistics("S", str(sample), par_brightness_thresh=120, verbose=False)
+    ledger_path = sample_dir / "ledger.json"
+    seg_id = load_sample_ledger(str(ledger_path)).size_result.segmentation_id
+    # As if segmented before outlines were saved; one frame recorded with other particles
+    shutil.rmtree(sample_dir / OUTLINES_DIR)
+    raw = json.loads(ledger_path.read_text())
+    changed = next(f for f in raw["frames"] if f["segmentations"][-1]["particle_areas_um2"])
+    changed["segmentations"][-1]["particle_areas_um2"][0] *= 1.5
+    ledger_path.write_text(json.dumps(raw))
+
+    reanalyze_particle_statistics("S", str(sample), par_brightness_thresh=120, verbose=False)
+    ledger = load_sample_ledger(str(ledger_path))
+    assert len(ledger.segmentations) == 2  # same segmentation, none added
+    for frame in ledger.frames_of("size_stats", 0):
+        outlines = load_outlines(str(sample_dir), seg_id, frame.frame_id)
+        if frame.frame_id == changed["frame_id"]:
+            assert outlines is None  # other particles than recorded: circles kept
+        else:
+            assert len(outlines["counted"]) == frame.segmentation(seg_id).n_particles

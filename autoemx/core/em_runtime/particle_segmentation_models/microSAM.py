@@ -37,7 +37,8 @@ from autoemx.core.em_runtime.particle_segmentation_models._instance_filters impo
 
 logger = get_logger(__name__)
 
-INSTALL_HINT = "python -m autoemx.utils.install_segmentation micro-sam"
+INSTALL_HINT = ("python -m autoemx.utils.install_segmentation micro-sam (ignore pip's warnings that micro-sam requires "
+                "PyQt6, segment-anything-py and trackastra)")
 DEFAULT_MODEL_TYPE = "vit_b_lm"
 
 _segmenters: Dict[tuple, Any] = {}  # (predictor, segmenter) loaded in this process, by (model, device, tiled)
@@ -54,7 +55,8 @@ def get_predictor_and_segmenter(model_type: str = DEFAULT_MODEL_TYPE, device: st
     if key not in _segmenters:
         from micro_sam.automatic_segmentation import get_predictor_and_segmenter as load
 
-        logger.info(f"Loading micro-sam model {model_type}…")
+        logger.info(f"Loading micro-sam model {model_type} (its weights, a few hundred MB, are downloaded on first "
+                    f"use)…")
         _segmenters[key] = load(model_type=model_type, device=None if device == "auto" else device,
                                 is_tiled=is_tiled)
     return _segmenters[key]

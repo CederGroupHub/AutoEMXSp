@@ -58,6 +58,9 @@ Models:
      pip install "autoemx[segmentation]"                       # SAM2
      python -m autoemx.utils.install_segmentation micro-sam    # microSAM
 
+  For microSAM, ignore pip's warnings that micro-sam requires PyQt6, segment-anything-py
+  and trackastra: they are left out on purpose.
+
 **options** (optional) changes model settings, e.g. ``{"pred_iou_thresh": 0.7}`` for SAM2 to
 find more particles.
 
@@ -65,7 +68,8 @@ find more particles.
 Step 4 - Leave out frames and particles
 ---------------------------------------
 
-Below the statistics, the **Frames** browser shows each frame with the particles found by the
-shown result circled. Click a particle to leave it out (click again to count it), or tick
-**Leave this frame out**, then click **Recalculate and save**. This saves a new result, made
-the active one; the earlier ones are kept.
+Below the statistics, the **Frames** browser shows each frame with the outlines of the particles
+found by the shown result: counted (green), left out (red), or not counted because they touch the
+frame edge or are outside the size range (amber, dashed). Click the dot at the centre of a particle
+to leave it out (click again to count it), or tick **Leave this frame out**, then click
+**Recalculate and save**. This saves a new result, made the active one; the earlier ones are kept.

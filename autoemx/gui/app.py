@@ -28,6 +28,7 @@ from urllib.parse import quote
 from flask import Response, abort, send_file
 
 from autoemx.config.runtime_configs import PowderMeasurementConfig
+from autoemx.core.particle_outlines import load_outlines
 from autoemx.gui import backend as be
 from autoemx.gui import plots as pl
 from autoemx.gui import tab_acquisition, tab_quantification, tab_single
@@ -1319,6 +1320,7 @@ def create_app(results_dir: Optional[str] = None) -> Dash:
                 f"/sem-image?max=1600&path={quote(frame.image_path)}", size, frame.marks,
                 {i for f, i in out_particles if f == frame.frame_id}, frame.is_eds,
                 frame.frame_id in out_frames, uirevision=frame.image_path,
+                outlines=load_outlines(sample_dir, frame.segmentation_id, frame.frame_id),
             )
         else:
             figure = pl.size_frame_figure(None, None, [])

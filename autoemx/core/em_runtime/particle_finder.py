@@ -414,7 +414,8 @@ class EM_Particle_Finder:
         self._eds_diameters_um: np.ndarray = np.array([])
         # Frames searched for EDS (automatic particle selection) not saved to the ledger yet, with the size range
         # they count: ((d_min_um, d_max_um, frame_width_um), frame record)
-        self.pending_eds_frames: List[Tuple[Tuple[float, float, float], ParticleStatsFrame]] = []
+        # (diameters searched and frame width, frame, outlines of its particles or None)
+        self.pending_eds_frames: List[Tuple[Tuple[float, float, float], ParticleStatsFrame, Optional[dict]]] = []
 
     @property
     def is_manual_particle_selection(self) -> bool:
@@ -779,12 +780,44 @@ class EM_Particle_Finder:
                 labels.append(i)
         return areas_um2, corrections, marks, labels
 
+    def _particle_outlines(self, labels: np.ndarray, stats: np.ndarray, num_labels: int,
+                           counted: Sequence[int]) -> Dict[str, list]:
+        """Outlines of the particles of a frame (see particle_outlines): those counted (labels ``counted``, in the
+        order of the frame's particles), and the others of at least min_par_pixels pixels."""
+        from autoemx.core.particle_outlines import frame_outlines
+
+        counted_set = set(counted)
+        others = [i for i in range(1, num_labels) if i not in counted_set
+                  and int(stats[i, cv2.CC_STAT_AREA]) >= self.powder_meas_cfg.min_par_pixels]
+        return frame_outlines(labels, counted, others)
+
+    def _sample_output_dir(self) -> Optional[str]:
+        """Folder of the sample (results_dir, or its parent if results_dir is the images folder)."""
+        if self.results_dir is None:
+            return None
+        if os.path.basename(self.results_dir) == cnst.IMAGES_DIR:
+            return os.path.dirname(self.results_dir)
+        return self.results_dir
+
+    def _save_particle_outlines(self, segmentation_id: int, frame_id: str, outlines: Optional[Dict[str, list]]):
+        """Save the particle outlines of a frame (shown in the GUI); a failure only skips them."""
+        sample_dir = self._sample_output_dir()
+        if outlines is None or sample_dir is None:
+            return
+        from autoemx.core.particle_outlines import save_outlines
+
+        try:
+            save_outlines(sample_dir, segmentation_id, frame_id, outlines)
+        except OSError as exc:
+            logger.warning(f"Particle outlines of frame {frame_id} not saved: {exc}")
+
     def segment_frame(self, frame_image: np.ndarray, pixel_size_um: float, d_range_um: Tuple[float, float],
-                      segmentation_id: int) -> FrameSegmentation:
+                      segmentation_id: int, with_outlines: bool = False):
         """
         Particles of a saved frame image valid for particle size statistics, with the current segmentation settings,
         among the diameters ``d_range_um`` searched in the frame (raised to the smallest particles of at least
-        min_par_pixels pixels): the result of segmentation ``segmentation_id`` of the frame.
+        min_par_pixels pixels): the result of segmentation ``segmentation_id`` of the frame (FrameSegmentation), and
+        with ``with_outlines`` the outlines of its particles (see particle_outlines), as a tuple.
         """
         self._im_height, self._im_width = frame_image.shape[:2]
         self.EM.pixel_size_um = pixel_size_um
@@ -793,11 +826,14 @@ class EM_Particle_Finder:
         self.powder_meas_cfg.min_area_par = diameter_um_to_area_um2(min(d_lo, d_hi))
         self.powder_meas_cfg.max_area_par = diameter_um_to_area_um2(d_hi)
         par_mask, _ = self._get_particles_on_substrate_mask(cv2.GaussianBlur(frame_image, (5, 5), 0), save_image=False)
-        num_labels, _, stats, centroids = self._get_connected_components_with_stats(par_mask)
-        areas, corrections, marks, _ = self._valid_particles(frame_image, stats, centroids, num_labels)
-        return FrameSegmentation(segmentation_id=segmentation_id, d_range_um=(min(d_lo, d_hi), d_hi),
-                                 particle_areas_um2=areas, particle_edge_corrections=corrections,
-                                 particle_marks_px=marks)
+        num_labels, labels, stats, centroids = self._get_connected_components_with_stats(par_mask)
+        areas, corrections, marks, counted = self._valid_particles(frame_image, stats, centroids, num_labels)
+        result = FrameSegmentation(segmentation_id=segmentation_id, d_range_um=(min(d_lo, d_hi), d_hi),
+                                   particle_areas_um2=areas, particle_edge_corrections=corrections,
+                                   particle_marks_px=marks)
+        if with_outlines:
+            return result, self._particle_outlines(labels, stats, num_labels, counted)
+        return result
 
     def _current_frame_position(self) -> Optional[Tuple[float, float]]:
         """Stage position (mm) of the current frame, or None if not known (e.g. not read after a manual move)."""
@@ -813,9 +849,11 @@ class EM_Particle_Finder:
         stats: np.ndarray,
         image_file: Optional[str] = None,
         centroids: Optional[np.ndarray] = None,
+        labels: Optional[np.ndarray] = None,
     ) -> None:
         """
-        Record a frame searched for EDS particles, with the area, edge correction and mark of each particle valid
+        Record a frame searched for EDS particles (with the outlines of its particles if ``labels``, the label image,
+        is given), with the area, edge correction and mark of each particle valid
         for particle size statistics (within the area limits, of at least min_par_pixels pixels, not touching the
         frame edge), whether it is then measured by EDS or not; stored as a frame of the sample ledger (see
         ``LedgerModule._store_eds_search_frames``).
@@ -826,8 +864,8 @@ class EM_Particle_Finder:
             centroids = np.array([[stats[i, cv2.CC_STAT_LEFT] + stats[i, cv2.CC_STAT_WIDTH] / 2,
                                    stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT] / 2]
                                   for i in range(num_labels)])
-        areas_um2, corrections, marks, _ = self._valid_particles(np.empty((im_height, im_width)), stats, centroids,
-                                                                 num_labels)
+        areas_um2, corrections, marks, counted = self._valid_particles(np.empty((im_height, im_width)), stats,
+                                                                       centroids, num_labels)
         frame_width_um = im_width * pixel_size_um
         d_min_um = max(
             float(2.0 * np.sqrt(self.powder_meas_cfg.min_area_par / np.pi)),
@@ -852,6 +890,7 @@ class EM_Particle_Finder:
                 image_file=image_file,
                 particle_marks_px=[(x, y, r, i) for i, (x, y, r) in enumerate(marks)],
             ),
+            self._particle_outlines(labels, stats, num_labels, counted) if labels is not None else None,
         ))
 
     #%% Particle Segmentation Operations
@@ -969,7 +1008,7 @@ class EM_Particle_Finder:
             self._unique_image_stem(f"{self._sample_id}_frEDS-{self.EM.current_frame_label}"), acquired_image,
             particle_marks,
         )
-        self._record_eds_search_frame(frame_image.shape, num_labels, stats, image_file, centroids)
+        self._record_eds_search_frame(frame_image.shape, num_labels, stats, image_file, centroids, labels)
         
         
         # Return false if no particles were detected in the frame
@@ -1883,10 +1922,12 @@ class EM_Particle_Finder:
         corrections: List[float],
         marks: List[Tuple[int, int, int]],
         image_file: Optional[str] = None,
+        outlines: Optional[Dict[str, list]] = None,
     ) -> None:
         """
         Record the frame just analysed, with its particles, in the size band being collected and as a frame of the
-        attached ledger (with the result of the segmentation of the measurement), saving the progress regularly.
+        attached ledger (with the result of the segmentation of the measurement, and the outlines of its particles),
+        saving the progress regularly.
         """
         band = self._stats_band
         if band is None:
@@ -1916,6 +1957,7 @@ class EM_Particle_Finder:
                                                  particle_marks_px=list(marks))],
             ))
             progress.measurement.bands[progress.bands.index(band)].frame_ids.append(record.frame_id)
+            self._save_particle_outlines(progress.segmentation_id, record.frame_id, outlines)
         if band.n_frames % STATS_SAVE_EVERY_N_FRAMES == 0:
             self._persist_stats_progress()
 
@@ -2460,7 +2502,7 @@ class EM_Particle_Finder:
         num_labels, labels, stats, centroids = self._get_connected_components_with_stats(par_mask)
         
         # Particles valid for the statistics (within the size limits, not at the frame edge): particle i of the frame
-        areas_um2, corrections, marks, _ = self._valid_particles(frame_image, stats, centroids, num_labels)
+        areas_um2, corrections, marks, counted = self._valid_particles(frame_image, stats, centroids, num_labels)
         par_cntr = len(areas_um2)
         frame_id = self._stats_frame_id() or str(self.EM.current_frame_label)
 
@@ -2472,7 +2514,8 @@ class EM_Particle_Finder:
             [(x, y, r, i) for i, (x, y, r) in enumerate(marks)],
             mask_image=self.prepare_mask_for_visualization(par_mask),
         )
-        self._record_stats_frame(frame_image.shape, frame_id, areas_um2, corrections, marks, image_file)
+        self._record_stats_frame(frame_image.shape, frame_id, areas_um2, corrections, marks, image_file,
+                                 self._particle_outlines(labels, stats, num_labels, counted))
 
         # Return True if at least 1 particle was found
         if par_cntr == 0:

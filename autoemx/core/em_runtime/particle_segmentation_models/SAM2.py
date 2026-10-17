@@ -12,7 +12,8 @@ SAM2 segments the whole frame (automatic mask generation, from a grid of points)
 on first use). The masks are then filtered (substrate, agglomerates, surface features, occluded particles; see
 ``_instance_filters``). The brightness threshold is not used.
 
-Install (optional): ``pip install "autoemx[segmentation]"`` (torch, torchvision, transformers).
+Install (optional): ``pip install "autoemx[segmentation]"`` (torch, torchvision, transformers), or, for an editable
+installation, ``pip install -e ".[segmentation]"`` from the repository folder.
 
 Options (``PowderMeasurementConfig.par_segmentation_params``), with their defaults:
 
@@ -28,6 +29,7 @@ Created on Sat Oct 17 2026
 """
 
 import importlib.util
+from pathlib import Path
 from typing import Any, Dict
 
 import numpy as np
@@ -37,7 +39,18 @@ from autoemx.core.em_runtime.particle_segmentation_models._instance_filters impo
 
 logger = get_logger(__name__)
 
-INSTALL_HINT = 'pip install "autoemx[segmentation]"'
+
+
+def _install_hint() -> str:
+    """The pip command installing SAM2: from the repository folder for an editable installation of AutoEMX (a PyPI
+    install would replace it), else from PyPI."""
+    repo = Path(__file__).resolve().parents[4]
+    if (repo / "pyproject.toml").exists():
+        return f'pip install -e "{repo}[segmentation]"'
+    return 'pip install "autoemx[segmentation]"'
+
+
+INSTALL_HINT = _install_hint()
 
 #: Options of the mask generation and their defaults
 GENERATOR_DEFAULTS: Dict[str, Any] = {
@@ -72,7 +85,8 @@ def get_mask_generator(checkpoint: str = DEFAULT_CHECKPOINT, device: str = "auto
     if key not in _generators:
         from transformers import pipeline
 
-        logger.info(f"Loading SAM2 checkpoint {checkpoint} on {key[1]}…")
+        logger.info(f"Loading SAM2 checkpoint {checkpoint} on {key[1]} (its weights, up to ~900 MB, are downloaded "
+                    f"on first use)…")
         _generators[key] = pipeline("mask-generation", model=checkpoint, device=key[1])
     return _generators[key]
 

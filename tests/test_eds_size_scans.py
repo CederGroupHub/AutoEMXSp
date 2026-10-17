@@ -79,10 +79,11 @@ def test_frames_searched_by_eds_are_recorded(tmp_path: Path):
     em.pixel_size_um, em.frame_navigator.current_frame_label = 1.0, "A3"
     # As in the frame search of EDS: segmentation of the frame, then record
     par_mask, _ = finder._get_particles_on_substrate_mask(cv2.GaussianBlur(image, (5, 5), 0))
-    num_labels, _, stats, _ = finder._get_connected_components_with_stats(par_mask)
-    finder._record_eds_search_frame(image.shape, num_labels, stats)
+    num_labels, labels, stats, _ = finder._get_connected_components_with_stats(par_mask)
+    finder._record_eds_search_frame(image.shape, num_labels, stats, labels=labels)
 
-    [((d_min, d_max, frame_width), frame)] = finder.pending_eds_frames
+    [((d_min, d_max, frame_width), frame, outlines)] = finder.pending_eds_frames
+    assert len(outlines["counted"]) == frame.n_particles  # outlines of the particles, saved with the frame
     assert d_min == pytest.approx(max(2 * np.sqrt(1.0 / np.pi), min_valid_diameter_um(1.0, 10)))
     assert d_max == pytest.approx(2 * np.sqrt(100.0 / np.pi))
     assert frame_width == image.shape[1] and frame.area_um2 == image.shape[0] * image.shape[1]

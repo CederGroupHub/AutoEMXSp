@@ -32,10 +32,11 @@ Particles are found in each frame by a segmentation model (``par_segmentation_mo
   touching particles are measured as one.
 - ``SAM2`` [Ravi2024]_ and ``microSAM`` [Archit2025]_: segment each particle on its own.
   Optional, install with ``pip install "autoemx[segmentation]"`` (SAM2) or
-  ``python -m autoemx.utils.install_segmentation micro-sam`` (microSAM). Agglomerates,
+  ``python -m autoemx.utils.install_segmentation micro-sam`` (microSAM; ignore pip's warnings
+  about PyQt6, segment-anything-py and trackastra). Agglomerates,
   surface features and particles partly hidden by others are left out. Model options go in
   ``par_segmentation_params``, e.g. ``{"pred_iou_thresh": 0.7}``.
-- ``Rettenberger2024`` [Rettenberger2024]_, or your own model (see the
+- Your own model (see the
   :ref:`particle size tutorial <particle_size_tutorial>`).
 
 Each model gives its own result. Segment the frames again with another model, compare the
@@ -121,7 +122,8 @@ number in the frame and its ``Weight``), ``<sample>_Par_size_stats.csv`` (with
 (``size_stats_plot_format``). The ledger records:
 
 - ``frames``: every frame acquired (by a size measurement, or searched by EDS),
-  with the particles found in it by each segmentation;
+  with the particles found in it by each segmentation (their outlines, shown in the
+  GUI, are in the ``particle_outlines`` folder of the sample);
 - ``segmentations``: the segmentation settings used (model, brightness threshold,
   ``min_par_pixels``, model options), each with an id;
 - ``size_measurements``: each measurement, with its settings, size bands and frames;
@@ -160,8 +162,5 @@ References
    arXiv:2408.00714 (2024). https://github.com/facebookresearch/sam2
 .. [Archit2025] A. Archit et al., "Segment Anything for Microscopy", *Nature Methods*
    **22**, 579–591 (2025). https://doi.org/10.1038/s41592-024-02580-4
-.. [Rettenberger2024] L. Rettenberger et al., "Uncertainty-aware particle segmentation
-   for electron microscopy at varied length scales", *npj Computational Materials*
-   **10**, 124 (2024). https://doi.org/10.1038/s41524-024-01302-w
 .. [Hyndman1996] R. J. Hyndman and Y. Fan, *The American Statistician* **50**,
    361–365 (1996). https://doi.org/10.1080/00031305.1996.10473566

@@ -879,7 +879,7 @@ def test_segmentation_model_not_installed(tmp_path: Path, monkeypatch):
     assert "SAM2" in be.par_segmentation_models()
     assert be.segmentation_model_label("SAM2") == "SAM2 (not installed)"
     assert be.segmentation_model_label("threshold_bright") == "threshold_bright"
-    assert 'pip install "autoemx[segmentation]"' in be.segmentation_install_note("SAM2")
+    assert "[segmentation]" in be.segmentation_install_note("SAM2")
     assert be.segmentation_install_note("threshold_bright") is None
     assert be._validate_models({"asize.par_segmentation_model": "SAM2"}) == [be.segmentation_install_note("SAM2")]
 
@@ -919,3 +919,25 @@ def test_segmentation_model_not_installed(tmp_path: Path, monkeypatch):
             "inputs": [{"id": model_id, "property": "value", "value": "SAM2"}], "changedPropIds": []}
     res = client.post("/_dash-update-component", json=body).get_json()["response"]
     assert "not installed" in str(res)
+
+
+def test_progress_bar_redraws_collapsed_in_job_logs():
+    # A download progress bar (redrawn in place with '\r') shows only its last state; Windows line ends handled
+    log = "Loading micro-sam\r\n 1%|#  | 1M/375M\r 2%|#  | 2M/375M\r 3%|## | 3M/375M\nFrame A0: 30 particles\r\n"
+    assert be.collapse_redraws(log) == "Loading micro-sam\n 3%|## | 3M/375M\nFrame A0: 30 particles\n"
+
+
+def test_frame_figure_draws_outlines():
+    from autoemx.gui import plots as pl
+
+    marks = [(50, 50, 10, 0), (150, 80, 12, 1)]
+    outlines = {"counted": [[40, 40, 60, 40, 60, 60, 40, 60], []], "others": [[0, 0, 10, 0, 10, 10]]}
+    fig = pl.size_frame_figure("data:,", (300, 200), marks, excluded_particles={1}, outlines=outlines)
+    lines = {t.name: t for t in fig.data if t.mode == "lines"}
+    # Particle 0 drawn with its outline (closed), particle 1 (no outline saved) with a circle; the others in amber
+    assert list(lines["Counted"].x[:5]) == [40, 60, 60, 40, 40]
+    assert len([v for v in lines["Left out"].x if v == v]) == 33
+    assert lines["Not counted (frame edge or size)"].line.color == pl.FRAME_MARK_COLORS["other"]
+    # Without outlines: circles, as before
+    fig = pl.size_frame_figure("data:,", (300, 200), marks)
+    assert not any(t.name.startswith("Not counted") for t in fig.data)

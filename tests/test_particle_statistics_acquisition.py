@@ -634,6 +634,11 @@ def test_every_frame_saved_and_reanalysed(tmp_path: Path, fake_microscope, monke
     # Every frame saved, the one without particles too
     assert [f.segmentation(0).n_particles == 0 for f in frames] == [False, True, False]
     assert all((images_dir / f.image_file).exists() for f in frames)
+    # With the outlines of their particles (shown in the GUI)
+    from autoemx.core.particle_outlines import load_outlines
+
+    assert [len(load_outlines(str(sample_dir), 0, f.frame_id)["counted"]) for f in frames] == [
+        f.segmentation(0).n_particles for f in frames]
 
     # Same settings: the segmentation of the measurement, same statistics
     reanalyze_particle_statistics(SAMPLE_ID, str(tmp_path), verbose=False)

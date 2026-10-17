@@ -85,7 +85,7 @@ Fill in the following fields:
 	be segmented as a single particle.
 	For more complex samples, machine-learning segmentation models are recommended:
 	``SAM2`` and ``microSAM`` segment touching particles separately (optional
-	installs, see :ref:`particle_size_statistics`), or ``Rettenberger2024``.
+	installs, see :ref:`particle_size_statistics`).
 	You can also add your own segmentation model (see the advanced section below).
 
 - ``Manual Navigation``
