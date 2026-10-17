@@ -417,12 +417,18 @@ body, .dash-spreadsheet-container .dash-spreadsheet-inner td, .dash-spreadsheet-
 .psd-result-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1 1 auto; }
 .psd-result-controls[hidden] { display: none; }
 .psd-result-dd { min-width: 360px; flex: 1 1 420px; }
-.psd-seg-box > summary { cursor: pointer; color: var(--muted); }
-.psd-seg-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+/* "Segment again" card: own line, styled as the parameter sections */
+.psd-seg-box { flex: 1 1 100%; margin-bottom: 0; }
+.psd-seg-box > :not(summary) { margin-left: 10px; margin-right: 10px; }
+.psd-seg-box > :last-child { margin-bottom: 8px; }
+.psd-seg-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
 .psd-seg-model { min-width: 170px; }
 .psd-seg-input { width: 80px; }
 .psd-compare-dd[hidden] { display: none; }
-.psd-seg-params { width: 260px; }
+.psd-seg-params { width: 230px; }
+.psd-seg-msg:empty { display: none; }
+.psd-seg-msg { margin-top: 6px; }
+.psd-seg-box .log { max-height: 220px; }
 .psd-seg-field { display: inline-flex; align-items: center; gap: 6px; }
 .param-note:empty { display: none; }
 .param-row .param-note { grid-column: 1 / -1; }

@@ -295,8 +295,9 @@ def _tabs() -> dcc.Tabs:
                         html.Button("Set as active", id="psd-set-active-btn", className="btn btn-small",
                                     title="Make the shown statistics the active ones of the sample: shown and used "
                                           "by default (e.g. recalculated when EDS adds frames)"),
+                        html.Span(id="psd-result-msg"),
                         html.Details([
-                            html.Summary("Segment again…"),
+                            html.Summary(html.Span("Segment again")),
                             html.Div([
                                 html.Span("model", className="axis-tag"),
                                 dcc.Dropdown(id="psd-seg-model", clearable=False, className="psd-seg-model",
@@ -325,8 +326,11 @@ def _tabs() -> dcc.Tabs:
                                                   "are kept)"),
                             ], className="psd-seg-row"),
                             html.Div(id="psd-seg-note", className="param-note"),
-                        ], className="psd-seg-box", open=True),
-                        html.Span(id="psd-result-msg"),
+                            # Progress of the segmentation: status, and its log (open while running)
+                            html.Div(id="psd-seg-msg", className="psd-seg-msg"),
+                            html.Details([html.Summary("Log"), html.Pre(id="psd-seg-log", className="log")],
+                                         id="psd-seg-log-box", className="log-box"),
+                        ], className="psd-seg-box param-section", open=True),
                     ], id="psd-result-controls", className="psd-result-controls"),
                     html.Div([
                         html.Div(dcc.Dropdown(id="psd-compare", multi=True, placeholder="Samples with particle sizes"),
@@ -1217,7 +1221,7 @@ def create_app(results_dir: Optional[str] = None) -> Dash:
     @app.callback(
         Output("psd-job-store", "data", allow_duplicate=True),
         Output("psd-poll", "disabled", allow_duplicate=True),
-        Output("psd-recalc-msg", "children", allow_duplicate=True),
+        Output("psd-seg-msg", "children", allow_duplicate=True),
         Input("psd-reseg-btn", "n_clicks"),
         State("sample-dd", "value"),
         State("psd-seg-model", "value"),
@@ -1359,26 +1363,37 @@ def create_app(results_dir: Optional[str] = None) -> Dash:
 
     @app.callback(
         Output("psd-recalc-msg", "children", allow_duplicate=True),
+        Output("psd-seg-msg", "children", allow_duplicate=True),
         Output("psd-job-store", "data", allow_duplicate=True),
         Output("psd-poll", "disabled", allow_duplicate=True),
         Output("data-version", "data", allow_duplicate=True),
+        Output("psd-seg-log", "children"),
+        Output("psd-seg-log-box", "open"),
         Input("psd-poll", "n_intervals"),
         State("psd-job-store", "data"),
         State("data-version", "data"),
         prevent_initial_call=True,
     )
     def poll_sizes_job(_, job_data, version):
+        # Status of the job: next to "Recalculate and save", or below "Segment again" with its log
         job = JOBS.get(job_data["id"]) if job_data else None
         if job is None or job_data.get("done"):
-            return no_update, no_update, True, no_update
+            return no_update, no_update, True, no_update, no_update, no_update, no_update
+        reseg = job.kind == "psd_reseg"
         res = job.result()
         if res is None:
-            doing = "Segmenting the frames again" if job.kind == "psd_reseg" else "Recalculating"
-            return html.Span(f"{doing}… {job.elapsed():.0f} s", className="running"), no_update, False, no_update
-        _info_cache.pop(job.sample_dir, None)
-        msg = (html.Span(f"Saved in the sample ledger ({job.elapsed():.0f} s).", className="ok") if res.get("ok")
-               else html.Span(f"Not saved: {res.get('error')}", className="err"))
-        return msg, {**job_data, "done": True}, True, (version or 0) + 1
+            doing = "Segmenting the frames again" if reseg else "Recalculating"
+            msg = html.Span(f"{doing}… {job.elapsed():.0f} s", className="running")
+            done, log_open = no_update, True
+        else:
+            _info_cache.pop(job.sample_dir, None)
+            msg = (html.Span(f"Saved in the sample ledger ({job.elapsed():.0f} s).", className="ok") if res.get("ok")
+                   else html.Span(f"Not saved: {res.get('error')}", className="err"))
+            done, log_open = {**job_data, "done": True}, not res.get("ok")  # kept open to show what failed
+        log = job.log_tail() if reseg else no_update
+        return ((no_update, msg) if reseg else (msg, no_update)) + (
+            done, res is not None, (version or 0) + 1 if res is not None else no_update, log,
+            log_open if reseg else no_update)
 
     @app.callback(
         Output({"type": "param", "key": ALL}, "value"),

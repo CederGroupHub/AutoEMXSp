@@ -1765,8 +1765,13 @@ def _job_entry(kind: str, sample_dir: str, payload: Dict[str, Any], log_path: st
         force=True,
     )
     import matplotlib
+    import warnings
 
     matplotlib.use("Agg")
+    # Deprecation notices of the segmentation models' libraries: of no use in the job log
+    for module in ("torch", "torchvision", "transformers", "micro_sam", "torch_em", "timm", "napari"):
+        warnings.filterwarnings("ignore", category=FutureWarning, module=module)
+        warnings.filterwarnings("ignore", category=DeprecationWarning, module=module)
     result: Dict[str, Any] = {"ok": False}
     try:
         result = _JOB_FUNCS[kind](sample_dir, payload)

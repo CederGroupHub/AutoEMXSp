@@ -39,7 +39,7 @@ spectra open directly on it.
 Step 3 - Segment again with another model
 -----------------------------------------
 
-Every frame image is saved, so the frames can be segmented again: in **Segment again…**,
+Every frame image is saved, so the frames can be segmented again: in the **Segment again** section,
 choose the **model** and click **Segment again**. Each segmentation gives its own result, kept
 next to the others: choose one in the results menu and click **Set as active** to use it by
 default.

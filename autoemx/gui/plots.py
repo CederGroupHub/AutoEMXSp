@@ -852,7 +852,8 @@ def size_frame_figure(image_src: Optional[str], size: Optional[Sequence[int]], m
     if others:
         xy = np.vstack([np.vstack([o, o[:1], [np.nan, np.nan]]) for o in others])
         fig.add_trace(go.Scatter(
-            x=xy[:, 0], y=xy[:, 1], mode="lines", name="Not counted (frame edge or size)", hoverinfo="skip",
+            x=xy[:, 0], y=xy[:, 1], mode="lines", hoverinfo="skip",
+            name="Not counted (cut by frame edge or outside specified size range)",
             line=dict(color=FRAME_MARK_COLORS["other"], width=1, dash="dash"),
         ))
     fig.update_layout(

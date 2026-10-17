@@ -910,7 +910,7 @@ def test_segmentation_model_not_installed(tmp_path: Path, monkeypatch):
     res = post("..psd-job-store.data", [("psd-reseg-btn", "n_clicks", 1)],
                [("sample-dd", "value", sample), ("psd-seg-model", "value", "SAM2"), ("psd-seg-thresh", "value", 100),
                 ("psd-seg-px", "value", 80), ("psd-seg-params", "value", "")])
-    assert "not installed" in str(res["psd-recalc-msg"]["children"]) and "psd-job-store" not in res
+    assert "not installed" in str(res["psd-seg-msg"]["children"]) and "psd-job-store" not in res
 
     # Acquisition: the same note below the model setting
     note_id, model_id = segmentation_note_id("asize.par_segmentation_model"), _pid("asize.par_segmentation_model")
@@ -937,7 +937,7 @@ def test_frame_figure_draws_outlines():
     # Particle 0 drawn with its outline (closed), particle 1 (no outline saved) with a circle; the others in amber
     assert list(lines["Counted"].x[:5]) == [40, 60, 60, 40, 40]
     assert len([v for v in lines["Left out"].x if v == v]) == 33
-    assert lines["Not counted (frame edge or size)"].line.color == pl.FRAME_MARK_COLORS["other"]
+    assert lines["Not counted (cut by frame edge or outside specified size range)"].line.color == pl.FRAME_MARK_COLORS["other"]
     # Without outlines: circles, as before
     fig = pl.size_frame_figure("data:,", (300, 200), marks)
     assert not any(t.name.startswith("Not counted") for t in fig.data)
