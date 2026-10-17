@@ -9,7 +9,7 @@ Install the optional particle segmentation models in the current Python environm
 ``sam2``: SAM2 through Hugging Face transformers, the ``segmentation`` extra of AutoEMX (torch, torchvision,
 transformers; Apache-2.0 / BSD).
 
-``micro-sam``: micro-sam (MIT; its model weights are CC-BY-4.0, downloaded from Zenodo on first use) is installed
+``micro-sam``: micro-sam (MIT; its model weights are CC-BY-4.0, downloaded from BioImage.IO on first use) is installed
 without its declared dependencies, which include PyQt6 (GPL) for its napari plugin, not needed to segment images,
 and ``segment-anything-py``, a third-party repackaging of Meta's ``segment_anything`` (installed instead from
 Meta's repository, Apache-2.0). Its other dependencies are then installed (``MICRO_SAM_REQUIREMENTS``).

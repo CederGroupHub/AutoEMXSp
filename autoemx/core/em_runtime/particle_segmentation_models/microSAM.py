@@ -10,9 +10,10 @@ Automatic instance segmentation (AIS) of the frame with a micro-sam model (defau
 light microscopy, which separates touching objects well), then the filters of ``_instance_filters`` (substrate,
 occluded particles). The brightness threshold is not used.
 
-micro-sam is MIT-licensed; its model weights (CC-BY-4.0, by the micro-sam authors) are downloaded from Zenodo on
-first use. Install (optional): ``python -m autoemx.utils.install_segmentation micro-sam`` (installs micro-sam
-without PyQt6, the GPL Qt binding of its napari plugin, not needed here).
+micro-sam is MIT-licensed; its model weights (CC-BY-4.0, by A. Archit and C. Pape; ``vit_b_lm`` is BioImage.IO model
+"SAM LM Generalist (ViT-B)") are downloaded from BioImage.IO on first use. Install (optional):
+``python -m autoemx.utils.install_segmentation micro-sam`` (installs micro-sam without PyQt6, the GPL Qt binding of its
+napari plugin, not needed here).
 
 Options (``PowderMeasurementConfig.par_segmentation_params``), with their defaults:
 
