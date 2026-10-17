@@ -414,9 +414,12 @@ body, .dash-spreadsheet-container .dash-spreadsheet-inner td, .dash-spreadsheet-
 .a-mode { flex-wrap: wrap; margin: 4px 0 2px; }
 .a-mode label { padding: 4px 9px; font-size: 12.5px; }
 .a-mode-note:empty { display: none; }
-.psd-result-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1 1 auto; }
+.psd-result-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1 1 100%; }  /* own line, below the modes */
 .psd-result-controls[hidden] { display: none; }
-.psd-result-dd { min-width: 360px; flex: 1 1 420px; }
+/* Results dropdown: shrinks (long names cut with "…") rather than pushing "Set as active" to another line */
+.psd-result-controls > .dash-dropdown-wrapper { flex: 1 1 0; min-width: 0; }
+.psd-result-dd { width: 100%; min-width: 0; }
+.psd-result-dd .dash-dropdown-value { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* "Segment again" card: own line, styled as the parameter sections */
 .psd-seg-box { flex: 1 1 100%; margin-bottom: 0; }
 .psd-seg-box > :not(summary) { margin-left: 10px; margin-right: 10px; }
