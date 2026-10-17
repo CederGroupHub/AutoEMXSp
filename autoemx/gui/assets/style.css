@@ -171,7 +171,7 @@ body, .dash-spreadsheet-container .dash-spreadsheet-inner td, .dash-spreadsheet-
 .psd-compare-controls[hidden] { display: none; }
 .psd-compare-dd { min-width: 320px; flex: 1 1 320px; }
 .psd-compare-table { flex: 1 1 100%; }
-.psd-frames-section { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 10px; }
+.psd-frames-section, .psd-stats-section { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
 .psd-section-title { font-weight: 600; margin-bottom: 6px; }
 .psd-frame-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 4px; }
 .psd-frame-dd { min-width: 300px; flex: 0 1 380px; }

@@ -30,8 +30,8 @@ Step 2 - View the statistics
 In the **Analysis** tab, select the sample and open **Particle sizes**. Samples without EDS
 spectra open directly on it.
 
-- **This sample**: the size distribution, its statistics and the frames. What each statistic
-  means: :ref:`psd_reported_statistics`.
+- **This sample**: the frames with the particles found (see Step 4), then the size distribution
+  and its statistics. What each statistic means: :ref:`psd_reported_statistics`.
 - **Compare samples**: the distributions of several samples of the folder, with **Export CSV**.
 - **Compare segmentations**: the results of this sample (see Step 3).
 

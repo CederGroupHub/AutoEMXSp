@@ -347,8 +347,6 @@ def _tabs() -> dcc.Tabs:
                     ], id="psd-compare-controls", className="psd-compare-controls", hidden=True),
                 ], className="psd-controls"),
                 html.Div(id="psd-banner", className="psd-banner"),
-                dcc.Graph(id="psd-graph", config=_GRAPH_CONFIG, className="psd-graph", figure=pl.psd_figure(None)),
-                html.Div(id="psd-tables", className="psd-tables"),
                 html.Div([
                     html.Div("Frames", className="psd-section-title"),
                     html.Div([
@@ -361,7 +359,8 @@ def _tabs() -> dcc.Tabs:
                                       value=[], className="param-check"),
                         html.Span(id="psd-frame-caption", className="muted"),
                     ], className="psd-frame-bar"),
-                    html.Div("Click a particle to leave it out of the statistics (or count it again).",
+                    html.Div("Click the dot at the centre of a particle to leave it out of the statistics (or count "
+                             "it again).",
                              className="hint"),
                     dcc.Graph(id="psd-frame-graph", className="psd-frame-graph",
                               config={**_GRAPH_CONFIG, "scrollZoom": True}),
@@ -375,6 +374,13 @@ def _tabs() -> dcc.Tabs:
                         html.Span(id="psd-recalc-msg"),
                     ], className="psd-recalc-bar"),
                 ], id="psd-frames-section", className="psd-frames-section"),
+                # Statistics of the whole result, after the frames (checking the segmentation comes first)
+                html.Div([
+                    html.Div("Size distribution", className="psd-section-title"),
+                    dcc.Graph(id="psd-graph", config=_GRAPH_CONFIG, className="psd-graph",
+                              figure=pl.psd_figure(None)),
+                    html.Div(id="psd-tables", className="psd-tables"),
+                ], className="psd-stats-section"),
             ], className="tab-body")]),
             dcc.Tab(id="sem-tab", label="SEM images", value="sem", children=[html.Div([
                 html.Div([
