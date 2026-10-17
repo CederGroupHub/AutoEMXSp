@@ -21,8 +21,11 @@ from autoemx.config.ledger_schemas import (
     ParticleInfo,
     ParticleSizeBand,
     ParticleStatsFrame,
+    SampleLedger,
+    SegmentationConfig,
 )
 from autoemx.config.runtime_configs import (
+    PowderMeasurementConfig,
     MeasurementConfig,
     MicroscopeConfig,
     PlotConfig,
@@ -34,6 +37,7 @@ from autoemx.core.em_runtime.particle_finder import EM_Particle_Finder, min_vali
 from autoemx.core.particle_statistics import (
     overlapping_frame_ids,
     recalculate_particle_stats,
+    size_stats_inputs,
     weighted_size_observations,
 )
 
@@ -48,11 +52,23 @@ def _eds_frame(frame_id: str, diameters_um, area_um2: float = 2e3) -> ParticleSt
                               particle_edge_corrections=[1.0] * len(diameters_um))
 
 
-def _eds_scan(frames) -> ParticleSizeBand:
-    scan = ParticleSizeBand(d_min_um=3.0, d_max_um=30.0, frame_width_um=50.0, n_frames=0, scanned_area_um2=0.0)
+def _eds_scan(frames, d_range=(3.0, 30.0)) -> ParticleSizeBand:
+    scan = ParticleSizeBand(d_min_um=d_range[0], d_max_um=d_range[1], frame_width_um=50.0, n_frames=0,
+                            scanned_area_um2=0.0)
     for frame in frames:
-        scan.add_frame(frame, [])
+        scan.add_frame(frame)
     return scan
+
+
+def _store(ledger, pending) -> bool:
+    """Frames searched by EDS, recorded by the particle finder, stored in the ledger."""
+    finder = SimpleNamespace(pending_eds_frames=list(pending))
+    return LedgerModule._store_eds_search_frames(SimpleNamespace(EM_controller=SimpleNamespace(particle_finder=finder)),
+                                                 ledger)
+
+
+def _eds_scans(ledger):
+    return size_stats_inputs(ledger, eds_segmentation_id=0).eds_scans
 
 
 def test_frames_searched_by_eds_are_recorded(tmp_path: Path):
@@ -79,17 +95,16 @@ def test_frames_searched_by_eds_are_recorded(tmp_path: Path):
 
 def test_overlapping_size_ranges_weighted_by_the_area_able_to_observe_them():
     # Size band 1-10 µm over 1000 µm², EDS frames 3-30 µm over 2 x 2000 µm²
-    psd = [ParticleInfo(id=i, area_um=_area(d), eq_diameter_um=d, selection="size_stats") for i, d in enumerate([2.0, 5.0])]
-    band = ParticleSizeBand(d_min_um=1.0, d_max_um=10.0, n_frames=1, scanned_area_um2=1e3, particle_ids=[0, 1])
+    band = _eds_scan([_eds_frame("B0", [2.0, 5.0], area_um2=1e3)], d_range=(1.0, 10.0))
     eds = _eds_scan([_eds_frame("EDS-A0", [5.0, 20.0]), _eds_frame("EDS-A1", [])])
-    obs, weights, [weighted_band], [weighted_eds] = weighted_size_observations(psd, [band], (), [eds])
+    obs, weights, [weighted_band], [weighted_eds] = weighted_size_observations([], [band], (), [eds])
     expected = {2.0: 1 / 1e3, 5.0: 1 / (1e3 + 4e3), 20.0: 1 / 4e3}  # sizes seen by the band, by both, by EDS only
     assert weights == pytest.approx([expected[d] for d in obs.eq_diameters_um])
     assert weighted_band.number_density_per_mm2 == pytest.approx(2 / 1e3 * 1e6)
     assert weighted_eds.number_density_per_mm2 == pytest.approx(2 / 4e3 * 1e6)
 
     # Leaving out a frame searched by EDS removes its particles and area
-    obs, weights, _, _ = weighted_size_observations(psd, [band], ["EDS-A0"], [eds])
+    obs, weights, _, _ = weighted_size_observations([], [band], ["EDS-A0"], [eds])
     assert list(obs.eq_diameters_um) == [2.0, 5.0]
     assert weights == pytest.approx([1 / 1e3, 1 / (1e3 + 2e3)])
 
@@ -104,28 +119,35 @@ def _ledger(tmp_path: Path):
 
 def test_eds_frames_stored_in_the_ledger(tmp_path: Path):
     ledger = _ledger(tmp_path)
-    finder = SimpleNamespace(pending_eds_frames=[
+    assert _store(ledger, [
         ((3.0, 30.0, 50.0), _eds_frame("EDS-A0", [5.0])),
         ((3.0, 30.0, 50.0), _eds_frame("EDS-A1", [6.0, 7.0])),
         ((1.0, 10.0, 20.0), _eds_frame("EDS-B0", [2.0])),  # other settings: another scan
     ])
-    analyzer = SimpleNamespace(EM_controller=SimpleNamespace(particle_finder=finder))
-    assert LedgerModule._store_eds_search_frames(analyzer, ledger)
-    assert finder.pending_eds_frames == []
-    assert [[f.frame_id for f in scan.frames] for scan in ledger.eds_size_scans] == [["EDS-A0", "EDS-A1"], ["EDS-B0"]]
-    assert ledger.eds_size_scans[0].scanned_area_um2 == 4e3
-    assert not LedgerModule._store_eds_search_frames(analyzer, ledger)  # nothing new
+    # Frames of the ledger, with the result of the segmentation of the EDS acquisition
+    assert [(f.frame_id, f.label, f.purpose) for f in ledger.frames] == [
+        ("EDS-A0", "A0", "eds_search"), ("EDS-A1", "A1", "eds_search"), ("EDS-B0", "B0", "eds_search")]
+    [segmentation] = ledger.segmentations
+    assert segmentation.settings() == SegmentationConfig.from_powder_meas_cfg(PowderMeasurementConfig(), 0).settings()
+    assert ledger.frames[1].segmentation(0).particle_areas_um2 == pytest.approx([_area(6.0), _area(7.0)])
+    assert ledger.frames[2].search_window_um == (1.0, 10.0)
+    # Grouped by size range and frame width for the statistics
+    scans = _eds_scans(ledger)
+    assert [[f.frame_id for f in scan.frames] for scan in scans] == [["EDS-A0", "EDS-A1"], ["EDS-B0"]]
+    assert scans[0].scanned_area_um2 == 4e3
+    assert not _store(ledger, [])  # nothing new
 
 
 def test_statistics_of_a_sample_measured_only_by_eds(tmp_path: Path):
     ledger = _ledger(tmp_path)
     rng = np.random.default_rng(0)
-    ledger.eds_size_scans = [_eds_scan([_eds_frame(f"EDS-A{i}", rng.lognormal(2.0, 0.3, 10)) for i in range(6)])]
+    _store(ledger, [((3.0, 30.0, 50.0), _eds_frame(f"EDS-A{i}", rng.lognormal(2.0, 0.3, 10))) for i in range(6)])
     # Particles measured by EDS are counted by the frames: left out
     ledger.particles = [ParticleInfo(id=1, area_um=_area(8.0), selection="auto", frame_id="A0")]
 
     result = recalculate_particle_stats(ledger)
-    assert result.particle_ids == [] and result.n_par_by_selection == {"eds_frames": 60}
+    assert result.n_par_by_selection == {"eds_frames": 60}
+    assert (result.measurement_id, result.segmentation_id, result.eds_segmentation_id) == (None, None, 0)
     assert result.size_stats.n_par_analysed == 60 and len(result.eds_scans) == 1
     assert "D50" in result.confidence_intervals_95  # 6 frames: enough for confidence intervals
     assert recalculate_particle_stats(ledger, frame_ids_to_filter=["EDS-A0"]).size_stats.n_par_analysed == 50
@@ -140,16 +162,13 @@ def test_eds_frame_searched_again_counted_once(tmp_path: Path):
     def frame(frame_id, x_mm):
         return ((3.0, 30.0, 50.0), _eds_frame(frame_id, [5.0]).model_copy(update={"center_mm": Coordinate2D(x=x_mm, y=1.0)}))
 
-    finder = SimpleNamespace(pending_eds_frames=[frame("EDS-A0", 0.0), frame("EDS-A1", 0.05)])
-    analyzer = SimpleNamespace(EM_controller=SimpleNamespace(particle_finder=finder))
-    LedgerModule._store_eds_search_frames(analyzer, ledger)
+    _store(ledger, [frame("EDS-A0", 0.0), frame("EDS-A1", 0.05)])
     # Resumed acquisition: A1 searched again (same position, 0.1 µm off), and a new frame
-    finder.pending_eds_frames = [frame("EDS-A1", 0.0501), frame("EDS-A2", 0.10)]
-    LedgerModule._store_eds_search_frames(analyzer, ledger)
-    [scan] = ledger.eds_size_scans
+    _store(ledger, [frame("EDS-A1", 0.0501), frame("EDS-A2", 0.10)])
+    [scan] = _eds_scans(ledger)
     assert [f.frame_id for f in scan.frames] == ["EDS-A0", "EDS-A1", "EDS-A1#2", "EDS-A2"]  # all recorded, ids unique
-    assert overlapping_frame_ids(ledger.eds_size_scans) == ["EDS-A1#2"]  # ... but counted once
-    obs, _, _, [weighted] = weighted_size_observations([], [], (), ledger.eds_size_scans)
+    assert overlapping_frame_ids([scan]) == ["EDS-A1#2"]  # ... but counted once
+    obs, _, _, [weighted] = weighted_size_observations([], [], (), [scan])
     assert len(obs.eq_diameters_um) == 3 and weighted.number_density_per_mm2 == pytest.approx(3 / 6e3 * 1e6)
 
 
@@ -161,25 +180,16 @@ def _frame(frame_id, x_mm, width_um, diameters=()):
 
 def test_overlapping_frames_counted_once_keeping_the_largest():
     # Size band 1-10 µm: frames of 50 µm; EDS frames of 100 µm, 3-30 µm, one overlapping band frame B1
-    band = ParticleSizeBand(d_min_um=1.0, d_max_um=10.0, n_frames=0, scanned_area_um2=0.0)
-    for frame_id, x_mm, ids in (("B0", 0.0, [0]), ("B1", 0.2, [1])):
-        band.add_frame(_frame(frame_id, x_mm, 50.0).model_copy(update={"particle_areas_um2": None,
-                                                                         "particle_edge_corrections": None,
-                                                                         "n_particles": 1}), ids)
+    band = _eds_scan([_frame("B0", 0.0, 50.0, [4.0]), _frame("B1", 0.2, 50.0, [4.0])], d_range=(1.0, 10.0))
     eds = _eds_scan([_frame("EDS-A0", 0.23, 100.0, [5.0]), _frame("EDS-A1", 0.5, 100.0, [6.0])])
     assert overlapping_frame_ids([band, eds]) == ["B1"]  # the smaller frame of the overlapping pair
 
-    psd = [ParticleInfo(id=i, area_um=_area(4.0), eq_diameter_um=4.0, frame_id=f, selection="size_stats")
-           for i, f in enumerate(["B0", "B1"])]
-    obs, _, [weighted_band], _ = weighted_size_observations(psd, [band], (), [eds])
+    obs, _, [weighted_band], _ = weighted_size_observations([], [band], (), [eds])
     assert [obs.frame_ids[k] for k in range(len(obs.frame_ids))] == ["B0", "EDS-A0", "EDS-A1"]
     assert weighted_band.number_density_per_mm2 == pytest.approx(1 / (50 * 50 * 0.625) * 1e6)  # B1 area removed
 
     # Frames of different size bands (a subframe inside its parent) count different particles: both kept
-    finer = ParticleSizeBand(d_min_um=0.1, d_max_um=1.0, n_frames=0, scanned_area_um2=0.0)
-    finer.add_frame(_frame("B0_a0", 0.0, 5.0).model_copy(update={"particle_areas_um2": None,
-                                                                   "particle_edge_corrections": None,
-                                                                   "n_particles": 0}), [])
+    finer = _eds_scan([_frame("B0_a0", 0.0, 5.0)], d_range=(0.1, 1.0))
     assert overlapping_frame_ids([band, finer]) == []
 
 
@@ -192,9 +202,34 @@ def test_frame_position_only_when_known_and_unique_frame_ids(tmp_path: Path):
     navigator.current_pos_is_measured = False  # stage position not read after a manual move
     assert finder._current_frame_position() is None
 
-    # Manual frames of a resumed measurement restart their numbering: ids made unique in the band
+    # Manual frames of a resumed measurement restart their numbering: ids made unique in the band (without ledger)
     navigator.current_frame_label = "0"
     finder._stats_band = ParticleSizeBand(d_min_um=1.0, d_max_um=10.0, n_frames=0, scanned_area_um2=0.0)
     assert finder._stats_frame_id() == "0"
-    finder._stats_band.add_frame(_frame("0", 0.0, 50.0), [])
+    finder._stats_band.add_frame(_frame("0", 0.0, 50.0))
     assert finder._stats_frame_id() == "0#2"
+    # ... and in the ledger, with the frames of earlier measurements
+    ledger = _ledger(tmp_path)
+    _store(ledger, [((3.0, 30.0, 50.0), _eds_frame("0", [5.0]))])
+    finder.attach_stats_ledger(ledger)
+    assert finder._stats_frame_id() == "0#2"
+
+
+def test_eds_search_frames_and_their_particles():
+    from autoemx.core.particle_statistics import eds_search_frames
+
+    scan = _eds_scan([_frame("EDS-A0", 0.0, 50.0, [5.0, 6.0]), _frame("EDS-A1", 1.0, 50.0, [7.0]),
+                      _frame("EDS-A1#2", 1.0, 50.0, [7.0])])  # searched again: overlapping, left out
+    frames, diameters = eds_search_frames([scan])
+    assert [f.frame_id for f in frames] == ["EDS-A0", "EDS-A1"]
+    assert frames[1].center_um == (1000.0, 0.0) and frames[1].d_range_um == (3.0, 30.0)
+    assert sorted(diameters) == pytest.approx([5.0, 6.0, 7.0])
+
+
+def test_particle_stats_refreshed_without_eds_frames(tmp_path: Path):
+    # EDS acquisition without frames searched (e.g. particles chosen manually): nothing to recalculate, no error
+    ledger = _ledger(tmp_path)
+    ledger.to_json_file(str(tmp_path / "ledger.json"))
+    LedgerModule._refresh_particle_stats(SimpleNamespace(sample_result_dir=str(tmp_path), verbose=True,
+                                                         EM_controller=None))
+    assert SampleLedger.from_json_file(str(tmp_path / "ledger.json")).size_result is None

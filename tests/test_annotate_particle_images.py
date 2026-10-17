@@ -15,10 +15,11 @@ import autoemx.utils.constants as cnst
 from autoemx.config.ledger_io import load_sample_ledger
 from autoemx.config.ledger_schemas import (
     AcquisitionDetails,
+    FrameRecord,
+    FrameSegmentation,
     ParticleInfo,
-    ParticleSizeBand,
-    ParticleStatsFrame,
-    ParticleStatsProgress,
+    SegmentationConfig,
+    SizeMeasurement,
     SpotCoordinates,
 )
 from autoemx.config.runtime_configs import MeasurementConfig, PowderMeasurementConfig
@@ -102,18 +103,20 @@ def test_frame_images_annotated_with_their_particles(tmp_path: Path):
                          ledger.configs.microscope_cfg, name, str(images_dir), im_annotations=None, scalebar=False,
                          image_extension="png")
 
-    def frame(frame_id, image_file, marks):
-        return ParticleStatsFrame(frame_id=frame_id, frame_width_um=10.0, pixel_size_um=PIXEL_SIZE_UM, area_um2=75.0,
-                                  n_particles=0, image_file=image_file, particle_marks_px=marks,
-                                  **({"particle_areas_um2": [], "particle_edge_corrections": []} if "EDS" in frame_id else {}))
-
-    eds_scan = ParticleSizeBand(d_min_um=1.0, d_max_um=5.0, n_frames=0, scanned_area_um2=0.0)
-    eds_scan.add_frame(frame("EDS-0", "S_frEDS0_particles.png", [(150, 75, 20, None)]), [])
-    ledger.eds_size_scans = [eds_scan]
-    progress_band = ParticleSizeBand(d_min_um=1.0, d_max_um=5.0, n_frames=0, scanned_area_um2=0.0)
-    progress_band.add_frame(frame("A0", "S_frA0_particles.png", [(50, 75, 15, 7)]), [])
-    ledger.particle_stats_progress = ParticleStatsProgress(n_par_target=1, powder_meas_cfg=PowderMeasurementConfig(),
-                                                           bands=[progress_band])
+    segmentation = ledger.append_segmentation(SegmentationConfig.from_powder_meas_cfg(PowderMeasurementConfig(), 0))
+    # A frame searched by EDS, and a frame of a measurement in progress, each with a particle
+    ledger.size_measurements.append(SizeMeasurement(measurement_id=0, n_par_target=1, segmentation_id=segmentation,
+                                                    powder_meas_cfg=PowderMeasurementConfig()))
+    for frame_id, purpose, image_file, mark in (("EDS-0", "eds_search", "S_frEDS0_particles.png", (150, 75, 20)),
+                                                ("A0", "size_stats", "S_frA0_particles.png", (50, 75, 15))):
+        ledger.add_frame(FrameRecord(
+            frame_id=frame_id, label=frame_id, purpose=purpose, measurement_id=0 if purpose == "size_stats" else None,
+            frame_width_um=10.0, pixel_size_um=PIXEL_SIZE_UM, area_um2=75.0, search_window_um=(1.0, 5.0),
+            image_file=image_file,
+            segmentations=[FrameSegmentation(segmentation_id=segmentation, d_range_um=(1.0, 5.0),
+                                             particle_areas_um2=[3.0], particle_edge_corrections=[1.0],
+                                             particle_marks_px=[mark])],
+        ))
     ledger.to_json_file(str(ledger_path))
 
     written = annotate_particle_images(sample_path=str(sample_dir), verbose=False)

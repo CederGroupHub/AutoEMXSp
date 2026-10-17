@@ -13,12 +13,16 @@ import pytest
 import autoemx.utils.constants as cnst
 from autoemx.config.ledger_io import create_sample_ledger
 from autoemx.config.ledger_schemas import (
+    FrameRecord,
+    FrameSegmentation,
     LedgerConfigs,
     ParticleInfo,
     ParticleSizeBand,
     ParticleStatsFrame,
-    ParticleStatsProgress,
     SampleLedger,
+    SegmentationConfig,
+    SizeBand,
+    SizeMeasurement,
 )
 from autoemx.config.runtime_configs import (
     MeasurementConfig,
@@ -31,13 +35,14 @@ from autoemx.config.runtime_configs import (
 from autoemx.core.particle_statistics import (
     _weighted_percentile,
     bootstrap_confidence_intervals,
-    save_particle_size_histogram,
-    band_particle_weights,
-    build_particle_stats_result,
-    edge_correction_factor,
+    build_size_result,
     compute_particle_size_stats,
+    edge_correction_factor,
+    recalculate_particle_stats,
+    save_particle_size_histogram,
     save_particle_statistics,
     select_size_stats_particles,
+    weighted_size_observations,
 )
 
 
@@ -71,7 +76,7 @@ def test_saved_files(tmp_path: Path):
 
 
 PARTICLES = [
-    ParticleInfo(id=0, area_um=10.0, selection="size_stats"),
+    ParticleInfo(id=0, area_um=10.0, selection="size_stats"),  # older ledgers: now particles of frames
     ParticleInfo(id=1, area_um=20.0, selection="auto"),
     ParticleInfo(id=2, area_um=30.0, selection="manual"),
     ParticleInfo(id=3, area_um=40.0, selection="list"),
@@ -81,91 +86,127 @@ PARTICLES = [
 
 
 def test_particles_selected_for_size_statistics():
-    assert [p.id for p in select_size_stats_particles(PARTICLES)] == [0, 1]
-    assert [p.id for p in select_size_stats_particles(PARTICLES, include_eds_auto_particles=False)] == [0]
+    # Besides the particles of frames: the particles measured by EDS with automatic selection
+    assert [p.id for p in select_size_stats_particles(PARTICLES)] == [1]
+    assert select_size_stats_particles(PARTICLES, include_eds_auto_particles=False) == []
 
 
-def test_result_stored_in_the_ledger(tmp_path: Path):
-    cfg = PowderMeasurementConfig(min_area_par=5.0)
-    result = build_particle_stats_result(select_size_stats_particles(PARTICLES), cfg, n_par_target=100)
-    assert result.particle_ids == [0, 1]
-    assert result.n_par_by_selection == {"size_stats": 1, "auto": 1}
-    assert result.n_par_target == 100 and result.powder_meas_cfg.min_area_par == 5.0
-    assert result.size_stats.median == pytest.approx(np.mean([2 * np.sqrt(a / np.pi) for a in (10.0, 20.0)]))
-    cfg.min_area_par = 1.0
-    assert result.powder_meas_cfg.min_area_par == 5.0  # settings copied
+def _area(d_um: float) -> float:
+    return float(np.pi * d_um**2 / 4)
 
+
+def _frame(frame_id: str, diameters_um, area_um2: float = 1000.0, corrections=None) -> ParticleStatsFrame:
+    """Working frame with particles of the given diameters."""
+    return ParticleStatsFrame(frame_id=frame_id, frame_width_um=40.0, pixel_size_um=0.04, area_um2=area_um2,
+                              n_particles=len(diameters_um), particle_areas_um2=[_area(d) for d in diameters_um],
+                              particle_edge_corrections=list(corrections or [1.0] * len(diameters_um)))
+
+
+def _band(d_min_um: float, d_max_um: float, frames) -> ParticleSizeBand:
+    band = ParticleSizeBand(d_min_um=d_min_um, d_max_um=d_max_um, n_frames=0, scanned_area_um2=0.0)
+    for frame in frames:
+        band.add_frame(frame)
+    return band
+
+
+def _ledger(tmp_path: Path) -> SampleLedger:
     configs = LedgerConfigs(
         microscope_cfg=MicroscopeConfig(ID="PhenomXL", type="SEM"), sample_cfg=SampleConfig(elements=[], type="powder"),
         sample_substrate_cfg=SampleSubstrateConfig(), measurement_cfg=MeasurementConfig(), plot_cfg=PlotConfig(),
     )
-    ledger = create_sample_ledger(str(tmp_path), "S", configs)
-    ledger.particles = list(PARTICLES)
-    ledger.particle_stats = result
+    return create_sample_ledger(str(tmp_path), "S", configs)
+
+
+def test_result_stored_in_the_ledger(tmp_path: Path):
+    cfg = PowderMeasurementConfig(min_area_par=5.0)
+    ledger = _ledger(tmp_path)
+    segmentation = ledger.append_segmentation(SegmentationConfig.from_powder_meas_cfg(cfg, 0))
+    assert ledger.append_segmentation(SegmentationConfig.from_powder_meas_cfg(cfg, 7)) == segmentation  # reused
+    other = ledger.append_segmentation(SegmentationConfig.from_powder_meas_cfg(
+        cfg.model_copy(update={"par_brightness_thresh": 150}), 0))
+    assert (segmentation, other) == (0, 1) and ledger.segmentations[1].label == "threshold_bright · 150 · 80 px"
+    measurement = SizeMeasurement(measurement_id=0, status="completed", n_par_target=100, powder_meas_cfg=cfg,
+                                  segmentation_id=segmentation, bands=[SizeBand(d_min_um=1.0, d_max_um=10.0)])
+    ledger.size_measurements.append(measurement)
+    for i, diameters in enumerate([[2.0, 3.0], [4.0]]):
+        frame = ledger.add_frame(FrameRecord(
+            frame_id="A0", label="A0", purpose="size_stats", measurement_id=0, frame_width_um=40.0, pixel_size_um=0.04,
+            area_um2=1000.0, search_window_um=(1.0, 10.0),
+            segmentations=[FrameSegmentation(segmentation_id=segmentation, d_range_um=(1.0, 10.0),
+                                             particle_areas_um2=[_area(d) for d in diameters],
+                                             particle_edge_corrections=[1.0] * len(diameters))],
+        ))
+        measurement.bands[0].frame_ids.append(frame.frame_id)
+    assert measurement.bands[0].frame_ids == ["A0", "A0#2"]  # frame ids unique in the ledger
+
+    result = recalculate_particle_stats(ledger)
+    assert (result.measurement_id, result.segmentation_id, result.n_par_target) == (0, 0, 100)
+    assert result.n_par_by_selection == {"size_stats": 3} and result.bands[0].frame_ids == ["A0", "A0#2"]
+    assert result.size_stats.median == 3.0 and result.powder_meas_cfg.min_area_par == 5.0
+    stored = ledger.append_size_result(result)
+    assert stored.result_id == 0 and ledger.size_result == stored
     ledger.to_json_file(str(tmp_path / "ledger.json"))
     reloaded = SampleLedger.from_json_file(str(tmp_path / "ledger.json"))
-    assert reloaded.particle_stats == result
-    assert [p.selection for p in reloaded.particles] == ["size_stats", "auto", "manual", "list", None, "auto"]
+    assert reloaded.size_result == stored and reloaded.frames == ledger.frames
 
-    band = ParticleSizeBand(d_min_um=1.0, d_max_um=10.0, frame_width_um=50.0, n_frames=2, scanned_area_um2=3e3,
-                            particle_ids=[0])
-    [weighted_band] = build_particle_stats_result(PARTICLES[:2], cfg, bands=[band]).bands
-    assert weighted_band.model_copy(update={"number_density_per_mm2": None, "n_eds_particles": 0}) == band
-    assert weighted_band.n_eds_particles == 1  # particle 1 (EDS, 5 µm) is in the band
-    assert weighted_band.number_density_per_mm2 == pytest.approx(1 / 3e3 * 1e6)  # 1 particle found in 3000 µm²
-    with pytest.raises(ValueError, match="one size band"):
-        build_particle_stats_result(PARTICLES[:2], cfg, bands=[band, band])
+    # Same inputs: the result is replaced; other exclusions: a new result (the active one), the first one kept
+    assert ledger.append_size_result(recalculate_particle_stats(ledger)).result_id == 0
+    excluded = ledger.append_size_result(recalculate_particle_stats(ledger, [("A0", 1)], ["A0#2"]))
+    assert excluded.result_id == 1 and ledger.active_size_result == 1 and len(ledger.size_results) == 2
+    assert excluded.size_stats.n_par_analysed == 1 and excluded.excluded_particles == [("A0", 1)]
 
-    with pytest.raises(ValueError, match="not in the ledger"):
-        SampleLedger.model_validate({**ledger.model_dump(), "particles": PARTICLES[1:]})
-    ledger.particle_stats = build_particle_stats_result(PARTICLES[:2], cfg, bands=[band.model_copy(update={"particle_ids": [0, 9]})])
-    with pytest.raises(ValueError, match=r"not in the ledger: \[9\]"):
-        SampleLedger.model_validate(ledger.model_dump())
+    # Results of a segmentation are added to frames, never replaced
+    ledger.add_frame_segmentation("A0", FrameSegmentation(segmentation_id=other, d_range_um=(1.0, 10.0)))
+    with pytest.raises(ValueError, match="already segmented"):
+        ledger.add_frame_segmentation("A0", FrameSegmentation(segmentation_id=other, d_range_um=(1.0, 10.0)))
+    # Frames of A0 without result of segmentation 'other' are left out of its statistics
+    by_other = recalculate_particle_stats(ledger, [], [], segmentation_id=other)
+    assert by_other is None  # A0 has no particle under it, A0#2 is not segmented with it
+
+    data = ledger.model_dump()
+    for bad, match in (
+        ({"size_measurements": [measurement.model_copy(update={"segmentation_id": 9}).model_dump()]},
+         "unknown segmentation"),
+        ({"active_size_result": 5}, "active_size_result"),
+        ({"frames": data["frames"] + [data["frames"][0]]}, "frame_id values must be unique"),
+    ):
+        with pytest.raises(ValueError, match=match):
+            SampleLedger.model_validate({**data, **bad})
 
 
 
 # --- Weighting by size band ----------------------------------------------------------------------------------------
-
-def _psd_particles(first_id: int, n: int, diameter_um: float) -> list:
-    return [ParticleInfo(id=i, area_um=float(np.pi * diameter_um**2 / 4), eq_diameter_um=diameter_um,
-                         selection="size_stats") for i in range(first_id, first_id + n)]
-
 
 def _two_band_measurement(n_large: int, n_small: int):
     """
     Sample with 1000 particles of 5 µm and 10 particles of 50 µm per mm²: the large band scans the area holding
     n_large large particles, the small band the (100 times smaller) area holding n_small small ones.
     """
-    large, small = _psd_particles(0, n_large, 50.0), _psd_particles(n_large, n_small, 5.0)
-    bands = [
-        ParticleSizeBand(d_min_um=10.0, d_max_um=100.0, n_frames=1, scanned_area_um2=n_large / 10 * 1e6,
-                         particle_ids=[p.id for p in large]),
-        ParticleSizeBand(d_min_um=1.0, d_max_um=10.0, n_frames=1, scanned_area_um2=n_small / 1000 * 1e6,
-                         particle_ids=[p.id for p in small]),
+    return [
+        _band(10.0, 100.0, [_frame("L", [50.0] * n_large, area_um2=n_large / 10 * 1e6)]),
+        _band(1.0, 10.0, [_frame("S", [5.0] * n_small, area_um2=n_small / 1000 * 1e6)]),
     ]
-    return large + small, bands
 
 
 def test_band_weights_give_the_sample_distribution_whatever_the_number_collected():
-    particles, bands = _two_band_measurement(n_large=10, n_small=100)
-    result = build_particle_stats_result(particles, PowderMeasurementConfig(), bands=bands)
+    result = build_size_result(PowderMeasurementConfig(), bands=_two_band_measurement(n_large=10, n_small=100))
     # 1 % of the particles are large: D10-D90 are small particles, the mean is weighted accordingly
-    assert result.size_stats.median == result.size_stats.D90 == 5.0
+    assert result.size_stats.median == pytest.approx(5.0) and result.size_stats.D90 == pytest.approx(5.0)
     assert result.size_stats.mean == pytest.approx((1000 * 5.0 + 10 * 50.0) / 1010)
     assert result.unweighted_size_stats.mean == pytest.approx((100 * 5.0 + 10 * 50.0) / 110)  # 9 % large, as before
     assert [b.number_density_per_mm2 for b in result.bands] == pytest.approx([10.0, 1000.0])
+    assert [b.n_particles for b in result.bands] == [10, 100] and result.n_par_by_selection == {"size_stats": 110}
 
     # Collecting 3 times more large particles (over 3 times the area) does not change the statistics
-    particles_3x, bands_3x = _two_band_measurement(n_large=30, n_small=100)
-    other = build_particle_stats_result(particles_3x, PowderMeasurementConfig(), bands=bands_3x)
+    other = build_size_result(PowderMeasurementConfig(), bands=_two_band_measurement(n_large=30, n_small=100))
     for key in ("mean", "stdev", "median", "D10", "D25", "D75", "D90"):
         assert getattr(other.size_stats, key) == pytest.approx(getattr(result.size_stats, key))
 
 
 def test_single_band_statistics_are_unweighted():
-    particles = [ParticleInfo(id=i, area_um=float(a), selection="size_stats") for i, a in enumerate([3, 8, 20, 50])]
-    band = ParticleSizeBand(d_min_um=1.0, d_max_um=10.0, n_frames=4, scanned_area_um2=1e4, particle_ids=[0, 1, 2, 3])
-    result = build_particle_stats_result(particles, PowderMeasurementConfig(), bands=[band])
+    band = _band(1.0, 10.0, [_frame(f"A{i}", [2 * np.sqrt(a / np.pi)], area_um2=2500.0)
+                             for i, a in enumerate([3, 8, 20, 50])])
+    result = build_size_result(PowderMeasurementConfig(), bands=[band])
     assert result.size_stats == result.unweighted_size_stats
     d = np.sort(np.random.default_rng(0).lognormal(1.0, 0.5, 50))
     for q in (10, 25, 50, 75, 90):  # equal weights: as numpy, method 'hazen'
@@ -176,50 +217,37 @@ def test_single_band_statistics_are_unweighted():
 
 
 def test_eds_particles_share_the_weight_of_their_band():
-    particles, bands = _two_band_measurement(n_large=10, n_small=100)
+    # Samples without frames searched by EDS: the particles measured by EDS share the weight of their band
+    bands = _two_band_measurement(n_large=10, n_small=100)
     eds = [
-        ParticleInfo(id=1000, area_um=float(np.pi * 30.0**2 / 4), selection="auto"),  # 30 µm: large band
-        ParticleInfo(id=1001, area_um=float(np.pi * 200.0**2 / 4), selection="auto"),  # 200 µm: no band
+        ParticleInfo(id=1000, area_um=_area(30.0), selection="auto"),  # 30 µm: large band
+        ParticleInfo(id=1001, area_um=_area(200.0), selection="auto"),  # 200 µm: no band
     ]
-    weights, weighted_bands = band_particle_weights(particles + eds, bands)
+    obs, weights, weighted_bands, _ = weighted_size_observations(eds, bands)
     assert [b.n_eds_particles for b in weighted_bands] == [1, 0]
-    large_band = [k for k, p in enumerate(particles + eds) if p.id < 10 or p.id == 1000]
+    large_band = (obs.eq_diameters_um > 20) & (obs.eq_diameters_um < 100)
     assert weights[large_band].sum() == pytest.approx(10 / 1e6)  # band weight unchanged: its density per µm²
-    assert weights[-1] == 0
+    assert weights[obs.eq_diameters_um > 100].sum() == 0
 
-    result = build_particle_stats_result(particles + eds, PowderMeasurementConfig(), bands=bands)
+    result = build_size_result(PowderMeasurementConfig(), bands=bands, particles=eds)
     assert result.n_par_without_weight == 1 and result.size_stats.n_par_analysed == 111
-    assert result.size_stats.max == 50.0  # the 200 µm particle is left out
+    assert result.size_stats.max == pytest.approx(50.0)  # the 200 µm particle is left out
+    assert result.n_par_by_selection == {"size_stats": 110, "auto": 2}
 
 
-
-def test_frame_records_and_progress_in_the_ledger(tmp_path: Path):
-    band = ParticleSizeBand(d_min_um=1.0, d_max_um=10.0, n_frames=0, scanned_area_um2=0.0)
-    for i, ids in enumerate([[0], []]):  # frames without particles count too
-        band.add_frame(ParticleStatsFrame(frame_id=f"A{i}", frame_width_um=100.0, pixel_size_um=0.1,
-                                          area_um2=6000.0, n_particles=len(ids)), ids)
-    assert (band.n_frames, band.scanned_area_um2, band.particle_ids) == (2, 12000.0, [0])
+def test_frames_and_particles_left_out():
+    band = _band(1.0, 10.0, [_frame("A0", [2.0, 3.0], area_um2=6000.0), _frame("A1", [], area_um2=6000.0)])
+    assert (band.n_frames, band.scanned_area_um2, band.n_particles) == (2, 12000.0, 2)
     assert band.frame_area_um2(["A1", "B9"]) == 6000.0
     with pytest.raises(ValueError, match="n_frames"):
         ParticleSizeBand.model_validate({**band.model_dump(), "n_frames": 3})
 
     # Leaving out the empty frame A1 halves the area: the density doubles
-    weights, [weighted] = band_particle_weights(PARTICLES[:1], [band], excluded_frame_ids=["A1"])
-    assert weighted.number_density_per_mm2 == pytest.approx(1 / 6000 * 1e6)
-
-    configs = LedgerConfigs(
-        microscope_cfg=MicroscopeConfig(ID="PhenomXL", type="SEM"), sample_cfg=SampleConfig(elements=[], type="powder"),
-        sample_substrate_cfg=SampleSubstrateConfig(), measurement_cfg=MeasurementConfig(), plot_cfg=PlotConfig(),
-    )
-    ledger = create_sample_ledger(str(tmp_path), "S", configs)
-    ledger.particle_stats_progress = ParticleStatsProgress(n_par_target=10, powder_meas_cfg=PowderMeasurementConfig(),
-                                                           bands=[band])
-    with pytest.raises(ValueError, match=r"particle_stats_progress references particle ids not in the ledger: \[0\]"):
-        SampleLedger.model_validate(ledger.model_dump())
-    ledger.particles = list(PARTICLES[:1])
-    ledger.to_json_file(str(tmp_path / "ledger.json"))
-    assert SampleLedger.from_json_file(str(tmp_path / "ledger.json")).particle_stats_progress == ledger.particle_stats_progress
-
+    _, _, [weighted], _ = weighted_size_observations([], [band], excluded_frame_ids=["A1"])
+    assert weighted.number_density_per_mm2 == pytest.approx(2 / 6000 * 1e6)
+    # A particle left out (frame, index)
+    obs, _, [weighted], _ = weighted_size_observations([], [band], excluded_particles=[("A0", 1)])
+    assert list(obs.eq_diameters_um) == pytest.approx([2.0]) and obs.particle_keys == [("A0", 0)]
 
 
 def test_edge_correction():
@@ -230,14 +258,11 @@ def test_edge_correction():
         edge_correction_factor(93, 10, 100, 50, 3)
 
     # In a band, particles count (and share its weight) in proportion to their edge correction
-    small = ParticleInfo(id=0, area_um=float(np.pi), eq_diameter_um=2.0, selection="size_stats", edge_correction=1.0)
-    large = ParticleInfo(id=1, area_um=float(np.pi * 16), eq_diameter_um=8.0, selection="size_stats",
-                         edge_correction=3.0)
-    band = ParticleSizeBand(d_min_um=1.0, d_max_um=10.0, n_frames=1, scanned_area_um2=1e3, particle_ids=[0, 1])
-    weights, [weighted] = band_particle_weights([small, large], [band])
+    band = _band(1.0, 10.0, [_frame("A0", [2.0, 8.0], area_um2=1e3, corrections=[1.0, 3.0])])
+    _, weights, [weighted], _ = weighted_size_observations([], [band])
     assert weights[1] / weights[0] == pytest.approx(3.0)
     assert weighted.number_density_per_mm2 == pytest.approx(4 / 1e3 * 1e6)
-    result = build_particle_stats_result([small, large], PowderMeasurementConfig(), bands=[band])
+    result = build_size_result(PowderMeasurementConfig(), bands=[band])
     assert result.size_stats.mean == pytest.approx((2.0 + 3 * 8.0) / 4)
     assert result.unweighted_size_stats.mean == pytest.approx(5.0)
 
@@ -268,37 +293,32 @@ def test_size_distribution_plot(tmp_path: Path):
 
 
 def _band_with_frames(n_frames: int, rng: np.random.Generator):
-    """Band of n_frames frames of 1000 µm², each with 5-15 particles of lognormal diameters."""
-    band = ParticleSizeBand(d_min_um=0.1, d_max_um=100.0, n_frames=0, scanned_area_um2=0.0)
-    particles = []
-    for i in range(n_frames):
-        diameters = rng.lognormal(1.0, 0.4, int(rng.integers(5, 16)))
-        frame_particles = [ParticleInfo(id=len(particles) + k, area_um=float(np.pi * d**2 / 4), eq_diameter_um=float(d),
-                                        frame_id=f"A{i}", selection="size_stats") for k, d in enumerate(diameters)]
-        particles += frame_particles
-        band.add_frame(ParticleStatsFrame(frame_id=f"A{i}", frame_width_um=40.0, pixel_size_um=0.04, area_um2=1000.0,
-                                          n_particles=len(frame_particles)), [p.id for p in frame_particles])
-    return particles, band
+    """Band of n_frames frames of 1000 µm², each with 5-15 particles of lognormal diameters, and the diameters."""
+    frames = [_frame(f"A{i}", rng.lognormal(1.0, 0.4, int(rng.integers(5, 16)))) for i in range(n_frames)]
+    band = _band(0.1, 100.0, frames)
+    diameters = [2 * np.sqrt(a / np.pi) for f in frames for a in f.particle_areas_um2]
+    return diameters, band
 
 
 def test_bootstrap_confidence_intervals():
-    particles, band = _band_with_frames(10, np.random.default_rng(1))
-    cis = bootstrap_confidence_intervals(particles, [band], rng=np.random.default_rng(2))
+    diameters, band = _band_with_frames(10, np.random.default_rng(1))
+    cis = bootstrap_confidence_intervals([], [band], rng=np.random.default_rng(2))
     assert set(cis) == {"D10", "D50", "D90", "D43", "Dv10", "Dv50", "Dv90"}
-    stats = compute_particle_size_stats([p.eq_diameter_um for p in particles])
+    stats = compute_particle_size_stats(diameters)
     assert cis["D50"][0] <= stats["median"] <= cis["D50"][1]
-    assert cis == bootstrap_confidence_intervals(particles, [band], rng=np.random.default_rng(2))  # reproducible
+    assert cis == bootstrap_confidence_intervals([], [band], rng=np.random.default_rng(2))  # reproducible
 
     # More frames: narrower intervals
-    more_particles, more_frames = _band_with_frames(100, np.random.default_rng(1))
-    wide, narrow = cis["D50"], bootstrap_confidence_intervals(more_particles, [more_frames])["D50"]
+    _, more_frames = _band_with_frames(100, np.random.default_rng(1))
+    wide, narrow = cis["D50"], bootstrap_confidence_intervals([], [more_frames])["D50"]
     assert narrow[1] - narrow[0] < (wide[1] - wide[0]) / 2
 
-    # Without bands, particles are resampled
+    # Without bands, particles (measured by EDS) are resampled
+    particles = [ParticleInfo(id=i, area_um=_area(d), selection="auto") for i, d in enumerate(diameters)]
     assert bootstrap_confidence_intervals(particles)["D50"][0] <= stats["median"]
     assert bootstrap_confidence_intervals(particles[:4]) == {}  # too few to resample
-    few_particles, few_frames = _band_with_frames(4, np.random.default_rng(1))
-    assert bootstrap_confidence_intervals(few_particles, [few_frames]) == {}
+    _, few_frames = _band_with_frames(4, np.random.default_rng(1))
+    assert bootstrap_confidence_intervals([], [few_frames]) == {}
 
 
 
@@ -306,3 +326,27 @@ def test_tiny_weights_are_not_taken_as_equal():
     # Band weights are particles per µm² (~1e-8): their relative differences must count
     d = np.array([1.0, 2.0, 4.0])
     assert compute_particle_size_stats(d, weights=[1e-9, 1e-9, 3e-9])["mean"] == pytest.approx((1 + 2 + 12) / 5)
+
+
+def test_size_distribution_reproduces_the_statistics(tmp_path: Path):
+    from _psd_helpers import make_eds_frames_sample, make_measurement_sample
+
+    from autoemx.config.ledger_schemas import SampleLedger
+    from autoemx.core.particle_statistics import compute_particle_size_stats, recalculate_particle_stats, size_distribution
+
+    measured = SampleLedger.from_json_file(str(make_measurement_sample(tmp_path / "M") / "ledger.json"))
+    eds_only = SampleLedger.from_json_file(str(make_eds_frames_sample(tmp_path / "E") / "ledger.json"))
+    cases = [
+        (measured, measured.size_result),  # stored result
+        (eds_only, recalculate_particle_stats(eds_only)),  # computed from the frames searched by EDS
+        (measured, recalculate_particle_stats(measured, frame_ids_to_filter=["B0F0"])),  # frame left out
+    ]
+    for ledger, result in cases:
+        d, w = size_distribution(ledger, result)
+        assert np.all(w > 0)
+        stats = compute_particle_size_stats(d, w)
+        assert stats["n_par_analysed"] == result.size_stats.n_par_analysed
+        assert stats["median"] == pytest.approx(result.size_stats.median)
+        assert stats["D90"] == pytest.approx(result.size_stats.D90)
+    # Default: the statistics saved in the ledger
+    assert np.array_equal(size_distribution(measured)[0], size_distribution(measured, measured.size_result)[0])

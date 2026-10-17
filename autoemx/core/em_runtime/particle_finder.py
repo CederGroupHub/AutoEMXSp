@@ -56,6 +56,7 @@ import warnings
 import cv2
 import numpy as np
 
+from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from autoemx.core.em_runtime.image_utilities import particle_mark_annotations
@@ -76,10 +77,14 @@ from autoemx.config import (
 )
 from autoemx.config.ledger_schemas import (
     Coordinate2D,
+    FrameRecord,
+    FrameSegmentation,
     ParticleInfo,
     ParticleSizeBand,
     ParticleStatsFrame,
-    ParticleStatsProgress,
+    SegmentationConfig,
+    SizeBand,
+    SizeMeasurement,
 )
 from autoemx.core import particle_statistics
 import autoemx.utils.constants as cnst
@@ -188,6 +193,20 @@ def frame_width_um_from_max_area(max_area_par: float) -> float:
     return float(min(FRAME_WIDTH_PER_MAX_DIAMETER * 2.0 * max_par_radius, MAX_FRAME_WIDTH_UM))
 
 #%% Electron Microscope Particle Finder class    
+@dataclass
+class StatsProgress:
+    """
+    Particle size statistics measurement being acquired: target, settings, working records of its size bands (with
+    the particles of their frames), and its record in the attached ledger with the segmentation used.
+    """
+
+    n_par_target: int
+    powder_meas_cfg: PowderMeasurementConfig
+    bands: List[ParticleSizeBand]
+    measurement: Optional[SizeMeasurement] = None
+    segmentation_id: Optional[int] = None
+
+
 class EM_Particle_Finder:
     """
     Automated particle analysis and X-ray spectra (EDS, WDS) acquisition in an electron microscope (EM).
@@ -346,9 +365,13 @@ class EM_Particle_Finder:
         self._list_mode_absolute_ids: bool = False
         self._particles_by_id: Dict[int, ParticleInfo] = {}
         # Particle size statistics measurement in progress, and the size band being collected
-        self._stats_progress: Optional[ParticleStatsProgress] = None
+        self._stats_progress: Optional[StatsProgress] = None
         self._stats_band: Optional[ParticleSizeBand] = None
         self._stats_max_n_frames: Optional[int] = None  # frame limit of a measurement stopping on precision
+        # Frames searched by EDS counted by the measurement in progress (get_particle_stats(count_eds_frames=True)),
+        # and the diameters of the particles counted in them
+        self._eds_frames: List[particle_statistics.EdsSearchFrame] = []
+        self._eds_diameters_um: np.ndarray = np.array([])
         # Frames searched for EDS (automatic particle selection) not saved to the ledger yet, with the size range
         # they count: ((d_min_um, d_max_um, frame_width_um), frame record)
         self.pending_eds_frames: List[Tuple[Tuple[float, float, float], ParticleStatsFrame]] = []
@@ -661,13 +684,15 @@ class EM_Particle_Finder:
     
     def _stats_frame_id(self) -> Optional[str]:
         """
-        Id of the current frame in the size band being collected: its label, made unique in the band (``#2``,
-        ``#3``, ...) if a frame with the same label was recorded (e.g. manual frames of a resumed measurement).
+        Id of the current frame: its label, made unique (``#2``, ``#3``, ...) in the attached ledger (or else in the
+        size band being collected) if a frame with the same label was recorded (e.g. by an earlier measurement).
         """
         label = self.EM.current_frame_label
         if label is None:
             return None
         frame_id = str(label)
+        if self._ledger is not None:
+            return self._ledger.unique_frame_id(frame_id)
         band = self._stats_band
         if band is not None:
             recorded = {frame.frame_id for frame in band.frames}
@@ -677,6 +702,62 @@ class EM_Particle_Finder:
                 unique_id, n = f"{frame_id}#{n}", n + 1
             frame_id = unique_id
         return frame_id
+
+    def _unique_image_stem(self, stem: str) -> str:
+        """Name of the images of a frame (``<stem>_particles``), made unique among the saved images (``#2``, ...)."""
+        folder = self.results_dir
+        if not folder or not os.path.isdir(folder):
+            return stem
+        names = {os.path.splitext(name)[0] for name in os.listdir(folder)}
+        unique, n = stem, 2
+        while f"{unique}_particles" in names:
+            unique, n = f"{stem}#{n}", n + 1
+        return unique
+
+    def _valid_particles(self, frame_image: np.ndarray, stats: np.ndarray, centroids: np.ndarray, num_labels: int):
+        """
+        Particles of a frame valid for particle size statistics (within the area limits, of at least min_par_pixels
+        pixels, not touching the frame edge): their areas (µm²), frame-edge corrections and marks (x, y, radius in
+        pixels), and their connected-component labels.
+        """
+        im_height, im_width = frame_image.shape[:2]
+        pixel_size_um = float(self.EM.pixel_size_um)
+        areas_um2, corrections, marks, labels = [], [], [], []
+        for i in range(1, num_labels):  # Skip the background component (index 0)
+            area_px = int(stats[i, cv2.CC_STAT_AREA])
+            if (
+                area_px >= self.powder_meas_cfg.min_par_pixels  # enough pixels for a valid area
+                and self._is_particle_area_ok(area_px)
+                and not self.is_particle_at_frame_edge(stats, i)
+            ):
+                areas_um2.append(float(area_px * pixel_size_um**2))
+                corrections.append(particle_statistics.edge_correction_factor(
+                    int(stats[i, cv2.CC_STAT_WIDTH]), int(stats[i, cv2.CC_STAT_HEIGHT]),
+                    im_width, im_height, FRAME_EDGE_MARGIN_PX,
+                ))
+                marks.append((int(centroids[i][0]), int(centroids[i][1]), int(np.sqrt(area_px / np.pi) * 1.1)))
+                labels.append(i)
+        return areas_um2, corrections, marks, labels
+
+    def segment_frame(self, frame_image: np.ndarray, pixel_size_um: float, d_range_um: Tuple[float, float],
+                      segmentation_id: int) -> FrameSegmentation:
+        """
+        Particles of a saved frame image valid for particle size statistics, with the current segmentation settings,
+        among the diameters ``d_range_um`` searched in the frame (raised to the smallest particles of at least
+        min_par_pixels pixels): the result of segmentation ``segmentation_id`` of the frame.
+        """
+        self._im_height, self._im_width = frame_image.shape[:2]
+        self.EM.pixel_size_um = pixel_size_um
+        d_lo = max(float(d_range_um[0]), min_valid_diameter_um(pixel_size_um, self.powder_meas_cfg.min_par_pixels))
+        d_hi = float(d_range_um[1])
+        self.powder_meas_cfg.min_area_par = diameter_um_to_area_um2(min(d_lo, d_hi))
+        self.powder_meas_cfg.max_area_par = diameter_um_to_area_um2(d_hi)
+        par_mask, _ = self._get_particles_on_substrate_mask(cv2.GaussianBlur(frame_image, (5, 5), 0), save_image=False)
+        num_labels, _, stats, centroids = self._get_connected_components_with_stats(par_mask)
+        areas, corrections, marks, _ = self._valid_particles(frame_image, stats, centroids, num_labels)
+        return FrameSegmentation(segmentation_id=segmentation_id, d_range_um=(min(d_lo, d_hi), d_hi),
+                                 particle_areas_um2=areas, particle_edge_corrections=corrections,
+                                 particle_marks_px=marks)
 
     def _current_frame_position(self) -> Optional[Tuple[float, float]]:
         """Stage position (mm) of the current frame, or None if not known (e.g. not read after a manual move)."""
@@ -691,28 +772,22 @@ class EM_Particle_Finder:
         num_labels: int,
         stats: np.ndarray,
         image_file: Optional[str] = None,
-        particle_marks: Optional[List[Tuple[int, int, int, Optional[int]]]] = None,
+        centroids: Optional[np.ndarray] = None,
     ) -> None:
         """
-        Record a frame searched for EDS particles, with the area and edge correction of each particle valid for
-        particle size statistics (within the area limits, of at least min_par_pixels pixels, not touching the frame
-        edge), whether it is then measured by EDS or not (see ``SampleLedger.eds_size_scans``).
+        Record a frame searched for EDS particles, with the area, edge correction and mark of each particle valid
+        for particle size statistics (within the area limits, of at least min_par_pixels pixels, not touching the
+        frame edge), whether it is then measured by EDS or not; stored as a frame of the sample ledger (see
+        ``LedgerModule._store_eds_search_frames``).
         """
         im_height, im_width = frame_image_shape[:2]
         pixel_size_um = float(self.EM.pixel_size_um)
-        areas_um2, corrections = [], []
-        for i in range(1, num_labels):
-            area_px = int(stats[i, cv2.CC_STAT_AREA])
-            if (
-                area_px >= self.powder_meas_cfg.min_par_pixels
-                and self._is_particle_area_ok(area_px)
-                and not self.is_particle_at_frame_edge(stats, i)
-            ):
-                areas_um2.append(float(area_px * pixel_size_um**2))
-                corrections.append(particle_statistics.edge_correction_factor(
-                    int(stats[i, cv2.CC_STAT_WIDTH]), int(stats[i, cv2.CC_STAT_HEIGHT]),
-                    im_width, im_height, FRAME_EDGE_MARGIN_PX,
-                ))
+        if centroids is None:
+            centroids = np.array([[stats[i, cv2.CC_STAT_LEFT] + stats[i, cv2.CC_STAT_WIDTH] / 2,
+                                   stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT] / 2]
+                                  for i in range(num_labels)])
+        areas_um2, corrections, marks, _ = self._valid_particles(np.empty((im_height, im_width)), stats, centroids,
+                                                                 num_labels)
         frame_width_um = im_width * pixel_size_um
         d_min_um = max(
             float(2.0 * np.sqrt(self.powder_meas_cfg.min_area_par / np.pi)),
@@ -735,7 +810,7 @@ class EM_Particle_Finder:
                 particle_areas_um2=areas_um2,
                 particle_edge_corrections=corrections,
                 image_file=image_file,
-                particle_marks_px=list(particle_marks) if particle_marks is not None else None,
+                particle_marks_px=[(x, y, r, i) for i, (x, y, r) in enumerate(marks)],
             ),
         ))
 
@@ -851,9 +926,10 @@ class EM_Particle_Finder:
             (int(center[0]), int(center[1]), int(rad), None) for rad, center in zip(par_radius_pixels, par_pos_pixels)
         ]
         image_file = self._save_frame_images(
-            f"{self._sample_id}_fr{self.EM.current_frame_label}", acquired_image, particle_marks
+            self._unique_image_stem(f"{self._sample_id}_frEDS-{self.EM.current_frame_label}"), acquired_image,
+            particle_marks,
         )
-        self._record_eds_search_frame(frame_image.shape, num_labels, stats, image_file, particle_marks)
+        self._record_eds_search_frame(frame_image.shape, num_labels, stats, image_file, centroids)
         
         
         # Return false if no particles were detected in the frame
@@ -1754,9 +1830,8 @@ class EM_Particle_Finder:
         self.powder_meas_cfg.par_search_frame_width_um = frame_width_um
 
     def _persist_stats_progress(self) -> None:
-        """Save the particle size statistics measurement in progress (and its particles) to the attached ledger."""
+        """Save the particle size statistics measurement in progress (its frames) to the attached ledger."""
         if self._ledger is not None and self._stats_progress is not None:
-            self._ledger.particle_stats_progress = self._stats_progress
             self._persist_stats_ledger()
 
     def _save_frame_images(
@@ -1783,56 +1858,91 @@ class EM_Particle_Finder:
     def _record_stats_frame(
         self,
         frame_image_shape: Tuple[int, ...],
-        particle_ids: List[int],
+        frame_id: str,
+        areas_um2: List[float],
+        corrections: List[float],
+        marks: List[Tuple[int, int, int]],
         image_file: Optional[str] = None,
-        particle_marks: Optional[List[Tuple[int, int, int, Optional[int]]]] = None,
     ) -> None:
-        """Record the frame just analysed in the size band being collected, saving the progress regularly."""
+        """
+        Record the frame just analysed, with its particles, in the size band being collected and as a frame of the
+        attached ledger (with the result of the segmentation of the measurement), saving the progress regularly.
+        """
         band = self._stats_band
         if band is None:
             return
         im_height, im_width = frame_image_shape[:2]
         pixel_size_um = float(self.EM.pixel_size_um)
         position = self._current_frame_position()
-        band.add_frame(
-            ParticleStatsFrame(
-                frame_id=self._stats_frame_id() or "",
-                center_mm=Coordinate2D(x=float(position[0]), y=float(position[1])) if position is not None else None,
-                frame_width_um=im_width * pixel_size_um,
-                pixel_size_um=pixel_size_um,
-                area_um2=float(im_height * im_width * pixel_size_um**2),
-                n_particles=len(particle_ids),
-                image_file=image_file,
-                particle_marks_px=list(particle_marks) if particle_marks is not None else None,
-            ),
-            particle_ids,
+        center = Coordinate2D(x=float(position[0]), y=float(position[1])) if position is not None else None
+        frame = ParticleStatsFrame(
+            frame_id=frame_id, center_mm=center, frame_width_um=im_width * pixel_size_um, pixel_size_um=pixel_size_um,
+            area_um2=float(im_height * im_width * pixel_size_um**2), n_particles=len(areas_um2),
+            particle_areas_um2=list(areas_um2), particle_edge_corrections=list(corrections), image_file=image_file,
+            particle_marks_px=[(x, y, r, i) for i, (x, y, r) in enumerate(marks)],
         )
+        band.add_frame(frame)
+        progress = self._stats_progress
+        if self._ledger is not None and progress is not None and progress.measurement is not None:
+            window = (band.d_min_um, band.d_max_um)
+            record = self._ledger.add_frame(FrameRecord(
+                frame_id=frame_id, label=str(self.EM.current_frame_label), purpose="size_stats",
+                measurement_id=progress.measurement.measurement_id, center_mm=center,
+                frame_width_um=frame.frame_width_um, pixel_size_um=pixel_size_um, area_um2=frame.area_um2,
+                search_window_um=window, image_file=image_file,
+                segmentations=[FrameSegmentation(segmentation_id=progress.segmentation_id, d_range_um=window,
+                                                 particle_areas_um2=list(areas_um2),
+                                                 particle_edge_corrections=list(corrections),
+                                                 particle_marks_px=list(marks))],
+            ))
+            progress.measurement.bands[progress.bands.index(band)].frame_ids.append(record.frame_id)
         if band.n_frames % STATS_SAVE_EVERY_N_FRAMES == 0:
             self._persist_stats_progress()
+
+    def _add_stats_band(self, progress: StatsProgress, band: ParticleSizeBand) -> None:
+        """Start a size band of the measurement (also in its ledger record)."""
+        progress.bands.append(band)
+        if progress.measurement is not None:
+            progress.measurement.bands.append(SizeBand(d_min_um=band.d_min_um, d_max_um=band.d_max_um,
+                                                       frame_width_um=band.frame_width_um))
+
+    def _new_stats_progress(self, powder_meas_cfg: PowderMeasurementConfig, n_par_target: int,
+                            count_eds_frames: bool = False) -> StatsProgress:
+        """A new measurement, recorded in the attached ledger with the segmentation of its settings."""
+        if self._ledger is None:
+            return StatsProgress(n_par_target, powder_meas_cfg, [])
+        segmentation_id = self._ledger.append_segmentation(
+            SegmentationConfig.from_powder_meas_cfg(powder_meas_cfg, 0))
+        measurement = SizeMeasurement(
+            measurement_id=self._ledger.next_measurement_id(), n_par_target=n_par_target,
+            powder_meas_cfg=powder_meas_cfg, segmentation_id=segmentation_id, count_eds_frames=count_eds_frames,
+        )
+        self._ledger.size_measurements.append(measurement)
+        return StatsProgress(n_par_target, powder_meas_cfg, [], measurement, segmentation_id)
 
     def _collect_size_band(self, band: ParticleSizeBand, n_par_target: int) -> None:
         """Analyse frames until ``band`` holds ``n_par_target`` particles or no frame is left, recording each frame."""
         self._stats_band = band
         try:
-            while len(band.particle_ids) < n_par_target:
+            while band.n_particles < n_par_target:
                 if self._stats_max_n_frames is not None and self._stats_progress is not None and sum(
                     b.n_frames for b in self._stats_progress.bands
                 ) >= self._stats_max_n_frames:
                     break
-                n_par_before = len(band.particle_ids)
+                n_par_before = band.n_particles
                 par_were_found = self._move_and_get_particles_stats_in_frame()
                 if par_were_found is None:
                     logger.warning(
                         f"⚠️ Could not find {n_par_target} particles in this size band. "
-                        f"Completed it with {len(band.particle_ids)} particles."
+                        f"Completed it with {band.n_particles} particles."
                     )
                     break
                 if par_were_found is False:
                     if self.verbose:
                         logger.warning("⚠️ No particle was found in this frame")
                 elif self.verbose:
-                    n_par_found_frame = len(band.particle_ids) - n_par_before
-                    n_par_band = len(band.particle_ids)
+                    n_par_found_frame = band.n_particles - n_par_before
+                    n_par_band = band.n_particles
                     logger.info(
                         f"{n_par_found_frame} particle{'s' if n_par_found_frame != 1 else ''} "
                         f"{'were' if n_par_found_frame != 1 else 'was'} found in this frame."
@@ -1848,24 +1958,31 @@ class EM_Particle_Finder:
 
     def _resume_stats_progress(
         self, powder_meas_cfg: PowderMeasurementConfig, n_par_target: int
-    ) -> Optional[ParticleStatsProgress]:
+    ) -> Optional[StatsProgress]:
         """Measurement interrupted in the attached ledger, to resume if it has the same target and settings."""
-        progress = self._ledger.particle_stats_progress if self._ledger is not None else None
-        if progress is None:
+        if self._ledger is None:
             return None
-        if progress.n_par_target == n_par_target and progress.powder_meas_cfg == powder_meas_cfg:
+        measurement = next((m for m in reversed(self._ledger.size_measurements) if m.status == "in_progress"), None)
+        if measurement is None:
+            return None
+        if measurement.n_par_target == n_par_target and measurement.powder_meas_cfg == powder_meas_cfg:
+            bands = particle_statistics.size_stats_inputs(
+                self._ledger, measurement.measurement_id, measurement.segmentation_id, None, False).bands
+            for band, recorded in zip(bands, measurement.bands):  # the bands as planned by the measurement
+                band.d_min_um = recorded.d_min_um
+            progress = StatsProgress(n_par_target, powder_meas_cfg, bands, measurement, measurement.segmentation_id)
             n_frames = sum(band.n_frames for band in progress.bands)
-            n_par = sum(len(band.particle_ids) for band in progress.bands)
+            n_par = sum(band.n_particles for band in progress.bands)
             logger.info(
                 f"ℹ️ Resuming the interrupted particle size statistics measurement "
                 f"({n_frames} frames and {n_par} particles already analysed)."
             )
             return progress
         logger.warning(
-            "⚠️ An interrupted particle size statistics measurement with different settings is discarded: "
-            "a new one starts (the particles it found stay in the ledger, left out of the new statistics)."
+            "⚠️ An interrupted particle size statistics measurement with different settings is not resumed: "
+            "a new one starts (the frames of the interrupted one stay in the ledger)."
         )
-        self._ledger.particle_stats_progress = None
+        measurement.status = "interrupted"
         return None
 
     def _frame_width_range_um(self) -> Optional[Tuple[float, float]]:
@@ -1879,11 +1996,14 @@ class EM_Particle_Finder:
         return None
 
     def _plan_band_frames(
-        self, navigator, progress: ParticleStatsProgress, band_idx: int, fw_mm: float, reuse_grid: bool = False
+        self, navigator, progress: StatsProgress, band_idx: int, fw_mm: float, reuse_grid: bool = False,
+        d_range_um: Optional[Tuple[float, float]] = None,
     ) -> bool:
         """
-        Plan the frames of a size band: the sample grid (first band) or subframes of the frames recorded in the
-        previous band. Returns False if the previous band has no frame.
+        Plan the frames of a size band (diameters ``d_range_um``): the sample grid (first band) or subframes of the
+        frames recorded in the previous band. When counting the frames searched by EDS (see
+        :meth:`get_particle_stats`), these are also parent frames of the second band, and the frames overlapping
+        an EDS frame searching the same sizes are left out. Returns False if the previous band has no frame.
         """
         if band_idx == 0:
             if (
@@ -1894,13 +2014,46 @@ class EM_Particle_Finder:
                 navigator.reset_frame_cursor()
             else:
                 navigator.configure_top_level_particle_frames(fw_mm)
-            return True
-        parent_frames = self._band_frame_descriptors(progress.bands[band_idx - 1])
-        if not parent_frames:
-            logger.warning("⚠️ No parent frames from the previous size band; skipping remaining finer bands.")
-            return False
-        navigator.configure_particle_subframes(parent_frames, fw_mm)
+        else:
+            parent_frames = self._band_frame_descriptors(progress.bands[band_idx - 1])
+            if band_idx == 1:
+                # Frames searched by EDS: searched for the sizes of the first band, not for smaller ones
+                parent_frames += [
+                    (f.frame_id, (f.center_um[0] / 1000, f.center_um[1] / 1000), f.frame_width_um / 1000)
+                    for f in self._eds_frames
+                ]
+            if not parent_frames:
+                logger.warning("⚠️ No parent frames from the previous size band; skipping remaining finer bands.")
+                return False
+            navigator.configure_particle_subframes(parent_frames, fw_mm)
+        if self._eds_frames and d_range_um is not None:
+            self._skip_eds_searched_frames(navigator, d_range_um)
         return True
+
+    def _skip_eds_searched_frames(self, navigator, d_range_um: Tuple[float, float]) -> None:
+        """Leave out the planned frames overlapping a frame searched by EDS for the same particle sizes."""
+        searched = [f for f in self._eds_frames if particle_statistics.size_ranges_overlap([f.d_range_um], d_range_um)[0]]
+        n_skipped = navigator.skip_frames_overlapping([
+            ((f.center_um[0] / 1000, f.center_um[1] / 1000), (f.half_size_um[0] / 1000, f.half_size_um[1] / 1000))
+            for f in searched
+        ])
+        if n_skipped and self.verbose:
+            logger.info(f"ℹ️ {n_skipped} frame{'s' if n_skipped != 1 else ''} already searched by EDS left out.")
+
+    def _band_target(self, band: ParticleSizeBand, band_idx: int, n_par_target: int) -> int:
+        """Particles still to find in a size band: the target, less the particles counted in the frames searched by
+        EDS (when counted, see :meth:`get_particle_stats`) with a diameter in the band."""
+        d = self._eds_diameters_um
+        if not d.size:
+            return n_par_target
+        in_band = (d >= band.d_min_um * (1 - 1e-9)) & (
+            d <= band.d_max_um * (1 + 1e-9) if band_idx == 0 else d < band.d_max_um * (1 - 1e-9)
+        )
+        n_eds = int(np.sum(in_band))
+        if self.verbose:
+            logger.info(f"ℹ️ {n_eds} particle{'s' if n_eds != 1 else ''} of this size band already counted in the "
+                        f"frames searched by EDS: {max(n_par_target - n_eds, 0)} more to find.")
+        return max(n_par_target - n_eds, 0)
 
     def _collect_in_band(self, band: ParticleSizeBand, band_idx: int, n_par_target: int) -> None:
         """Set the particle area limits of a size band and collect its particles."""
@@ -1912,34 +2065,43 @@ class EM_Particle_Finder:
         self._collect_size_band(band, n_par_target)
 
     def _continue_size_band(
-        self, navigator, progress: ParticleStatsProgress, band_idx: int, n_par_target: int
+        self, navigator, progress: StatsProgress, band_idx: int, n_par_target: int
     ) -> bool:
         """Collect more particles in a recorded size band, in its frames not analysed yet. False if none planned."""
         band = progress.bands[band_idx]
-        if not self._plan_band_frames(navigator, progress, band_idx, band.frame_width_um / 1000.0):
+        if not self._plan_band_frames(navigator, progress, band_idx, band.frame_width_um / 1000.0,
+                                      d_range_um=(band.d_min_um, band.d_max_um)):
             return False
-        navigator.skip_frames([frame.frame_id for frame in band.frames])
+        # Frames analysed already, by their navigation label
+        records = [self._ledger.frame(f.frame_id) if self._ledger is not None else None for f in band.frames]
+        navigator.skip_frames([r.label if r is not None else f.frame_id for f, r in zip(band.frames, records)])
         self._collect_in_band(band, band_idx, n_par_target)
         return True
 
-    def _stats_eds_scans(self, powder_meas_cfg: PowderMeasurementConfig) -> List[ParticleSizeBand]:
-        """Frames searched by EDS on the sample (in the attached ledger) to include in the statistics."""
-        if self._ledger is None or not powder_meas_cfg.include_eds_auto_particles:
-            return []
-        return list(self._ledger.eds_size_scans)
+    def _stats_eds_segmentation(self, progress: StatsProgress) -> Optional[int]:
+        """Segmentation of the frames searched by EDS counted by the measurement (None: not counted)."""
+        if self._ledger is None or not progress.powder_meas_cfg.include_eds_auto_particles:
+            return None
+        return particle_statistics.eds_segmentation_for(self._ledger, progress.segmentation_id)
 
-    def _stats_particles(self, progress: ParticleStatsProgress, eds_scans: List[ParticleSizeBand]) -> List[ParticleInfo]:
-        """Particles of the statistics: those found by the measurement, and those measured by EDS without EDS scans."""
+    def _stats_eds_scans(self, progress: StatsProgress) -> List[ParticleSizeBand]:
+        """Frames searched by EDS on the sample (in the attached ledger) to include in the statistics."""
+        segmentation_id = self._stats_eds_segmentation(progress)
+        if segmentation_id is None:
+            return []
+        return particle_statistics.size_stats_inputs(self._ledger, eds_segmentation_id=segmentation_id).eds_scans
+
+    def _stats_particles(self, progress: StatsProgress, eds_scans: List[ParticleSizeBand]) -> List[ParticleInfo]:
+        """Particles of the statistics besides those of frames: measured by EDS, without frames searched by EDS."""
+        has_eds_frames = self._ledger is not None and bool(self._ledger.frames_of("eds_search"))
         return particle_statistics.select_size_stats_particles(
-            self.analyzed_pars,
-            progress.powder_meas_cfg.include_eds_auto_particles and not eds_scans,
-            size_stats_ids=[pid for band in progress.bands for pid in band.particle_ids],
+            self.analyzed_pars, progress.powder_meas_cfg.include_eds_auto_particles and not has_eds_frames,
         )
 
-    def _size_stats_precision(self, progress: ParticleStatsProgress) -> Dict[str, float]:
+    def _size_stats_precision(self, progress: StatsProgress) -> Dict[str, float]:
         """Relative half-width of the 95 % confidence interval of the statistics whose precision is checked."""
         cfg = progress.powder_meas_cfg
-        eds_scans = self._stats_eds_scans(cfg)
+        eds_scans = self._stats_eds_scans(progress)
         particles = self._stats_particles(progress, eds_scans)
         obs, weights, _, _ = particle_statistics.weighted_size_observations(particles, progress.bands, (), eds_scans)
         if not np.any(weights > 0):
@@ -1950,7 +2112,7 @@ class EM_Particle_Finder:
             cfg.size_stats_ci_quantities,
         )
 
-    def _collect_until_precise(self, progress: ParticleStatsProgress, navigator) -> bool:
+    def _collect_until_precise(self, progress: StatsProgress, navigator) -> bool:
         """
         Collect more particles in every size band (about 50 % more per round) until the confidence intervals of
         ``powder_meas_cfg.size_stats_ci_quantities`` are within ``size_stats_ci_tolerance``, the frame or time
@@ -1978,7 +2140,7 @@ class EM_Particle_Finder:
                                 "collecting more particles.")
                 n_frames_before = n_frames
                 for band_idx, band in enumerate(progress.bands):
-                    n_target = len(band.particle_ids) + max(len(band.particle_ids) // 2, 1)
+                    n_target = band.n_particles + max(band.n_particles // 2, 1)
                     if navigator is None:
                         self._collect_in_band(band, band_idx, n_target)
                     elif not self._continue_size_band(navigator, progress, band_idx, n_target):
@@ -1997,7 +2159,7 @@ class EM_Particle_Finder:
             for frame in band.frames if frame.center_mm is not None
         ]
 
-    def get_particle_stats(self, n_par_target):
+    def get_particle_stats(self, n_par_target, count_eds_frames: bool = False):
         """
         Analyze frames to collect and save particle size statistics.
 
@@ -2014,18 +2176,21 @@ class EM_Particle_Finder:
         Top-level frames use normal labels (``A0``); finer bands use hierarchical
         ids (``A0_a0``) for sub-frames inside visited parent FOVs.
 
-        Each frame analysed is recorded in its band, and the measurement in
-        progress is saved to the sample ledger regularly
-        (``SampleLedger.particle_stats_progress``). A measurement interrupted with
-        the same target and settings is resumed: completed bands are kept, and the
-        interrupted band continues in the frames not analysed yet. With different
-        settings, a new measurement starts.
+        The measurement is recorded in the sample ledger
+        (``SampleLedger.size_measurements``) with the segmentation of its settings
+        (``SampleLedger.segmentations``), and each frame analysed as a frame of the
+        ledger with the particles found in it (``SampleLedger.frames``), saved
+        regularly. A measurement interrupted with the same target and settings is
+        resumed: completed bands are kept, and the interrupted band continues in the
+        frames not analysed yet. With different settings, a new measurement starts
+        (the interrupted one is kept, with its frames). Frames, measurements and
+        statistics of earlier measurements stay in the ledger.
 
-        Particles already in the sample ledger (measured by EDS, or by an earlier
-        measurement) are kept; new particles get the following ids. The statistics
-        use the particles found by this measurement and, if
-        ``powder_meas_cfg.include_eds_auto_particles``, the particles measured by
-        EDS with automatic particle selection.
+        The statistics (added to ``SampleLedger.size_results`` as the active result)
+        use the frames of this measurement and, if
+        ``powder_meas_cfg.include_eds_auto_particles``, the frames searched by EDS
+        on the sample (or, without them, the particles measured by EDS with
+        automatic particle selection).
 
         With powder_meas_cfg.size_stats_ci_tolerance, the measurement then
         goes on, collecting about 50 % more particles in every band per round,
@@ -2033,12 +2198,23 @@ class EM_Particle_Finder:
         powder_meas_cfg.size_stats_ci_quantities are within the tolerance
         (or the frame or time limit is reached, or no frame is left).
 
+        With ``count_eds_frames`` (measurement continuing an EDS acquisition of
+        the sample, with automatic navigation), the frames searched by EDS
+        (frames of the ledger, if ``powder_meas_cfg.include_eds_auto_particles``)
+        count too: the particles
+        found in them count towards the target of the size band of their
+        diameter, the frames overlapping them are not searched again for the same
+        sizes, and finer bands are also searched inside them.
+
         Parameters
         ----------
         n_par_target : int
             Target number of particles to find **per size band** (particles
-            already in the ledger are not counted); the minimum when stopping
-            on precision.
+            already in the ledger are not counted, unless counted in the frames
+            searched by EDS with ``count_eds_frames``); the minimum when
+            stopping on precision.
+        count_eds_frames : bool, optional
+            Whether to count the frames searched by EDS (default: False).
 
         Returns
         -------
@@ -2050,8 +2226,12 @@ class EM_Particle_Finder:
         n_par_target = int(n_par_target)
         progress = self._resume_stats_progress(powder_meas_cfg, n_par_target)
         if progress is None:
-            progress = ParticleStatsProgress(n_par_target=n_par_target, powder_meas_cfg=powder_meas_cfg)
+            progress = self._new_stats_progress(powder_meas_cfg, n_par_target, count_eds_frames)
         self._stats_progress = progress
+        self._eds_frames, self._eds_diameters_um = (
+            particle_statistics.eds_search_frames(self._stats_eds_scans(progress)) if count_eds_frames
+            else ([], np.array([]))
+        )
 
         d_min_um = 2.0 * np.sqrt(self.powder_meas_cfg.min_area_par / np.pi)
         d_max_um = 2.0 * np.sqrt(self.powder_meas_cfg.max_area_par / np.pi)
@@ -2065,7 +2245,7 @@ class EM_Particle_Finder:
         if is_manual or navigator is None:
             # Frames chosen by the user: one band, particles of at least min_par_pixels pixels in each frame
             if not progress.bands:
-                progress.bands.append(ParticleSizeBand(
+                self._add_stats_band(progress, ParticleSizeBand(
                     d_min_um=d_min_um, d_max_um=d_max_um, n_frames=0, scanned_area_um2=0.0,
                 ))
             self._collect_size_band(progress.bands[0], n_par_target)
@@ -2085,16 +2265,20 @@ class EM_Particle_Finder:
                 )
             ):
                 logger.warning("⚠️ The interrupted measurement used other size bands: a new one starts.")
-                progress = ParticleStatsProgress(n_par_target=n_par_target, powder_meas_cfg=powder_meas_cfg)
+                if progress.measurement is not None:
+                    progress.measurement.status = "interrupted"
+                progress = self._new_stats_progress(powder_meas_cfg, n_par_target, count_eds_frames)
                 self._stats_progress = progress
             for band_idx, (d_lo, d_hi, fw_planned_um) in enumerate(plan):
                 if band_idx < len(progress.bands):
                     if band_idx == len(progress.bands) - 1:
                         # Band interrupted (or last one recorded): continue in the frames not analysed yet
-                        if not self._continue_size_band(navigator, progress, band_idx, n_par_target):
+                        band_target = self._band_target(progress.bands[band_idx], band_idx, n_par_target)
+                        if not self._continue_size_band(navigator, progress, band_idx, band_target):
                             break
                     continue
-                if not self._plan_band_frames(navigator, progress, band_idx, fw_planned_um / 1000.0, reuse_grid=True):
+                if not self._plan_band_frames(navigator, progress, band_idx, fw_planned_um / 1000.0, reuse_grid=True,
+                                              d_range_um=(d_lo, d_hi)):
                     break
                 # Frame width set by the microscope (clipped to its range): gives the smallest valid particles
                 fw_um = float(
@@ -2111,22 +2295,23 @@ class EM_Particle_Finder:
                     d_min_um=max(d_lo, d_pixels_um), d_max_um=d_hi, frame_width_um=fw_um,
                     n_frames=0, scanned_area_um2=0.0,
                 )
-                progress.bands.append(band)
-                self._collect_in_band(band, band_idx, n_par_target)
+                self._add_stats_band(progress, band)
+                self._collect_in_band(band, band_idx, self._band_target(band, band_idx, n_par_target))
 
         precision_reached = None
         if powder_meas_cfg.size_stats_ci_tolerance is not None:
             precision_reached = self._collect_until_precise(progress, navigator if not is_manual else None)
 
         size_bands = progress.bands
-        run_particle_ids = [pid for band in size_bands for pid in band.particle_ids]
-        eds_scans = self._stats_eds_scans(powder_meas_cfg)
+        n_found = sum(band.n_particles for band in size_bands)
+        eds_scans = self._stats_eds_scans(progress)
         stats_particles = self._stats_particles(progress, eds_scans)
-        # The measurement ends: its result replaces the record in progress
+        # The measurement ends
         self._stats_progress = None
-        if self._ledger is not None:
-            self._ledger.particle_stats_progress = None
-        if not run_particle_ids:
+        measurement = progress.measurement
+        if measurement is not None:
+            measurement.status, measurement.precision_reached = "completed", precision_reached
+        if not n_found and not self._eds_diameters_um.size:  # (targets possibly reached by EDS alone)
             logger.error(
                 '❌ Could not find any particle. Please check your sample, '
                 'or change the contrast/brightness values.'
@@ -2134,16 +2319,19 @@ class EM_Particle_Finder:
             self._persist_stats_ledger()
             return None
 
-        if self._ledger is not None:
-            result = particle_statistics.build_particle_stats_result(
-                stats_particles, powder_meas_cfg, n_par_target=n_par_target, bands=size_bands, eds_scans=eds_scans
+        result = None
+        if self._ledger is not None and measurement is not None:
+            result = particle_statistics.recalculate_particle_stats(
+                self._ledger, include_eds_auto_particles=powder_meas_cfg.include_eds_auto_particles,
+                measurement_id=measurement.measurement_id, segmentation_id=measurement.segmentation_id,
+                eds_segmentation_id=self._stats_eds_segmentation(progress),
             )
-            result.precision_reached = precision_reached
-            self._ledger.particle_stats = result
+            if result is not None:
+                result = self._ledger.append_size_result(result)
         self._persist_stats_ledger()
         return self.save_particle_statistics(
             particles=stats_particles, bands=size_bands, eds_scans=eds_scans,
-            confidence_intervals=self._ledger.particle_stats.confidence_intervals_95 if self._ledger is not None else None,
+            confidence_intervals=result.confidence_intervals_95 if result is not None else None,
         )
 
     def save_particle_statistics(
@@ -2251,56 +2439,20 @@ class EM_Particle_Finder:
         # Find connected components
         num_labels, labels, stats, centroids = self._get_connected_components_with_stats(par_mask)
         
-        # Store particle area / geometry as ParticleInfo
-        par_centroids = []  # Only used for saving image
-        par_areas = []
-        par_cntr = 0
-        frame_label = self._stats_frame_id()
-        for i in range(1, num_labels):  # Skip the background component (index 0)
-            par_area_pixels = stats[i, cv2.CC_STAT_AREA]
-            if (
-                par_area_pixels >= self.powder_meas_cfg.min_par_pixels  # enough pixels for a valid area
-                and self._is_particle_area_ok(par_area_pixels)
-                and not self.is_particle_at_frame_edge(stats, i)
-            ):
-                # If particle is within size limits and is not at the edge, consider it in the statistics
-                par_area_um = float(par_area_pixels * self.EM.pixel_size_um**2)
-                eq_diameter_um = float(2.0 * np.sqrt(par_area_um / np.pi))
-                abs_mm = self.EM.convert_pixel_pos_to_mm(centroids[i])
-                # Ids follow those of the particles already in the ledger (e.g. measured by EDS)
-                global_par_id = max((p.id for p in self.analyzed_pars), default=-1) + 1
-                self.analyzed_pars.append(
-                    ParticleInfo(
-                        id=global_par_id,
-                        area_um=par_area_um,
-                        eq_diameter_um=eq_diameter_um,
-                        coordinates=Coordinate2D(x=float(abs_mm[0]), y=float(abs_mm[1])),
-                        frame_id=frame_label,
-                        selection="size_stats",
-                        edge_correction=particle_statistics.edge_correction_factor(
-                            int(stats[i, cv2.CC_STAT_WIDTH]), int(stats[i, cv2.CC_STAT_HEIGHT]),
-                            self._im_width, self._im_height, FRAME_EDGE_MARGIN_PX,
-                        ),
-                    )
-                )
-                # Store stats locally to draw circles
-                par_areas.append(par_area_pixels)
-                par_centroids.append(centroids[i])
-                par_cntr += 1
-                
+        # Particles valid for the statistics (within the size limits, not at the frame edge): particle i of the frame
+        areas_um2, corrections, marks, _ = self._valid_particles(frame_image, stats, centroids, num_labels)
+        par_cntr = len(areas_um2)
+        frame_id = self._stats_frame_id() or str(self.EM.current_frame_label)
+
         # Save the frame images (without annotations, unless annotate_particle_images), and record the frame for the
         # statistics, with the particles to mark on its image. Frames without particles are saved too, so that the
         # measurement can be reanalysed (see autoemx.runners.reanalyze_particle_statistics)
-        new_particles = self.analyzed_pars[len(self.analyzed_pars) - par_cntr:]
-        particle_marks = [
-            (int(center[0]), int(center[1]), int(np.sqrt(area / np.pi) * 1.1), particle.id)
-            for center, area, particle in zip(par_centroids, par_areas, new_particles)
-        ]
         image_file = self._save_frame_images(
-            f"{self._sample_id}_fr{frame_label if frame_label is not None else self.EM.current_frame_label}",
-            frame_image, particle_marks, mask_image=self.prepare_mask_for_visualization(par_mask),
+            self._unique_image_stem(f"{self._sample_id}_fr{frame_id}"), frame_image,
+            [(x, y, r, i) for i, (x, y, r) in enumerate(marks)],
+            mask_image=self.prepare_mask_for_visualization(par_mask),
         )
-        self._record_stats_frame(frame_image.shape, [p.id for p in new_particles], image_file, particle_marks)
+        self._record_stats_frame(frame_image.shape, frame_id, areas_um2, corrections, marks, image_file)
 
         # Return True if at least 1 particle was found
         if par_cntr == 0:

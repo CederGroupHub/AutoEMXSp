@@ -14,7 +14,7 @@ from autoemx.core.composition_analysis.clustering_plot_axes import (
     CLUSTERING_3D_VIEW_AZIM,
     CLUSTERING_3D_VIEW_ELEV,
 )
-from autoemx.gui.backend import QUANT_FLAG_MEANINGS, AnalysisData
+from autoemx.gui.backend import QUANT_FLAG_MEANINGS, AnalysisData, ParticleSizeData
 
 CLUSTER_COLORS = [
     "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
@@ -678,4 +678,160 @@ def single_spectrum_figure(
     fig.update_yaxes(title_text="Residuals", row=2, col=1)
     fig.update_xaxes(range=x_range, row=1, col=1)
     fig.update_xaxes(title_text="Energy (keV)", range=x_range, row=2, col=1)
+    return fig
+
+
+PSD_COLOR = "#1f77b4"
+PSD_MARK_COLOR = "#d62728"
+
+
+def psd_figure(data: Optional[ParticleSizeData], bins: int = 20) -> go.Figure:
+    """Particle size distribution: number fraction by equivalent diameter (weighted as the statistics), with
+    logarithmic bins when the diameters span more than a factor 10, cumulative number and volume distributions,
+    and D10, D50 and D90 (as ``particle_statistics.save_particle_size_histogram``)."""
+    if data is None:
+        return _empty_figure("No particle size data for this sample")
+    d, w = np.asarray(data.diameters_um, dtype=float), np.asarray(data.weights, dtype=float)
+    if d.size == 0:
+        return _empty_figure("No particle with a weight in the statistics")
+    d_min, d_max = float(d.min()), float(d.max())
+    is_log = d_max / d_min > 10
+    if np.isclose(d_min, d_max):
+        edges = np.array([d_min * 0.95, d_max * 1.05])
+    elif is_log:
+        edges = np.geomspace(d_min, d_max, bins + 1)
+    else:
+        edges = np.linspace(d_min, d_max, bins + 1)
+    fractions, _ = np.histogram(d, bins=edges, weights=w / w.sum() * 100)
+
+    fig = go.Figure()
+    # Histogram as a filled step line: bars keep their width on a logarithmic axis
+    fig.add_trace(go.Scatter(
+        x=np.repeat(edges, 2)[1:-1], y=np.repeat(fractions, 2), mode="lines", fill="tozeroy", name="Number fraction",
+        line=dict(color=PSD_COLOR, width=1), fillcolor="rgba(31,119,180,0.45)", hoverinfo="skip",
+    ))
+    centres = np.sqrt(edges[:-1] * edges[1:]) if is_log else (edges[:-1] + edges[1:]) / 2
+    fig.add_trace(go.Scatter(
+        x=centres, y=fractions, mode="markers", marker=dict(size=14, opacity=0), showlegend=False,
+        customdata=np.column_stack([edges[:-1], edges[1:]]),
+        hovertemplate="%{customdata[0]:.3g}–%{customdata[1]:.3g} µm: %{y:.1f} %<extra></extra>",
+    ))
+    order = np.argsort(d, kind="stable")
+    for dist_w, dash, name in ((w, "solid", "Cumulative, number"), (w * d**3, "dash", "Cumulative, volume")):
+        cumulative = np.cumsum(dist_w[order]) / np.sum(dist_w) * 100
+        fig.add_trace(go.Scatter(
+            x=d[order], y=cumulative, mode="lines", line=dict(color="#222", width=1.4, dash=dash, shape="hv"),
+            name=name, yaxis="y2", hovertemplate="%{x:.3g} µm: %{y:.1f} %<extra>" + name + "</extra>",
+        ))
+    stats = data.result.size_stats
+    y_top = float(fractions.max()) * 1.12
+    for value, label in ((stats.D10, "D10"), (stats.median, "D50"), (stats.D90, "D90")):
+        fig.add_trace(go.Scatter(
+            x=[value, value], y=[0, y_top], mode="lines+text", text=["", f" {label}"], textposition="bottom right",
+            textfont=dict(color=PSD_MARK_COLOR, size=11), line=dict(color=PSD_MARK_COLOR, width=1.2, dash="dot"),
+            showlegend=False, hovertemplate=f"{label}: {value:.3g} µm<extra></extra>",
+        ))
+    fig.update_layout(
+        template="plotly_white", margin=dict(l=10, r=10, t=30, b=10), legend=dict(orientation="h", y=1.08),
+        xaxis=dict(title="Equivalent diameter (µm)", type="log" if is_log else "linear",
+                   dtick="D2" if is_log else None),
+        yaxis=dict(title="Number fraction (%)", range=[0, y_top * 1.02], rangemode="tozero"),
+        yaxis2=dict(title="Cumulative (%)", overlaying="y", side="right", range=[0, 100], showgrid=False),
+        hovermode="closest",
+    )
+    return fig
+
+
+def psd_comparison_figure(items: Sequence[tuple], kind: str = "cumulative", basis: str = "number",
+                          bins: int = 25) -> go.Figure:
+    """Size distributions of several samples (``items``: (label, ParticleSizeData)), by number or volume:
+    cumulative curves with their median marked, or histograms on common bins (logarithmic when the diameters
+    span more than a factor 10)."""
+    items = [(label, data) for label, data in items if data is not None and len(data.diameters_um)]
+    if not items:
+        return _empty_figure("Select samples with particle size data to compare")
+    all_d = np.concatenate([np.asarray(data.diameters_um, dtype=float) for _, data in items])
+    d_min, d_max = float(all_d.min()), float(all_d.max())
+    is_log = d_max / d_min > 10
+    if np.isclose(d_min, d_max):
+        edges = np.array([d_min * 0.95, d_max * 1.05])
+    else:
+        edges = np.geomspace(d_min, d_max, bins + 1) if is_log else np.linspace(d_min, d_max, bins + 1)
+    fig = go.Figure()
+    for i, (label, data) in enumerate(items):
+        color = cluster_color(i)
+        d = np.asarray(data.diameters_um, dtype=float)
+        w = np.asarray(data.weights, dtype=float) * (d**3 if basis == "volume" else 1)
+        if kind == "histogram":
+            fractions, _ = np.histogram(d, bins=edges, weights=w / w.sum() * 100)
+            fig.add_trace(go.Scatter(
+                x=np.repeat(edges, 2)[1:-1], y=np.repeat(fractions, 2), mode="lines", name=label,
+                line=dict(color=color, width=1.8), hovertemplate="%{x:.3g} µm: %{y:.1f} %<extra>" + label + "</extra>",
+            ))
+            continue
+        order = np.argsort(d, kind="stable")
+        cumulative = np.cumsum(w[order]) / w.sum() * 100
+        fig.add_trace(go.Scatter(
+            x=d[order], y=cumulative, mode="lines", name=label, legendgroup=label,
+            line=dict(color=color, width=1.8, shape="hv"),
+            hovertemplate="%{x:.3g} µm: %{y:.1f} %<extra>" + label + "</extra>",
+        ))
+        stats = data.result.size_stats
+        median = stats.Dv50 if basis == "volume" else stats.median
+        if median is not None:
+            fig.add_trace(go.Scatter(
+                x=[median], y=[50], mode="markers", legendgroup=label, showlegend=False,
+                marker=dict(color=color, size=9, line=dict(color="white", width=1)),
+                hovertemplate=f"{label}<br>{'Dv50' if basis == 'volume' else 'D50'}: {median:.3g} µm<extra></extra>",
+            ))
+    y_title = f"{'Volume' if basis == 'volume' else 'Number'} fraction (%)"
+    fig.update_layout(
+        template="plotly_white", margin=dict(l=10, r=10, t=30, b=10), legend=dict(orientation="h", y=1.08),
+        xaxis=dict(title="Equivalent diameter (µm)", type="log" if is_log else "linear", dtick="D2" if is_log else None),
+        yaxis=dict(title=("Cumulative " + y_title[0].lower() + y_title[1:]) if kind == "cumulative" else y_title,
+                   range=[0, 102] if kind == "cumulative" else None, rangemode="tozero"),
+        hovermode="closest",
+    )
+    return fig
+
+
+FRAME_MARK_COLORS = {"in": "#2ca02c", "out": "#d62728", "eds": "#17becf"}
+
+
+def size_frame_figure(image_src: Optional[str], size: Optional[Sequence[int]], marks: Sequence[Sequence[Any]],
+                      excluded_particles: Iterable[int] = (), is_eds: bool = False,
+                      frame_excluded: bool = False, uirevision: Optional[str] = None) -> go.Figure:
+    """Frame image of a particle size measurement with its particles circled: counted (green, cyan in frames searched
+    by EDS) or left out (red); ``excluded_particles`` are their indices in the frame. Clicking a particle gives its
+    index as customdata."""
+    if not image_src or not size:
+        return _empty_figure("No image saved for this frame")
+    width, height = int(size[0]), int(size[1])
+    excluded = set(excluded_particles)
+    fig = go.Figure()
+    fig.add_layout_image(dict(source=image_src, xref="x", yref="y", x=0, y=0, sizex=width, sizey=height,
+                              xanchor="left", yanchor="top", sizing="stretch", layer="below",
+                              opacity=0.45 if frame_excluded else 1))
+    groups: Dict[str, List[Sequence[Any]]] = {"in": [], "out": [], "eds": []}
+    for x, y, r, index in marks:
+        key = "out" if index in excluded or frame_excluded else ("eds" if is_eds else "in")
+        groups[key].append((x, y, r, index))
+        fig.add_shape(type="circle", xref="x", yref="y", x0=x - r, x1=x + r, y0=y - r, y1=y + r,
+                      line=dict(color=FRAME_MARK_COLORS[key], width=2, dash="dot" if key == "out" else "solid"))
+    names = {"in": "Counted", "out": "Left out", "eds": "Counted (frame searched by EDS)"}
+    for key, pts in groups.items():
+        if not pts:
+            continue
+        fig.add_trace(go.Scatter(
+            x=[p[0] for p in pts], y=[p[1] for p in pts], mode="markers", name=names[key],
+            customdata=[p[3] for p in pts],
+            marker=dict(color=FRAME_MARK_COLORS[key], size=8, opacity=0.25),  # click target, circle stays visible
+            hovertemplate="Particle %{customdata}<extra></extra>",
+        ))
+    fig.update_layout(
+        template="plotly_white", margin=dict(l=0, r=0, t=0, b=0), dragmode="pan", uirevision=uirevision,
+        xaxis=dict(range=[0, width], visible=False, constrain="domain"),
+        yaxis=dict(range=[height, 0], visible=False, scaleanchor="x", scaleratio=1, constrain="domain"),
+        legend=dict(orientation="h", y=-0.01, yanchor="top", x=0, font=dict(size=11)),
+    )
     return fig

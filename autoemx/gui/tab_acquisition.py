@@ -3,7 +3,9 @@
 """
 Acquisition tab of the AutoEMX GUI: acquire (and optionally quantify) the spectra of a list of
 samples with the electron microscope (``batch_acquire_and_analyze``), with every option of
-``Run_Acquisition.py``. Settings and the sample list are kept in the browser between sessions.
+``Run_Acquisition.py``, possibly continued by particle size statistics; or measure only the particle
+size statistics of the samples (``collect_particle_statistics``). Settings and the sample list are kept
+in the browser between sessions.
 
 The results folder and the samples can be given in the page URL (``?acq=<JSON>``), e.g. by an external
 script; see ``prefill_from_query``. With a run ID, the runs started from that page are reported to it
@@ -27,6 +29,7 @@ from autoemx.gui.common import JOBS, _chip, _pid, _row_class, _spec, form_values
 
 _NOTES = {
     "apowder": "used for powder samples",
+    "asize": "used for particle sizes",
     "abulk": "used for bulk-type samples",
     "aquant": "used when quantifying during acquisition",
 }
@@ -132,6 +135,13 @@ def _prefill_rows(search: Optional[str]) -> List[Dict[str, Any]]:
 def layout() -> List[Any]:
     sidebar = html.Div(
         [
+            html.Div([
+                html.Span("Measurement", className="side-title"),
+                dcc.RadioItems(id="a-mode", value="eds", className="seg a-mode", persistence="v1",
+                               persistence_type="local",
+                               options=[{"label": label, "value": key} for key, label in be.ACQ_MODES.items()]),
+                html.Div(id="a-mode-note", className="hint a-mode-note"),
+            ], className="side-block"),
             html.Div(
                 [
                     html.Div([html.Span("Settings", className="side-title"),
@@ -139,7 +149,7 @@ def layout() -> List[Any]:
                                           title="Restore the default settings of Run_Acquisition.py")],
                              className="side-title-row"),
                     html.Div(param_sections(be.ACQ_SPECS, be.ACQ_SECTIONS, _NOTES,
-                                            open_sections=("amicro", "asample", "aacq"), persist=True),
+                                            open_sections=("amicro", "asample", "aacq", "asize"), persist=True),
                              className="param-sections"),
                 ],
                 className="side-block side-params",
@@ -229,13 +239,24 @@ def layout() -> List[Any]:
 ON, OFF, HIDDEN = "on", "off", "hidden"  # parameter shown, greyed out, or not shown
 
 
-def active_acq_params(values: Dict[str, Any]) -> Dict[str, str]:
+# Settings of EDS spectra, not used by particle size statistics only
+_EDS_ONLY_PARAMS = ("asample.sample_type", "asample.els_substrate", "asample.working_distance_tolerance",
+                    "aacq.beam_energy", "aacq.target_Xsp_counts", "aacq.max_XSp_acquisition_time",
+                    "aacq.quantify_spectra", "aacq.n_spectra", "aacq.min_n_spectra", "aacq.max_n_spectra",
+                    "aimg.annotate_particle_images", "aimg.save_raw_images")
+# Settings of a particle size statistics measurement (not of the EDS frames counted in the statistics)
+_SIZE_MEASUREMENT_PARAMS = ("n_par_target", "min_par_diameter_um", "max_par_diameter_um", *be.ACQ_PSD_POWDER_FIELDS,
+                            "size_stats_ci_tolerance", "size_stats_ci_quantities", "size_stats_max_n_frames",
+                            "size_stats_max_time_min", "size_stats_plot_format")
+
+
+def active_acq_params(values: Dict[str, Any], mode: str = "eds") -> Dict[str, str]:
     """State (on / off / hidden) of the acquisition sections ('section') and parameters ('section.name')
-    with the current settings. Not listed: on."""
+    with the current settings, for the measurement ``mode`` (see ``backend.ACQ_MODES``). Not listed: on."""
     sample_type = values.get("asample.sample_type")
     quantify = bool(values.get("aacq.quantify_spectra"))
     auto_bc = bool(values.get("aacq.auto_adjust_brightness_contrast"))
-    return {
+    active = {
         "apowder": ON if sample_type in be.ACQ_PARTICLE_TYPES else OFF,
         "abulk": ON if sample_type in be.ACQ_GRID_TYPES else OFF,
         "aquant": ON if quantify else OFF,
@@ -246,7 +267,24 @@ def active_acq_params(values: Dict[str, Any]) -> Dict[str, str]:
         "aacq.n_spectra": HIDDEN if quantify else ON,
         "aacq.min_n_spectra": ON if quantify else HIDDEN,
         "aacq.max_n_spectra": ON if quantify else HIDDEN,
+        # Raw copies: of annotated images only
+        "aimg.save_raw_images": ON if values.get("aimg.annotate_particle_images") else OFF,
     }
+    # Brightness threshold: used by the threshold segmentation only
+    for section in ("apowder", "asize"):
+        model = values.get(f"{section}.par_segmentation_model")
+        active[f"{section}.par_brightness_thresh"] = ON if model in (None, "threshold_bright") else OFF
+    if mode == "eds":
+        active.update({f"asize.{name}": HIDDEN for name in _SIZE_MEASUREMENT_PARAMS})
+    elif not values.get("asize.size_stats_ci_tolerance"):
+        # Limits of a measurement stopping at precision
+        active.update({f"asize.{name}": OFF for name in ("size_stats_ci_quantities", "size_stats_max_n_frames",
+                                                         "size_stats_max_time_min")})
+    if mode == "sizes":
+        # Particle settings in the size statistics section
+        active.update({key: HIDDEN for key in _EDS_ONLY_PARAMS})
+        active.update({"apowder": HIDDEN, "abulk": HIDDEN, "aquant": HIDDEN})
+    return active
 
 
 def _progress_view(progress: List[Dict[str, Any]]) -> List[Any]:
@@ -254,7 +292,12 @@ def _progress_view(progress: List[Dict[str, Any]]) -> List[Any]:
     for p in progress:
         frac = min(1.0, p["done"] / p["total"]) if p["total"] else 0.0
         label = {"waiting": "waiting", "running": f"{p['done']} / {p['total']} spectra",
-                 "done": f"done · {p['done']} spectra", "failed": "failed"}[p["state"]]
+                 "done": f"done · {p['done']} spectra" if p["total"] else "done", "failed": "failed"}[p["state"]]
+        sizes = p.get("sizes")
+        if sizes and p["state"] == "running":  # particle size statistics (after the spectra, if any)
+            total = sizes["total"]
+            label = f"size band {sizes['band']}: {sizes['done']}" + (f" / {total} particles" if total else " particles")
+            frac = min(1.0, sizes["done"] / total) if total else 0.0
         error = [html.Div(p["error"], className="err q-prog-error")] if p.get("error") else []
         items.append(html.Div([
             html.Div([html.Span(p["sample"], className="q-prog-name"), html.Span(label, className="muted")],
@@ -402,13 +445,26 @@ def register(app) -> None:
         Output({"type": "aparam-section", "key": ALL}, "className"),
         Output({"type": "aparam-row", "key": ALL}, "className"),
         Input({"type": "aparam", "key": ALL}, "value"),
+        Input("a-mode", "value"),
     )
-    def grey_out(_):
-        active = active_acq_params(form_values(ctx.inputs_list[0]))
+    def grey_out(_, mode):
+        active = active_acq_params(form_values(ctx.inputs_list[0]), mode)
         extra = {ON: "", OFF: " disabled", HIDDEN: " hidden-param"}
         sections = ["param-section" + extra[active.get(o["id"]["key"], ON)] for o in ctx.outputs_list[0]]
         rows = [_row_class(_spec(o["id"])) + extra[active.get(_spec(o["id"]).key, ON)] for o in ctx.outputs_list[1]]
         return sections, rows
+
+    @app.callback(Output("a-mode-note", "children"), Input("a-mode", "value"))
+    def mode_note(mode):
+        return {
+            "eds": "",
+            "eds+sizes": "After the spectra of each sample, frames are searched for particle size statistics: the "
+                         "particles found in the frames searched by EDS count, and only more frames are searched to "
+                         "reach the target. With another segmentation model or threshold than EDS, the frames "
+                         "searched by EDS are segmented again with them, from their saved images. Powder samples, "
+                         "automatic navigation and particle selection only.",
+            "sizes": "Particle sizes only: no spectra are acquired, the elements of the samples are not needed.",
+        }.get(mode, "")
 
     @app.callback(
         Output("a-table-msg", "children"),
@@ -416,17 +472,18 @@ def register(app) -> None:
         Input({"type": "a-cell", "uid": ALL, "col": ALL}, "value"),
         Input(_pid("amicro.microscope_ID"), "value"),
         Input(_pid("aacq.beam_energy"), "value"),
+        Input("a-mode", "value"),
         State("sample-dd", "options"),
     )
-    def check_table(_, microscope, beam_kv, options):
+    def check_table(_, microscope, beam_kv, mode, options):
         rows = _rows_from_cells(ctx.inputs_list[0])
         if not ctx.inputs_list[0]:
             return html.Span("Add the samples to acquire.", className="muted"), no_update
-        return _check_message(rows, options, microscope or be.dflt.microscope_ID, beam_kv), rows
+        return _check_message(rows, options, microscope or be.dflt.microscope_ID, beam_kv, mode), rows
 
-    def _check_message(rows, options, microscope, beam_kv):
+    def _check_message(rows, options, microscope, beam_kv, mode="eds"):
         try:
-            samples = be.acquisition_samples(rows)
+            samples = be.acquisition_samples(rows, require_elements=mode != "sizes")
         except ValueError as exc:
             return html.Span(str(exc), className="err")
         existing = {os.path.basename(o["value"]) for o in (options or [])}
@@ -436,7 +493,7 @@ def register(app) -> None:
             out.append(html.Span(f" Already in the results folder (spectra will be added): {', '.join(again)}.",
                                  className="warn"))
         missing = []
-        for smp in samples:
+        for smp in samples if mode != "sizes" else []:
             no_std = be.elements_without_standards(smp["els"], microscope, beam_kv)
             if no_std:
                 missing.append(f"{smp['ID']}: {', '.join(no_std)}")
@@ -445,12 +502,14 @@ def register(app) -> None:
                                  className="err"))
         return out
 
-    def _settings(states_form, rows, folder):
+    def _settings(states_form, rows, folder, mode):
         values = be.coerce_values(form_values(states_form), be.ACQ_SPECS)
-        samples = be.acquisition_samples(rows)
+        samples = be.acquisition_samples(rows, require_elements=mode != "sizes")
         if not folder:
             raise ValueError("Choose the results folder at the top")
-        return samples, be.acquisition_kwargs(values)
+        if mode == "sizes":
+            return [{"ID": s["ID"], "pos": s["pos"]} for s in samples], be.psd_acquisition_kwargs(values)
+        return samples, be.acquisition_kwargs(values, mode)
 
     @app.callback(
         Output("a-download", "data"),
@@ -459,14 +518,16 @@ def register(app) -> None:
         State({"type": "aparam", "key": ALL}, "value"),
         State({"type": "a-cell", "uid": ALL, "col": ALL}, "value"),
         State("folder", "value"),
+        State("a-mode", "value"),
         prevent_initial_call=True,
     )
-    def script(_, __, ___, folder):
+    def script(_, __, ___, folder, mode):
         try:
-            samples, kwargs = _settings(ctx.states_list[0], _rows_from_cells(ctx.states_list[1]), folder)
+            samples, kwargs = _settings(ctx.states_list[0], _rows_from_cells(ctx.states_list[1]), folder, mode)
         except ValueError as exc:
             return no_update, html.Div([html.B("Invalid settings: "), str(exc)], className="err")
-        return dict(content=be.acquisition_script(samples, kwargs, folder), filename="Run_Acquisition_GUI.py"), \
+        name = "Collect_Particle_Statistics_GUI.py" if mode == "sizes" else "Run_Acquisition_GUI.py"
+        return dict(content=be.acquisition_script(samples, kwargs, folder, mode), filename=name), \
             html.Span("Script downloaded.", className="ok")
 
     @app.callback(
@@ -478,15 +539,18 @@ def register(app) -> None:
         State({"type": "a-cell", "uid": ALL, "col": ALL}, "value"),
         State("folder", "value"),
         State("a-link", "data"),
+        State("a-mode", "value"),
         prevent_initial_call=True,
     )
-    def run(_, __, ___, folder, link):
+    def run(_, __, ___, folder, link, mode):
         try:
-            samples, kwargs = _settings(ctx.states_list[0], _rows_from_cells(ctx.states_list[1]), folder)
+            samples, kwargs = _settings(ctx.states_list[0], _rows_from_cells(ctx.states_list[1]), folder, mode)
         except ValueError as exc:
             return no_update, no_update, html.Div([html.B("Invalid settings: "), str(exc)], className="err")
-        payload = {"samples": samples, "kwargs": kwargs, "results_dir": os.path.abspath(os.path.expanduser(folder))}
-        desc = f"Acquisition of {len(samples)} sample{'s' if len(samples) > 1 else ''}"
+        payload = {"samples": samples, "kwargs": kwargs, "results_dir": os.path.abspath(os.path.expanduser(folder)),
+                   "mode": mode}
+        what = "Particle size statistics" if mode == "sizes" else "Acquisition"
+        desc = f"{what} of {len(samples)} sample{'s' if len(samples) > 1 else ''}"
         report = None
         if link and link.get("run_id"):
             report = run_report.new_report(link["run_id"], [s["ID"] for s in samples], payload["results_dir"],
@@ -505,7 +569,7 @@ def register(app) -> None:
             threading.Thread(target=run_report.follow_job, args=(job, report), name=f"report-{report['run_id']}",
                              daemon=False).start()
         return ({"id": job.job_id, "done": False, "samples": [s["ID"] for s in samples],
-                 "max_n": kwargs["max_n_spectra"]}, False, html.Span(f"{desc} started…", className="running"))
+                 "max_n": kwargs.get("max_n_spectra", 0)}, False, html.Span(f"{desc} started…", className="running"))
 
     @app.callback(
         Output("a-run-msg", "children", allow_duplicate=True),

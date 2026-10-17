@@ -40,6 +40,7 @@ Created on Mon Oct  5 2026
 
 import json
 import logging
+from types import SimpleNamespace
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -123,12 +124,23 @@ def _spots_by_image(ledger) -> Tuple[Dict[int, list], Dict[str, list]]:
 
 
 def _recorded_frames(ledger) -> list:
-    """Frames of the ledger with an image and particles to mark: particle size statistics and EDS frames."""
-    scans = list(ledger.eds_size_scans)
-    for stats in (ledger.particle_stats, ledger.particle_stats_progress):
-        if stats is not None:
-            scans += list(stats.bands)
-    return [frame for scan in scans for frame in scan.frames if frame.image_file and frame.particle_marks_px is not None]
+    """
+    Frames of the ledger with an image, with the particles to mark (x, y, radius, index in the frame): those of the
+    segmentation of the active statistics result (else the last segmentation of each frame).
+    """
+    result = ledger.size_result
+    frames = []
+    for frame in ledger.frames:
+        if not frame.image_file or not frame.segmentations:
+            continue
+        preferred = None
+        if result is not None:
+            preferred = result.eds_segmentation_id if frame.purpose == "eds_search" else result.segmentation_id
+        segmentation = frame.segmentation(preferred) or frame.segmentations[-1]
+        marks = [(x, y, r, i) for i, (x, y, r) in enumerate(segmentation.particle_marks_px)]
+        frames.append(SimpleNamespace(image_file=frame.image_file, pixel_size_um=frame.pixel_size_um,
+                                      particle_marks_px=marks))
+    return frames
 
 
 def annotate_particle_images(

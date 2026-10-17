@@ -136,3 +136,25 @@ def test_save_particle_statistics_from_particle_info(outputs_dir: Path):
     content = sizes_path.read_text(encoding="utf-8")
     assert "A0_a1" in content
     assert cnst.PAR_EQ_D_KEY in content
+
+
+def test_skip_frames_overlapping_areas_searched():
+    nav = object.__new__(FrameNavigator)
+    nav.EM_controller = SimpleNamespace(set_frame_width=lambda _fw: None)
+    nav.EM_driver = SimpleNamespace(is_microscope_connected=lambda: False)
+    nav.im_width, nav.im_height = 100, 50
+    nav._center_pos, nav._sample_hw_mm = (0.0, 0.0), 1.0
+    nav.grid_search_fw_mm, nav._frame_cntr, nav.current_frame_label = None, 0, ""
+    nav._visited_band_frames, nav._band_frame_descriptors = [], []
+    nav.frame_pos_mm, nav.frame_labels, nav.num_frames = [], [], 0
+    # 4x4 frames of 0.1 x 0.05 mm inside a 0.4 mm parent
+    nav.configure_particle_subframes([("A0", (0.0, 0.0), 0.4)], child_fw_mm=0.1, randomize_frames=False)
+    assert nav.num_frames == 16
+
+    assert nav.skip_frames_overlapping([]) == 0 and nav.num_frames == 16
+    # Area searched covering the frame at (-0.15, -0.075) and touching (not overlapping) its neighbours
+    n = nav.skip_frames_overlapping([((-0.15, -0.075), (0.05, 0.025))])
+    assert n == 1 and nav.num_frames == 15
+    assert all(not (np.isclose(x, -0.15) and np.isclose(y, -0.075)) for x, y in nav.frame_pos_mm)
+    # Larger area: every frame it overlaps
+    assert nav.skip_frames_overlapping([((0.15, 0.0), (0.04, 0.01))]) == 2  # two rows of the last column

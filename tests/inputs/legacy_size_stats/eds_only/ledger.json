@@ -1,0 +1,1225 @@
+{
+  "autoemx_version": "1.6.3",
+  "sample_id": "eds_only",
+  "sample_path": "/Users/Andrea_1/Desktop/Work/Codes/Repositories/AutoEMXSp/tests/inputs/legacy_size_stats/eds_only",
+  "configs": {
+    "microscope_cfg": {
+      "ID": "PhenomXL",
+      "type": "SEM",
+      "detector_type": "BSD",
+      "is_auto_BC": true,
+      "brightness": null,
+      "contrast": null,
+      "energy_zero": null,
+      "bin_width": null
+    },
+    "sample_cfg": {
+      "elements": [
+        "Si"
+      ],
+      "type": "powder",
+      "w_frs": null,
+      "center_pos": [
+        0.0,
+        0.0
+      ],
+      "half_width_mm": 2.9,
+      "is_powder_sample": true,
+      "is_surface_rough": true,
+      "is_grid_acquisition": false,
+      "is_particle_acquisition": true
+    },
+    "measurement_cfg": {
+      "type": "EDS",
+      "mode": "point",
+      "working_distance": null,
+      "working_distance_tolerance": 1.0,
+      "beam_energy_keV": 15.0,
+      "beam_current": null,
+      "emergence_angle": null,
+      "is_manual_navigation": false,
+      "max_acquisition_time": 30.0,
+      "target_acquisition_counts": 50000,
+      "min_n_spectra": 50,
+      "max_n_spectra": 100,
+      "powder_meas_cfg": {
+        "par_selection_mode": "auto",
+        "img_shift_tracking": true,
+        "par_search_frame_width_um": 195.44100476116796,
+        "max_n_par_per_frame": 30,
+        "max_spectra_per_par": 3,
+        "max_area_par": 300.0,
+        "min_area_par": 10.0,
+        "par_mask_margin": 1.0,
+        "xsp_spots_distance_um": 1.0,
+        "par_spot_selection_mode": "auto",
+        "par_segmentation_model": "threshold_bright",
+        "par_brightness_thresh": 100,
+        "par_xy_spots_thresh": 100,
+        "par_feature_selection": "random",
+        "par_spot_spacing": "random",
+        "min_par_pixels": 80,
+        "size_stats_plot_format": "png",
+        "size_stats_ci_tolerance": null,
+        "size_stats_ci_quantities": [
+          "D50"
+        ],
+        "size_stats_max_n_frames": 500,
+        "size_stats_max_time_min": null,
+        "include_eds_auto_particles": true
+      },
+      "bulk_meas_cfg": {
+        "grid_spot_spacing_um": 100.0,
+        "min_xsp_spots_distance_um": 5.0,
+        "image_frame_width_um": 1000.0,
+        "randomize_frames": false,
+        "exclude_sample_margin": false
+      },
+      "exp_stds_cfg": null,
+      "saved_images_extension": "png",
+      "save_raw_images": false,
+      "annotate_particle_images": false
+    },
+    "sample_substrate_cfg": {
+      "elements": [
+        "C"
+      ],
+      "type": "Ctape",
+      "shape": "circle",
+      "auto_detection": true,
+      "stub_w_mm": 12.0
+    },
+    "plot_cfg": {
+      "show_unused_comps_clust": true,
+      "els_excluded_clust_plot": [],
+      "els_to_plot": [],
+      "show_legend_clustering": true,
+      "save_plots": true,
+      "show_plots": false,
+      "use_custom_plots": false,
+      "custom_plot_file": null,
+      "plot_best_mixture": true,
+      "intermixing_violin_plots": null
+    }
+  },
+  "spectra": [],
+  "particles": [],
+  "particle_stats": {
+    "autoemx_version": "1.6.3",
+    "datetime": "2026-10-16T23:06:23",
+    "n_par_target": null,
+    "powder_meas_cfg": {
+      "par_selection_mode": "auto",
+      "img_shift_tracking": true,
+      "par_search_frame_width_um": 195.44100476116796,
+      "max_n_par_per_frame": 30,
+      "max_spectra_per_par": 3,
+      "max_area_par": 300.0,
+      "min_area_par": 10.0,
+      "par_mask_margin": 1.0,
+      "xsp_spots_distance_um": 1.0,
+      "par_spot_selection_mode": "auto",
+      "par_segmentation_model": "threshold_bright",
+      "par_brightness_thresh": 100,
+      "par_xy_spots_thresh": 100,
+      "par_feature_selection": "random",
+      "par_spot_spacing": "random",
+      "min_par_pixels": 80,
+      "size_stats_plot_format": "png",
+      "size_stats_ci_tolerance": null,
+      "size_stats_ci_quantities": [
+        "D50"
+      ],
+      "size_stats_max_n_frames": 500,
+      "size_stats_max_time_min": null,
+      "include_eds_auto_particles": true
+    },
+    "particle_ids": [],
+    "n_par_by_selection": {
+      "eds_frames": 48
+    },
+    "size_stats": {
+      "n_par_analysed": 48,
+      "mean": 6.064635453927996,
+      "stdev": 2.0484540290474285,
+      "median": 5.859337595305837,
+      "max": 11.50236267068051,
+      "min": 2.4429325013806658,
+      "D10": 3.6806929821597665,
+      "D25": 4.49381769883648,
+      "D75": 7.347477953875817,
+      "D90": 9.3021996517605,
+      "D43": 8.067721552447084,
+      "Dv10": 5.034310077512494,
+      "Dv50": 8.05149261779255,
+      "Dv90": 10.92246773100554
+    },
+    "unweighted_size_stats": {
+      "n_par_analysed": 48,
+      "mean": 6.064635453927996,
+      "stdev": 2.0484540290474285,
+      "median": 5.859337595305837,
+      "max": 11.50236267068051,
+      "min": 2.4429325013806658,
+      "D10": 3.6806929821597665,
+      "D25": 4.49381769883648,
+      "D75": 7.347477953875817,
+      "D90": 9.3021996517605,
+      "D43": 8.067721552447084,
+      "Dv10": 5.034310077512494,
+      "Dv50": 8.05149261779255,
+      "Dv90": 10.92246773100554
+    },
+    "n_par_without_weight": 0,
+    "confidence_intervals_95": {
+      "D10": [
+        3.4413788988287406,
+        4.365995134495445
+      ],
+      "D50": [
+        4.837576606821889,
+        6.455534794622592
+      ],
+      "D90": [
+        7.580289395107661,
+        10.408382827771337
+      ],
+      "D43": [
+        7.008799788809163,
+        9.031930131747444
+      ],
+      "Dv10": [
+        4.390478686715306,
+        6.0948494067819805
+      ],
+      "Dv50": [
+        6.621851134130727,
+        9.823417675495191
+      ],
+      "Dv90": [
+        9.26519088356016,
+        11.50236267068051
+      ]
+    },
+    "precision_reached": null,
+    "bands": [],
+    "eds_scans": [
+      {
+        "d_min_um": 3.0,
+        "d_max_um": 30.0,
+        "frame_width_um": 50.0,
+        "n_frames": 6,
+        "scanned_area_um2": 11250.0,
+        "particle_ids": [],
+        "frames": [
+          {
+            "frame_id": "EDS-B0",
+            "center_mm": {
+              "x": 5.0,
+              "y": 5.0
+            },
+            "frame_width_um": 50.0,
+            "pixel_size_um": 0.08,
+            "area_um2": 1875.0,
+            "n_particles": 8,
+            "particle_areas_um2": [
+              31.068131779213733,
+              27.46130394820342,
+              9.304547739402825,
+              4.687192783933945,
+              17.598984246851018,
+              10.60251840544248,
+              32.90062612792967,
+              43.45007134403953
+            ],
+            "particle_edge_corrections": [
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "image_file": "S_frB0_particles.png",
+            "particle_marks_px": [
+              [
+                20,
+                30,
+                4,
+                null
+              ],
+              [
+                30,
+                30,
+                4,
+                null
+              ],
+              [
+                40,
+                30,
+                4,
+                null
+              ],
+              [
+                50,
+                30,
+                4,
+                null
+              ],
+              [
+                60,
+                30,
+                4,
+                null
+              ],
+              [
+                70,
+                30,
+                4,
+                null
+              ],
+              [
+                80,
+                30,
+                4,
+                null
+              ],
+              [
+                90,
+                30,
+                4,
+                null
+              ]
+            ]
+          },
+          {
+            "frame_id": "EDS-B1",
+            "center_mm": {
+              "x": 5.1,
+              "y": 5.0
+            },
+            "frame_width_um": 50.0,
+            "pixel_size_um": 0.08,
+            "area_um2": 1875.0,
+            "n_particles": 8,
+            "particle_areas_um2": [
+              33.10961479599742,
+              22.65176390863402,
+              29.495655164545223,
+              56.96055954431454,
+              18.259210598122298,
+              49.17234180648579,
+              43.22954881346153,
+              33.081196111373956
+            ],
+            "particle_edge_corrections": [
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "image_file": "S_frB1_particles.png",
+            "particle_marks_px": [
+              [
+                20,
+                30,
+                4,
+                null
+              ],
+              [
+                30,
+                30,
+                4,
+                null
+              ],
+              [
+                40,
+                30,
+                4,
+                null
+              ],
+              [
+                50,
+                30,
+                4,
+                null
+              ],
+              [
+                60,
+                30,
+                4,
+                null
+              ],
+              [
+                70,
+                30,
+                4,
+                null
+              ],
+              [
+                80,
+                30,
+                4,
+                null
+              ],
+              [
+                90,
+                30,
+                4,
+                null
+              ]
+            ]
+          },
+          {
+            "frame_id": "EDS-B2",
+            "center_mm": {
+              "x": 5.2,
+              "y": 5.0
+            },
+            "frame_width_um": 50.0,
+            "pixel_size_um": 0.08,
+            "area_um2": 1875.0,
+            "n_particles": 8,
+            "particle_areas_um2": [
+              67.56651754693013,
+              18.380003608620317,
+              49.772273733244525,
+              16.193072249334563,
+              17.845217001972806,
+              14.971191865080524,
+              36.9458534950557,
+              16.08839880177699
+            ],
+            "particle_edge_corrections": [
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "image_file": "S_frB2_particles.png",
+            "particle_marks_px": [
+              [
+                20,
+                30,
+                4,
+                null
+              ],
+              [
+                30,
+                30,
+                4,
+                null
+              ],
+              [
+                40,
+                30,
+                4,
+                null
+              ],
+              [
+                50,
+                30,
+                4,
+                null
+              ],
+              [
+                60,
+                30,
+                4,
+                null
+              ],
+              [
+                70,
+                30,
+                4,
+                null
+              ],
+              [
+                80,
+                30,
+                4,
+                null
+              ],
+              [
+                90,
+                30,
+                4,
+                null
+              ]
+            ]
+          },
+          {
+            "frame_id": "EDS-B3",
+            "center_mm": {
+              "x": 5.3,
+              "y": 5.0
+            },
+            "frame_width_um": 50.0,
+            "pixel_size_um": 0.08,
+            "area_um2": 1875.0,
+            "n_particles": 8,
+            "particle_areas_um2": [
+              29.173197744450583,
+              14.295250027933095,
+              53.60857382232719,
+              85.08566478115405,
+              32.38192667799776,
+              75.7905574220156,
+              39.58113617209131,
+              103.91159114947543
+            ],
+            "particle_edge_corrections": [
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "image_file": "S_frB3_particles.png",
+            "particle_marks_px": [
+              [
+                20,
+                30,
+                4,
+                null
+              ],
+              [
+                30,
+                30,
+                4,
+                null
+              ],
+              [
+                40,
+                30,
+                4,
+                null
+              ],
+              [
+                50,
+                30,
+                4,
+                null
+              ],
+              [
+                60,
+                30,
+                4,
+                null
+              ],
+              [
+                70,
+                30,
+                4,
+                null
+              ],
+              [
+                80,
+                30,
+                4,
+                null
+              ],
+              [
+                90,
+                30,
+                4,
+                null
+              ]
+            ]
+          },
+          {
+            "frame_id": "EDS-B4",
+            "center_mm": {
+              "x": 5.4,
+              "y": 5.0
+            },
+            "frame_width_um": 50.0,
+            "pixel_size_um": 0.08,
+            "area_um2": 1875.0,
+            "n_particles": 8,
+            "particle_areas_um2": [
+              30.01757436930802,
+              11.019873237659683,
+              69.1518548748946,
+              26.20982073580441,
+              15.187116250379448,
+              19.07149758571655,
+              10.656344368324486,
+              25.567790635689718
+            ],
+            "particle_edge_corrections": [
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "image_file": "S_frB4_particles.png",
+            "particle_marks_px": [
+              [
+                20,
+                30,
+                4,
+                null
+              ],
+              [
+                30,
+                30,
+                4,
+                null
+              ],
+              [
+                40,
+                30,
+                4,
+                null
+              ],
+              [
+                50,
+                30,
+                4,
+                null
+              ],
+              [
+                60,
+                30,
+                4,
+                null
+              ],
+              [
+                70,
+                30,
+                4,
+                null
+              ],
+              [
+                80,
+                30,
+                4,
+                null
+              ],
+              [
+                90,
+                30,
+                4,
+                null
+              ]
+            ]
+          },
+          {
+            "frame_id": "EDS-B5",
+            "center_mm": {
+              "x": 5.5,
+              "y": 5.0
+            },
+            "frame_width_um": 50.0,
+            "pixel_size_um": 0.08,
+            "area_um2": 1875.0,
+            "n_particles": 8,
+            "particle_areas_um2": [
+              14.867776352197188,
+              68.88667732856298,
+              42.12534852858456,
+              10.440691870950332,
+              11.431024064621168,
+              20.1210995814478,
+              8.907822745331291,
+              26.471560764954138
+            ],
+            "particle_edge_corrections": [
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "image_file": "S_frB5_particles.png",
+            "particle_marks_px": [
+              [
+                20,
+                30,
+                4,
+                null
+              ],
+              [
+                30,
+                30,
+                4,
+                null
+              ],
+              [
+                40,
+                30,
+                4,
+                null
+              ],
+              [
+                50,
+                30,
+                4,
+                null
+              ],
+              [
+                60,
+                30,
+                4,
+                null
+              ],
+              [
+                70,
+                30,
+                4,
+                null
+              ],
+              [
+                80,
+                30,
+                4,
+                null
+              ],
+              [
+                90,
+                30,
+                4,
+                null
+              ]
+            ]
+          }
+        ],
+        "number_density_per_mm2": 4266.666666666667,
+        "n_eds_particles": 0
+      }
+    ],
+    "excluded_particle_ids": [],
+    "excluded_frame_ids": [],
+    "overlapping_frame_ids": []
+  },
+  "particle_stats_progress": null,
+  "eds_size_scans": [
+    {
+      "d_min_um": 3.0,
+      "d_max_um": 30.0,
+      "frame_width_um": 50.0,
+      "n_frames": 6,
+      "scanned_area_um2": 11250.0,
+      "particle_ids": [],
+      "frames": [
+        {
+          "frame_id": "EDS-B0",
+          "center_mm": {
+            "x": 5.0,
+            "y": 5.0
+          },
+          "frame_width_um": 50.0,
+          "pixel_size_um": 0.08,
+          "area_um2": 1875.0,
+          "n_particles": 8,
+          "particle_areas_um2": [
+            31.068131779213733,
+            27.46130394820342,
+            9.304547739402825,
+            4.687192783933945,
+            17.598984246851018,
+            10.60251840544248,
+            32.90062612792967,
+            43.45007134403953
+          ],
+          "particle_edge_corrections": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "image_file": "S_frB0_particles.png",
+          "particle_marks_px": [
+            [
+              20,
+              30,
+              4,
+              null
+            ],
+            [
+              30,
+              30,
+              4,
+              null
+            ],
+            [
+              40,
+              30,
+              4,
+              null
+            ],
+            [
+              50,
+              30,
+              4,
+              null
+            ],
+            [
+              60,
+              30,
+              4,
+              null
+            ],
+            [
+              70,
+              30,
+              4,
+              null
+            ],
+            [
+              80,
+              30,
+              4,
+              null
+            ],
+            [
+              90,
+              30,
+              4,
+              null
+            ]
+          ]
+        },
+        {
+          "frame_id": "EDS-B1",
+          "center_mm": {
+            "x": 5.1,
+            "y": 5.0
+          },
+          "frame_width_um": 50.0,
+          "pixel_size_um": 0.08,
+          "area_um2": 1875.0,
+          "n_particles": 8,
+          "particle_areas_um2": [
+            33.10961479599742,
+            22.65176390863402,
+            29.495655164545223,
+            56.96055954431454,
+            18.259210598122298,
+            49.17234180648579,
+            43.22954881346153,
+            33.081196111373956
+          ],
+          "particle_edge_corrections": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "image_file": "S_frB1_particles.png",
+          "particle_marks_px": [
+            [
+              20,
+              30,
+              4,
+              null
+            ],
+            [
+              30,
+              30,
+              4,
+              null
+            ],
+            [
+              40,
+              30,
+              4,
+              null
+            ],
+            [
+              50,
+              30,
+              4,
+              null
+            ],
+            [
+              60,
+              30,
+              4,
+              null
+            ],
+            [
+              70,
+              30,
+              4,
+              null
+            ],
+            [
+              80,
+              30,
+              4,
+              null
+            ],
+            [
+              90,
+              30,
+              4,
+              null
+            ]
+          ]
+        },
+        {
+          "frame_id": "EDS-B2",
+          "center_mm": {
+            "x": 5.2,
+            "y": 5.0
+          },
+          "frame_width_um": 50.0,
+          "pixel_size_um": 0.08,
+          "area_um2": 1875.0,
+          "n_particles": 8,
+          "particle_areas_um2": [
+            67.56651754693013,
+            18.380003608620317,
+            49.772273733244525,
+            16.193072249334563,
+            17.845217001972806,
+            14.971191865080524,
+            36.9458534950557,
+            16.08839880177699
+          ],
+          "particle_edge_corrections": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "image_file": "S_frB2_particles.png",
+          "particle_marks_px": [
+            [
+              20,
+              30,
+              4,
+              null
+            ],
+            [
+              30,
+              30,
+              4,
+              null
+            ],
+            [
+              40,
+              30,
+              4,
+              null
+            ],
+            [
+              50,
+              30,
+              4,
+              null
+            ],
+            [
+              60,
+              30,
+              4,
+              null
+            ],
+            [
+              70,
+              30,
+              4,
+              null
+            ],
+            [
+              80,
+              30,
+              4,
+              null
+            ],
+            [
+              90,
+              30,
+              4,
+              null
+            ]
+          ]
+        },
+        {
+          "frame_id": "EDS-B3",
+          "center_mm": {
+            "x": 5.3,
+            "y": 5.0
+          },
+          "frame_width_um": 50.0,
+          "pixel_size_um": 0.08,
+          "area_um2": 1875.0,
+          "n_particles": 8,
+          "particle_areas_um2": [
+            29.173197744450583,
+            14.295250027933095,
+            53.60857382232719,
+            85.08566478115405,
+            32.38192667799776,
+            75.7905574220156,
+            39.58113617209131,
+            103.91159114947543
+          ],
+          "particle_edge_corrections": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "image_file": "S_frB3_particles.png",
+          "particle_marks_px": [
+            [
+              20,
+              30,
+              4,
+              null
+            ],
+            [
+              30,
+              30,
+              4,
+              null
+            ],
+            [
+              40,
+              30,
+              4,
+              null
+            ],
+            [
+              50,
+              30,
+              4,
+              null
+            ],
+            [
+              60,
+              30,
+              4,
+              null
+            ],
+            [
+              70,
+              30,
+              4,
+              null
+            ],
+            [
+              80,
+              30,
+              4,
+              null
+            ],
+            [
+              90,
+              30,
+              4,
+              null
+            ]
+          ]
+        },
+        {
+          "frame_id": "EDS-B4",
+          "center_mm": {
+            "x": 5.4,
+            "y": 5.0
+          },
+          "frame_width_um": 50.0,
+          "pixel_size_um": 0.08,
+          "area_um2": 1875.0,
+          "n_particles": 8,
+          "particle_areas_um2": [
+            30.01757436930802,
+            11.019873237659683,
+            69.1518548748946,
+            26.20982073580441,
+            15.187116250379448,
+            19.07149758571655,
+            10.656344368324486,
+            25.567790635689718
+          ],
+          "particle_edge_corrections": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "image_file": "S_frB4_particles.png",
+          "particle_marks_px": [
+            [
+              20,
+              30,
+              4,
+              null
+            ],
+            [
+              30,
+              30,
+              4,
+              null
+            ],
+            [
+              40,
+              30,
+              4,
+              null
+            ],
+            [
+              50,
+              30,
+              4,
+              null
+            ],
+            [
+              60,
+              30,
+              4,
+              null
+            ],
+            [
+              70,
+              30,
+              4,
+              null
+            ],
+            [
+              80,
+              30,
+              4,
+              null
+            ],
+            [
+              90,
+              30,
+              4,
+              null
+            ]
+          ]
+        },
+        {
+          "frame_id": "EDS-B5",
+          "center_mm": {
+            "x": 5.5,
+            "y": 5.0
+          },
+          "frame_width_um": 50.0,
+          "pixel_size_um": 0.08,
+          "area_um2": 1875.0,
+          "n_particles": 8,
+          "particle_areas_um2": [
+            14.867776352197188,
+            68.88667732856298,
+            42.12534852858456,
+            10.440691870950332,
+            11.431024064621168,
+            20.1210995814478,
+            8.907822745331291,
+            26.471560764954138
+          ],
+          "particle_edge_corrections": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "image_file": "S_frB5_particles.png",
+          "particle_marks_px": [
+            [
+              20,
+              30,
+              4,
+              null
+            ],
+            [
+              30,
+              30,
+              4,
+              null
+            ],
+            [
+              40,
+              30,
+              4,
+              null
+            ],
+            [
+              50,
+              30,
+              4,
+              null
+            ],
+            [
+              60,
+              30,
+              4,
+              null
+            ],
+            [
+              70,
+              30,
+              4,
+              null
+            ],
+            [
+              80,
+              30,
+              4,
+              null
+            ],
+            [
+              90,
+              30,
+              4,
+              null
+            ]
+          ]
+        }
+      ],
+      "number_density_per_mm2": null,
+      "n_eds_particles": 0
+    }
+  ],
+  "active_quant": null,
+  "quantifications": []
+}

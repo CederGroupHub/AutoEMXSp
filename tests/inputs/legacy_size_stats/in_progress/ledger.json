@@ -1,0 +1,1622 @@
+{
+  "autoemx_version": "1.6.3",
+  "sample_id": "in_progress",
+  "sample_path": "/Users/Andrea_1/Desktop/Work/Codes/Repositories/AutoEMXSp/tests/inputs/legacy_size_stats/in_progress",
+  "configs": {
+    "microscope_cfg": {
+      "ID": "PhenomXL",
+      "type": "SEM",
+      "detector_type": "BSD",
+      "is_auto_BC": true,
+      "brightness": null,
+      "contrast": null,
+      "energy_zero": null,
+      "bin_width": null
+    },
+    "sample_cfg": {
+      "elements": [
+        "Si"
+      ],
+      "type": "powder",
+      "w_frs": null,
+      "center_pos": [
+        0.0,
+        0.0
+      ],
+      "half_width_mm": 2.9,
+      "is_powder_sample": true,
+      "is_surface_rough": true,
+      "is_grid_acquisition": false,
+      "is_particle_acquisition": true
+    },
+    "measurement_cfg": {
+      "type": "EDS",
+      "mode": "point",
+      "working_distance": null,
+      "working_distance_tolerance": 1.0,
+      "beam_energy_keV": 15.0,
+      "beam_current": null,
+      "emergence_angle": null,
+      "is_manual_navigation": false,
+      "max_acquisition_time": 30.0,
+      "target_acquisition_counts": 50000,
+      "min_n_spectra": 50,
+      "max_n_spectra": 100,
+      "powder_meas_cfg": {
+        "par_selection_mode": "auto",
+        "img_shift_tracking": true,
+        "par_search_frame_width_um": 195.44100476116796,
+        "max_n_par_per_frame": 30,
+        "max_spectra_per_par": 3,
+        "max_area_par": 300.0,
+        "min_area_par": 10.0,
+        "par_mask_margin": 1.0,
+        "xsp_spots_distance_um": 1.0,
+        "par_spot_selection_mode": "auto",
+        "par_segmentation_model": "threshold_bright",
+        "par_brightness_thresh": 100,
+        "par_xy_spots_thresh": 100,
+        "par_feature_selection": "random",
+        "par_spot_spacing": "random",
+        "min_par_pixels": 80,
+        "size_stats_plot_format": "png",
+        "size_stats_ci_tolerance": null,
+        "size_stats_ci_quantities": [
+          "D50"
+        ],
+        "size_stats_max_n_frames": 500,
+        "size_stats_max_time_min": null,
+        "include_eds_auto_particles": true
+      },
+      "bulk_meas_cfg": {
+        "grid_spot_spacing_um": 100.0,
+        "min_xsp_spots_distance_um": 5.0,
+        "image_frame_width_um": 1000.0,
+        "randomize_frames": false,
+        "exclude_sample_margin": false
+      },
+      "exp_stds_cfg": null,
+      "saved_images_extension": "png",
+      "save_raw_images": false,
+      "annotate_particle_images": false
+    },
+    "sample_substrate_cfg": {
+      "elements": [
+        "C"
+      ],
+      "type": "Ctape",
+      "shape": "circle",
+      "auto_detection": true,
+      "stub_w_mm": 12.0
+    },
+    "plot_cfg": {
+      "show_unused_comps_clust": true,
+      "els_excluded_clust_plot": [],
+      "els_to_plot": [],
+      "show_legend_clustering": true,
+      "save_plots": true,
+      "show_plots": false,
+      "use_custom_plots": false,
+      "custom_plot_file": null,
+      "plot_best_mixture": true,
+      "intermixing_violin_plots": null
+    }
+  },
+  "spectra": [],
+  "particles": [
+    {
+      "id": 0,
+      "area_um": 4.659365167746625,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A0",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0161127439598803
+    },
+    {
+      "id": 1,
+      "area_um": 8.932000602872954,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A0",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1666868940309192
+    },
+    {
+      "id": 2,
+      "area_um": 27.03246458560761,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A0",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0316896573091978
+    },
+    {
+      "id": 3,
+      "area_um": 29.542350676499588,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A0",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.148562385212264
+    },
+    {
+      "id": 4,
+      "area_um": 5.115052100834628,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A0",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1760919797879263
+    },
+    {
+      "id": 5,
+      "area_um": 13.708771846781792,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A0",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0434971402863897
+    },
+    {
+      "id": 6,
+      "area_um": 8.047500359305685,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A0",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0634937000057936
+    },
+    {
+      "id": 7,
+      "area_um": 11.781199857781349,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A0",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.112826525344606
+    },
+    {
+      "id": 8,
+      "area_um": 4.8598297900980425,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A0",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1738159804766428
+    },
+    {
+      "id": 9,
+      "area_um": 9.577379415380214,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A0",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.171045082019048
+    },
+    {
+      "id": 10,
+      "area_um": 5.7730367963392855,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A0",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.097293293390771
+    },
+    {
+      "id": 11,
+      "area_um": 6.461571515990696,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A0",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1133209333262652
+    },
+    {
+      "id": 12,
+      "area_um": 9.222220835391546,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A1",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1845956164707576
+    },
+    {
+      "id": 13,
+      "area_um": 8.700752102915686,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A1",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0771692715348258
+    },
+    {
+      "id": 14,
+      "area_um": 35.14448033964229,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A1",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.124980065532875
+    },
+    {
+      "id": 15,
+      "area_um": 5.183666359531007,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A1",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1719099345912898
+    },
+    {
+      "id": 16,
+      "area_um": 6.3585979886029165,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A1",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1659103127341457
+    },
+    {
+      "id": 17,
+      "area_um": 14.878435943987327,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A1",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1346810046144347
+    },
+    {
+      "id": 18,
+      "area_um": 9.632247664485227,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A1",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1428141399500638
+    },
+    {
+      "id": 19,
+      "area_um": 60.52365272361635,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A1",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1513870872560523
+    },
+    {
+      "id": 20,
+      "area_um": 14.725783213963666,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A1",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1173972731537618
+    },
+    {
+      "id": 21,
+      "area_um": 5.145458807390839,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A1",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0865255007761145
+    },
+    {
+      "id": 22,
+      "area_um": 10.443529845688772,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A1",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.179701390106121
+    },
+    {
+      "id": 23,
+      "area_um": 42.55616109725397,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A1",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0320856507381957
+    },
+    {
+      "id": 24,
+      "area_um": 9.961332270883611,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A2",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0493502898840519
+    },
+    {
+      "id": 25,
+      "area_um": 44.675899112050956,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A2",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0191788025945672
+    },
+    {
+      "id": 26,
+      "area_um": 16.319934619609963,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A2",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.085429230433787
+    },
+    {
+      "id": 27,
+      "area_um": 24.018517944996056,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A2",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1288887478982124
+    },
+    {
+      "id": 28,
+      "area_um": 8.27569342219694,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A2",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.077413869906155
+    },
+    {
+      "id": 29,
+      "area_um": 8.823901797495457,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A2",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1913245668889685
+    },
+    {
+      "id": 30,
+      "area_um": 8.245875472127684,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A2",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1878923989150285
+    },
+    {
+      "id": 31,
+      "area_um": 11.31882948835266,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A2",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1553558137663567
+    },
+    {
+      "id": 32,
+      "area_um": 5.0491566989030074,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A2",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.158681331432176
+    },
+    {
+      "id": 33,
+      "area_um": 61.254414182115084,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A2",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0626084723909184
+    },
+    {
+      "id": 34,
+      "area_um": 4.159017502602046,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A2",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1516331755186022
+    },
+    {
+      "id": 35,
+      "area_um": 12.225734693450711,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A2",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0105249813804047
+    },
+    {
+      "id": 36,
+      "area_um": 8.065625561671691,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A3",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0719343970793842
+    },
+    {
+      "id": 37,
+      "area_um": 3.5740937193650497,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A3",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0114471218239836
+    },
+    {
+      "id": 38,
+      "area_um": 14.231051725465235,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A3",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0877027623834252
+    },
+    {
+      "id": 39,
+      "area_um": 6.892441272042869,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A3",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.043431716996413
+    },
+    {
+      "id": 40,
+      "area_um": 5.310739564041226,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A3",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.145035685641073
+    },
+    {
+      "id": 41,
+      "area_um": 25.43991594375093,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A3",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1223199769944068
+    },
+    {
+      "id": 42,
+      "area_um": 19.58368186375616,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A3",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1872589783594756
+    },
+    {
+      "id": 43,
+      "area_um": 7.8091776264481805,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A3",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.137837609583437
+    },
+    {
+      "id": 44,
+      "area_um": 8.408546660523882,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A3",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.050137489073338
+    },
+    {
+      "id": 45,
+      "area_um": 3.591346990338035,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A3",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0748394295018848
+    },
+    {
+      "id": 46,
+      "area_um": 4.286973887978744,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A3",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1001330157222073
+    },
+    {
+      "id": 47,
+      "area_um": 10.165709544860468,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A3",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1073151886573664
+    },
+    {
+      "id": 48,
+      "area_um": 11.609281009103999,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A4",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.15790505255086
+    },
+    {
+      "id": 49,
+      "area_um": 8.296659407124135,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A4",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0245214833216898
+    },
+    {
+      "id": 50,
+      "area_um": 17.696510061826153,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A4",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1033924898639502
+    },
+    {
+      "id": 51,
+      "area_um": 5.484051764252861,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A4",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0428780502320658
+    },
+    {
+      "id": 52,
+      "area_um": 5.652152593068302,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A4",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0344953564760089
+    },
+    {
+      "id": 53,
+      "area_um": 14.997484133600624,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A4",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1065738156542582
+    },
+    {
+      "id": 54,
+      "area_um": 12.311832745693753,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A4",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.176851439043938
+    },
+    {
+      "id": 55,
+      "area_um": 24.65397365551468,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A4",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0168023761341942
+    },
+    {
+      "id": 56,
+      "area_um": 7.97224395839915,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A4",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.041615020081124
+    },
+    {
+      "id": 57,
+      "area_um": 5.150687601641939,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A4",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0970866182804495
+    },
+    {
+      "id": 58,
+      "area_um": 8.787094088697895,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A4",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1910924999831445
+    },
+    {
+      "id": 59,
+      "area_um": 5.50267758607849,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A4",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0725589449647985
+    },
+    {
+      "id": 60,
+      "area_um": 31.19221560920119,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A5",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1773943182979534
+    },
+    {
+      "id": 61,
+      "area_um": 8.323449878959075,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A5",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0169508277838484
+    },
+    {
+      "id": 62,
+      "area_um": 9.472658969949217,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A5",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0815781560850004
+    },
+    {
+      "id": 63,
+      "area_um": 14.045480320073162,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A5",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1990243074849134
+    },
+    {
+      "id": 64,
+      "area_um": 5.798676946284648,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A5",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1722103299449902
+    },
+    {
+      "id": 65,
+      "area_um": 6.5085665627512,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A5",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0265000722810311
+    },
+    {
+      "id": 66,
+      "area_um": 20.804752968949582,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A5",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0173329974933207
+    },
+    {
+      "id": 67,
+      "area_um": 4.7620354060201935,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A5",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0965354490879629
+    },
+    {
+      "id": 68,
+      "area_um": 9.3062735056663,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A5",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.136992112226188
+    },
+    {
+      "id": 69,
+      "area_um": 57.652786145117354,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A5",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.1622490312830345
+    },
+    {
+      "id": 70,
+      "area_um": 16.63272035037763,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A5",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.0398326218977023
+    },
+    {
+      "id": 71,
+      "area_um": 8.650172862654504,
+      "eq_diameter_um": null,
+      "coordinates": null,
+      "frame_id": "A5",
+      "image_pixel_size_um": null,
+      "clusters": [],
+      "composition": null,
+      "selection": "size_stats",
+      "edge_correction": 1.085226975957184
+    }
+  ],
+  "particle_stats": null,
+  "particle_stats_progress": {
+    "autoemx_version": "1.6.3",
+    "datetime": "2026-10-16T23:06:23",
+    "n_par_target": 50,
+    "powder_meas_cfg": {
+      "par_selection_mode": "auto",
+      "img_shift_tracking": true,
+      "par_search_frame_width_um": 195.44100476116796,
+      "max_n_par_per_frame": 30,
+      "max_spectra_per_par": 3,
+      "max_area_par": 300.0,
+      "min_area_par": 10.0,
+      "par_mask_margin": 1.0,
+      "xsp_spots_distance_um": 1.0,
+      "par_spot_selection_mode": "auto",
+      "par_segmentation_model": "threshold_bright",
+      "par_brightness_thresh": 120,
+      "par_xy_spots_thresh": 100,
+      "par_feature_selection": "random",
+      "par_spot_spacing": "random",
+      "min_par_pixels": 80,
+      "size_stats_plot_format": "png",
+      "size_stats_ci_tolerance": null,
+      "size_stats_ci_quantities": [
+        "D50"
+      ],
+      "size_stats_max_n_frames": 500,
+      "size_stats_max_time_min": null,
+      "include_eds_auto_particles": true
+    },
+    "bands": [
+      {
+        "d_min_um": 2.0,
+        "d_max_um": 40.0,
+        "frame_width_um": 120.0,
+        "n_frames": 6,
+        "scanned_area_um2": 64800.0,
+        "particle_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71
+        ],
+        "frames": [
+          {
+            "frame_id": "A0",
+            "center_mm": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "frame_width_um": 120.0,
+            "pixel_size_um": 0.1875,
+            "area_um2": 10800.0,
+            "n_particles": 12,
+            "particle_areas_um2": null,
+            "particle_edge_corrections": null,
+            "image_file": "S_frA0_particles.png",
+            "particle_marks_px": [
+              [
+                528,
+                357,
+                5,
+                0
+              ],
+              [
+                138,
+                85,
+                5,
+                1
+              ],
+              [
+                77,
+                411,
+                5,
+                2
+              ],
+              [
+                414,
+                382,
+                5,
+                3
+              ],
+              [
+                55,
+                118,
+                5,
+                4
+              ],
+              [
+                72,
+                284,
+                5,
+                5
+              ],
+              [
+                325,
+                327,
+                5,
+                6
+              ],
+              [
+                367,
+                292,
+                5,
+                7
+              ],
+              [
+                391,
+                50,
+                5,
+                8
+              ],
+              [
+                309,
+                45,
+                5,
+                9
+              ],
+              [
+                419,
+                113,
+                5,
+                10
+              ],
+              [
+                131,
+                63,
+                5,
+                11
+              ]
+            ]
+          },
+          {
+            "frame_id": "A1",
+            "center_mm": {
+              "x": 0.2,
+              "y": 0.0
+            },
+            "frame_width_um": 120.0,
+            "pixel_size_um": 0.1875,
+            "area_um2": 10800.0,
+            "n_particles": 12,
+            "particle_areas_um2": null,
+            "particle_edge_corrections": null,
+            "image_file": "S_frA1_particles.png",
+            "particle_marks_px": [
+              [
+                182,
+                74,
+                5,
+                12
+              ],
+              [
+                346,
+                151,
+                5,
+                13
+              ],
+              [
+                21,
+                118,
+                5,
+                14
+              ],
+              [
+                597,
+                428,
+                5,
+                15
+              ],
+              [
+                321,
+                242,
+                5,
+                16
+              ],
+              [
+                208,
+                391,
+                5,
+                17
+              ],
+              [
+                559,
+                252,
+                5,
+                18
+              ],
+              [
+                90,
+                111,
+                5,
+                19
+              ],
+              [
+                475,
+                387,
+                5,
+                20
+              ],
+              [
+                532,
+                390,
+                5,
+                21
+              ],
+              [
+                509,
+                71,
+                5,
+                22
+              ],
+              [
+                257,
+                341,
+                5,
+                23
+              ]
+            ]
+          },
+          {
+            "frame_id": "A2",
+            "center_mm": {
+              "x": 0.4,
+              "y": 0.0
+            },
+            "frame_width_um": 120.0,
+            "pixel_size_um": 0.1875,
+            "area_um2": 10800.0,
+            "n_particles": 12,
+            "particle_areas_um2": null,
+            "particle_edge_corrections": null,
+            "image_file": "S_frA2_particles.png",
+            "particle_marks_px": [
+              [
+                199,
+                28,
+                5,
+                24
+              ],
+              [
+                155,
+                48,
+                5,
+                25
+              ],
+              [
+                137,
+                153,
+                5,
+                26
+              ],
+              [
+                164,
+                325,
+                5,
+                27
+              ],
+              [
+                394,
+                33,
+                5,
+                28
+              ],
+              [
+                184,
+                181,
+                5,
+                29
+              ],
+              [
+                62,
+                270,
+                5,
+                30
+              ],
+              [
+                148,
+                375,
+                5,
+                31
+              ],
+              [
+                274,
+                256,
+                5,
+                32
+              ],
+              [
+                181,
+                123,
+                5,
+                33
+              ],
+              [
+                36,
+                56,
+                5,
+                34
+              ],
+              [
+                298,
+                232,
+                5,
+                35
+              ]
+            ]
+          },
+          {
+            "frame_id": "A3",
+            "center_mm": {
+              "x": 0.6000000000000001,
+              "y": 0.0
+            },
+            "frame_width_um": 120.0,
+            "pixel_size_um": 0.1875,
+            "area_um2": 10800.0,
+            "n_particles": 12,
+            "particle_areas_um2": null,
+            "particle_edge_corrections": null,
+            "image_file": "S_frA3_particles.png",
+            "particle_marks_px": [
+              [
+                183,
+                415,
+                5,
+                36
+              ],
+              [
+                591,
+                285,
+                5,
+                37
+              ],
+              [
+                344,
+                156,
+                5,
+                38
+              ],
+              [
+                593,
+                135,
+                5,
+                39
+              ],
+              [
+                239,
+                261,
+                5,
+                40
+              ],
+              [
+                152,
+                55,
+                5,
+                41
+              ],
+              [
+                163,
+                212,
+                5,
+                42
+              ],
+              [
+                586,
+                396,
+                5,
+                43
+              ],
+              [
+                491,
+                405,
+                5,
+                44
+              ],
+              [
+                483,
+                255,
+                5,
+                45
+              ],
+              [
+                163,
+                248,
+                5,
+                46
+              ],
+              [
+                75,
+                159,
+                5,
+                47
+              ]
+            ]
+          },
+          {
+            "frame_id": "A4",
+            "center_mm": {
+              "x": 0.8,
+              "y": 0.0
+            },
+            "frame_width_um": 120.0,
+            "pixel_size_um": 0.1875,
+            "area_um2": 10800.0,
+            "n_particles": 12,
+            "particle_areas_um2": null,
+            "particle_edge_corrections": null,
+            "image_file": "S_frA4_particles.png",
+            "particle_marks_px": [
+              [
+                337,
+                385,
+                5,
+                48
+              ],
+              [
+                366,
+                247,
+                5,
+                49
+              ],
+              [
+                26,
+                209,
+                5,
+                50
+              ],
+              [
+                341,
+                340,
+                5,
+                51
+              ],
+              [
+                332,
+                102,
+                5,
+                52
+              ],
+              [
+                97,
+                241,
+                5,
+                53
+              ],
+              [
+                514,
+                34,
+                5,
+                54
+              ],
+              [
+                320,
+                240,
+                5,
+                55
+              ],
+              [
+                379,
+                438,
+                5,
+                56
+              ],
+              [
+                571,
+                49,
+                5,
+                57
+              ],
+              [
+                111,
+                61,
+                5,
+                58
+              ],
+              [
+                247,
+                260,
+                5,
+                59
+              ]
+            ]
+          },
+          {
+            "frame_id": "A5",
+            "center_mm": {
+              "x": 1.0,
+              "y": 0.0
+            },
+            "frame_width_um": 120.0,
+            "pixel_size_um": 0.1875,
+            "area_um2": 10800.0,
+            "n_particles": 12,
+            "particle_areas_um2": null,
+            "particle_edge_corrections": null,
+            "image_file": "S_frA5_particles.png",
+            "particle_marks_px": [
+              [
+                326,
+                209,
+                5,
+                60
+              ],
+              [
+                317,
+                147,
+                5,
+                61
+              ],
+              [
+                485,
+                305,
+                5,
+                62
+              ],
+              [
+                429,
+                246,
+                5,
+                63
+              ],
+              [
+                570,
+                194,
+                5,
+                64
+              ],
+              [
+                307,
+                343,
+                5,
+                65
+              ],
+              [
+                326,
+                145,
+                5,
+                66
+              ],
+              [
+                110,
+                272,
+                5,
+                67
+              ],
+              [
+                204,
+                348,
+                5,
+                68
+              ],
+              [
+                405,
+                162,
+                5,
+                69
+              ],
+              [
+                528,
+                33,
+                5,
+                70
+              ],
+              [
+                71,
+                20,
+                5,
+                71
+              ]
+            ]
+          }
+        ],
+        "number_density_per_mm2": null,
+        "n_eds_particles": 0
+      }
+    ]
+  },
+  "eds_size_scans": [],
+  "active_quant": null,
+  "quantifications": []
+}

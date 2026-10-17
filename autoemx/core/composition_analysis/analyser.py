@@ -123,6 +123,7 @@ from autoemx.config.ledger_schemas import (
     QuantificationDiagnostics,
     QuantificationResult,
     SampleLedger,
+    SegmentationConfig,
 )
 from autoemx.config.ledger_io import (
     LedgerRuntimeConfigs,
@@ -2364,7 +2365,92 @@ class EMXSp_Composition_Analyzer:
             self._warn_peak_overlaps()
 
         return is_analysis_successful, is_converged
-    
+
+    def _resegment_eds_frames(self, ledger, size_cfg: PowderMeasurementConfig) -> bool:
+        """
+        Segment the frames searched by EDS again, from their saved images, with the segmentation settings of the
+        particle size statistics following the EDS acquisition (``size_cfg``), when they differ from those of the
+        EDS acquisition: all the frames of the statistics are then segmented alike. The results are added to the
+        frames (the EDS results are kept); each frame keeps the size range searched by EDS; frames without saved
+        image are left out of the statistics. Returns True if ``ledger`` was modified.
+        """
+        from autoemx.core.saved_frames import resegment_frames
+
+        eds_frames = ledger.frames_of("eds_search")
+        size_segmentation = SegmentationConfig.from_powder_meas_cfg(size_cfg, 0)
+        existing = next((s for s in ledger.segmentations if s.fingerprint() == size_segmentation.fingerprint()), None)
+        if not eds_frames or (existing is not None and all(f.segmentation(existing.segmentation_id)
+                                                           for f in eds_frames)):
+            return False
+        logger.info(f"ℹ️ Frames searched by EDS segmented again with the settings of the particle size statistics "
+                    f"({size_segmentation.label}).")
+        _, without_image = resegment_frames(ledger, self.sample_result_dir, eds_frames, size_cfg)
+        if without_image:
+            logger.warning(f"⚠️ {len(without_image)} frame(s) searched by EDS left out of the particle size "
+                           f"statistics: no saved image to segment again ({', '.join(without_image)}).")
+        return True
+
+    def collect_particle_stats_after_eds(self, n_par_target: int, powder_meas_cfg_kwargs: Optional[Dict[str, Any]] = None):
+        """
+        Continue an EDS acquisition of the sample with a particle size statistics measurement, counting the frames
+        searched by EDS: their particles count towards the target of each size band, and only more frames are
+        searched to reach it (see ``EM_Particle_Finder.get_particle_stats(count_eds_frames=True)``). Uses the
+        microscope session of the EDS acquisition.
+
+        Only for particle samples measured with automatic navigation and automatic particle selection; otherwise
+        a warning is logged and nothing is measured.
+
+        Parameters
+        ----------
+        n_par_target : int
+            Target number of particles per size band.
+        powder_meas_cfg_kwargs : dict, optional
+            PowderMeasurementConfig settings of the size statistics, replacing those of the EDS acquisition for this
+            measurement (e.g. ``min_area_par``, ``max_area_par``, ``par_segmentation_model``).
+
+        Returns
+        -------
+        pandas.DataFrame or None
+            Summary statistics, or None if not measured or no particle was found.
+        """
+        if (
+            not self.sample_cfg.is_particle_acquisition
+            or self.measurement_cfg.is_manual_navigation
+            or self.powder_meas_cfg.par_selection_mode != "auto"
+        ):
+            logger.warning(
+                "⚠️ Particle size statistics after EDS need a particle sample, automatic navigation and automatic "
+                "particle selection: not measured."
+            )
+            return None
+        print_double_separator(f"Sample '{self.sample_id}': particle size statistics")
+        if getattr(self, "EM_controller", None) is None:
+            self._initialise_SEM()  # EDS acquisition resumed with nothing left to acquire
+        particle_finder = self.EM_controller.particle_finder
+        size_cfg = particle_finder.powder_meas_cfg.model_copy(update=powder_meas_cfg_kwargs or {})
+        # Frames searched by EDS not saved yet go to the ledger, which the particle finder then uses, segmented with
+        # the settings of the size statistics
+        ledger = LedgerModule._load_existing_ledger(self)
+        if ledger is not None:
+            changed = LedgerModule._store_eds_search_frames(self, ledger)
+            changed |= self._resegment_eds_frames(ledger, size_cfg)
+            if changed:
+                ledger.to_json_file(LedgerModule._get_ledger_path(self))
+        LedgerModule._attach_particle_stats_ledger(self)
+        measurement_cfg = self.EM_controller.measurement_cfg
+        # The size bands change the particle area limits and search frame width of the EDS settings: restored after
+        powder_cfg = particle_finder.powder_meas_cfg
+        saved_powder_cfg, saved_type = powder_cfg.model_copy(deep=True), measurement_cfg.type
+        measurement_cfg.type = measurement_cfg.PARTICLE_STATS_MEAS_TYPE_KEY
+        try:
+            for name, value in (powder_meas_cfg_kwargs or {}).items():
+                setattr(powder_cfg, name, value)
+            return particle_finder.get_particle_stats(n_par_target, count_eds_frames=True)
+        finally:
+            measurement_cfg.type = saved_type
+            for name in type(powder_cfg).model_fields:
+                setattr(powder_cfg, name, getattr(saved_powder_cfg, name))
+
     
     def _evaluate_clustering_convergence(
         self,

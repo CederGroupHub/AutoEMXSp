@@ -403,3 +403,462 @@ def test_remove_unfinished_sample(tmp_path: Path):
     for path in (unfinished, finished, tmp_path / "missing", None):
         be.remove_unfinished_sample(str(path) if path else None)
     assert not unfinished.exists() and finished.exists()
+
+
+# ----------------------------------------------------------------------------- particle sizes
+@pytest.fixture()
+def psd_dir(tmp_path: Path) -> Path:
+    from _psd_helpers import make_eds_frames_sample, make_empty_sample, make_measurement_sample
+
+    make_measurement_sample(tmp_path / "PSD_only")
+    make_eds_frames_sample(tmp_path / "EDS_frames_only")
+    make_empty_sample(tmp_path / "Empty")
+    return tmp_path
+
+
+def test_particle_sizes_of_samples_without_spectra(psd_dir: Path):
+    from autoemx.gui.common import get_analysis, get_particle_sizes
+
+    ledgers = {p.parent.name: p.stat().st_mtime for p in psd_dir.glob("*/ledger.json")}
+    measured = be.load_sample_info(str(psd_dir / "PSD_only"))
+    assert (measured.has_eds, measured.has_sizes) == (False, True)
+    data = be.load_particle_sizes(measured)
+    assert data.stored and data.source == "measurement" and data.eds_d_min_um is None
+    assert len(data.diameters_um) == data.result.size_stats.n_par_analysed
+
+    eds = get_particle_sizes(str(psd_dir / "EDS_frames_only"))  # no statistics in the ledger: computed
+    assert not eds.stored and eds.source == "eds_frames" and eds.eds_d_min_um == 3.0
+    assert eds.result.size_stats.n_par_analysed == 60
+
+    empty = be.load_sample_info(str(psd_dir / "Empty"))
+    assert not empty.has_sizes and be.load_particle_sizes(empty) is None
+    # EDS views have no data for these samples (no error)
+    for name in ("PSD_only", "EDS_frames_only", "Empty"):
+        assert get_analysis(str(psd_dir / name), None)[1] is None
+    # Read-only: ledgers not rewritten
+    assert {p.parent.name: p.stat().st_mtime for p in psd_dir.glob("*/ledger.json")} == ledgers
+
+    for d in (data, eds, None):
+        assert pl.psd_figure(d).data is not None
+
+
+def test_particle_size_callbacks(psd_dir: Path, results_dir: Path):
+    from autoemx.gui.app import create_app
+
+    app = create_app("")
+    client = app.server.test_client()
+
+    def call(prefix, outputs, sample_dir, state=(), extra_inputs=()):
+        key = next(k for k in app.callback_map if k.startswith(prefix))
+        body = {"output": key, "outputs": [{"id": i, "property": p} for i, p in outputs],
+                "inputs": [{"id": "sample-dd", "property": "value", "value": str(sample_dir)},
+                           {"id": "data-version", "property": "data", "value": 0}, *extra_inputs],
+                "state": list(state), "changedPropIds": ["sample-dd.value"]}
+        res = client.post("/_dash-update-component", json=body)
+        assert res.status_code == 200, res.data
+        return res.get_json()["response"]
+
+    eds_tabs = ["plot-tab", "clusters-tab", "spectra-tab", "dist-tab", "figures-tab", "settings-tab"]
+    grey_outputs = [(t, "disabled") for t in eds_tabs + ["psd-tab"]] + [
+        ("tabs", "value"), ("analysis-sidebar", "className"), ("spectrum-panel", "className"),
+        ("analysis-dd", "placeholder"), ("set-active-btn", "disabled")]
+
+    def grey(sample_dir, tab):
+        return call("..plot-tab.disabled", grey_outputs, sample_dir,
+                    [{"id": "tabs", "property": "value", "value": tab}])
+
+    res = grey(psd_dir / "PSD_only", "plot")
+    assert all(res[t]["disabled"] for t in eds_tabs) and not res["psd-tab"]["disabled"]
+    assert res["tabs"]["value"] == "psd" and "no-eds" in res["analysis-sidebar"]["className"]
+    assert res["set-active-btn"]["disabled"]
+    res = grey(psd_dir / "Empty", "clusters")
+    assert res["psd-tab"]["disabled"] and res["tabs"]["value"] == "sem"
+    res = grey(results_dir / WULFENITE_MINI_ID, "psd")  # spectra, no particle sizes
+    assert not any(res[t]["disabled"] for t in eds_tabs) and res["psd-tab"]["disabled"]
+    assert res["tabs"]["value"] == "plot" and res["analysis-sidebar"]["className"] == "sidebar"
+
+    psd_outputs = [("psd-banner", "children"), ("psd-graph", "figure"), ("psd-tables", "children"),
+                   ("psd-compare-controls", "hidden"), ("psd-compare-samples", "hidden")]
+    mode = [{"id": i, "property": "value", "value": v}
+            for i, v in (("psd-mode", "sample"), ("psd-compare", []), ("psd-kind", "cumulative"),
+                         ("psd-basis", "number"), ("psd-result-dd", None))]
+    options = [{"id": "sample-dd", "property": "options", "value": []}]
+    res = call("..psd-banner.children", psd_outputs, psd_dir / "EDS_frames_only", options, mode)
+    assert "frames searched by EDS only" in str(res["psd-banner"]["children"])
+    assert "not saved" in str(res["psd-banner"]["children"])
+    res = call("..psd-banner.children", psd_outputs, psd_dir / "Empty", options, mode)
+    assert "No particle size data" in str(res["psd-banner"]["children"])
+
+
+@pytest.fixture()
+def series_dir(tmp_path: Path) -> Path:
+    """Results folder: a temperature series and an EDS-only sample, a sub-folder of two samples, a sample without
+    particle sizes."""
+    from _psd_helpers import make_eds_frames_sample, make_empty_sample, make_measurement_sample
+
+    for i, (name, median) in enumerate((("S_900C", 1.5), ("S_1000C", 2.5), ("S_1100C", 4.0))):
+        make_measurement_sample(tmp_path / name, seed=i, median_um=median, sigma=0.4)
+    make_eds_frames_sample(tmp_path / "S_EDS")
+    make_measurement_sample(tmp_path / "batch2" / "H_A", seed=10, median_um=0.8)
+    make_measurement_sample(tmp_path / "batch2" / "H_B", seed=11, median_um=1.2)
+    make_empty_sample(tmp_path / "No_sizes")
+    return tmp_path
+
+
+def test_size_comparison_table_and_figure(series_dir: Path):
+    from autoemx.gui.common import get_particle_sizes, has_sizes
+
+    assert has_sizes(str(series_dir / "S_EDS")) and not has_sizes(str(series_dir / "No_sizes"))
+    assert not be.sample_has_sizes(str(series_dir / "missing"))
+    items = [(name, get_particle_sizes(str(series_dir / name))) for name in ("S_900C", "S_1100C", "S_EDS")]
+    df = be.size_comparison_table(items)
+    assert list(df["Sample"]) == ["S_900C", "S_1100C", "S_EDS"]
+    assert list(df["Source"]) == ["size measurement", "size measurement", "EDS frames"]
+    assert list(df["Saved"]) == [True, True, False]
+    assert df.loc[0, "D50"] == pytest.approx(items[0][1].result.size_stats.median)
+    assert df.loc[0, "D50 CI low"] <= df.loc[0, "D50"] <= df.loc[0, "D50 CI high"]
+    for kind in ("cumulative", "histogram"):
+        for basis in ("number", "volume"):
+            fig = pl.psd_comparison_figure(items, kind, basis)
+            assert {t.name for t in fig.data if t.showlegend is not False} == {"S_900C", "S_1100C", "S_EDS"}
+    assert pl.psd_comparison_figure([]).layout.annotations  # empty-state message
+
+
+def test_size_comparison_callbacks(series_dir: Path):
+    from autoemx.gui.app import create_app
+
+    app = create_app("")
+    client = app.server.test_client()
+    samples = [{"label": s.label, "value": s.sample_dir} for s in be.find_samples(str(series_dir))]
+    by_label = {o["label"]: o["value"] for o in samples}
+
+    def post(prefix, outputs, inputs, state=(), changed=()):
+        key = next(k for k in app.callback_map if k.startswith(prefix))
+        outs = [{"id": i, "property": p} for i, p in outputs]
+        body = {"output": key, "outputs": outs if len(outs) > 1 else outs[0],  # one output: not a list
+                "inputs": [{"id": i, "property": p, "value": v} for i, p, v in inputs],
+                "state": [{"id": i, "property": p, "value": v} for i, p, v in state],
+                "changedPropIds": list(changed)}
+        res = client.post("/_dash-update-component", json=body)
+        assert res.status_code == 200, res.data
+        return res.get_json()["response"]
+
+    def choices(sample_label):
+        res = post("..psd-compare.options", [("psd-compare", "options"), ("psd-compare", "value")],
+                   [("sample-dd", "options", samples), ("sample-dd", "value", by_label[sample_label]),
+                    ("data-version", "data", 0)], changed=["sample-dd.value"])
+        return [o["label"] for o in res["psd-compare"]["options"]], res["psd-compare"]["value"]
+
+    labels, value = choices("S_1000C")
+    # Samples with particle sizes, in natural order; by default those of the folder of the shown sample
+    assert labels == ["batch2/H_A", "batch2/H_B", "S_900C", "S_1000C", "S_1100C", "S_EDS"]
+    assert sorted(value) == sorted(by_label[s] for s in ("S_900C", "S_1000C", "S_1100C", "S_EDS"))
+    assert sorted(choices("batch2/H_A")[1]) == sorted([by_label["batch2/H_A"], by_label["batch2/H_B"]])
+
+    outputs = [("psd-banner", "children"), ("psd-graph", "figure"), ("psd-tables", "children"),
+               ("psd-compare-controls", "hidden"), ("psd-compare-samples", "hidden")]
+
+    def view(mode, compared):
+        return post("..psd-banner.children", outputs,
+                    [("sample-dd", "value", by_label["S_1000C"]), ("data-version", "data", 0),
+                     ("psd-mode", "value", mode), ("psd-compare", "value", compared),
+                     ("psd-kind", "value", "cumulative"), ("psd-basis", "value", "number"),
+                     ("psd-result-dd", "value", None)],
+                    [("sample-dd", "options", samples)], ["psd-mode.value"])
+
+    res = view("compare", value)
+    assert res["psd-compare-controls"]["hidden"] is False
+    assert "4 samples compared" in str(res["psd-banner"]["children"])
+    assert "S_EDS" in str(res["psd-banner"]["children"])  # EDS frames only: flagged
+    rows = res["psd-tables"]["children"][0]["props"]["children"][1]["props"]["data"]
+    assert [r["Sample"] for r in rows] == ["S_900C", "S_1000C", "S_1100C", "S_EDS"]
+    assert view("sample", value)["psd-compare-controls"]["hidden"] is True
+
+    res = post("psd-download.data", [("psd-download", "data")], [("psd-export-btn", "n_clicks", 1)],
+               [("psd-compare", "value", value), ("sample-dd", "options", samples), ("psd-mode", "value", "compare"),
+                ("sample-dd", "value", by_label["S_1000C"])], ["psd-export-btn.n_clicks"])
+    assert res["psd-download"]["data"]["filename"] == "Particle_size_comparison.csv"
+    assert "D50 CI low" in res["psd-download"]["data"]["content"]
+
+
+def test_size_frames_and_saving_exclusions(tmp_path: Path):
+    from _psd_helpers import make_eds_frames_sample, make_measurement_sample
+
+    from autoemx.config.ledger_schemas import SampleLedger
+    from autoemx.gui.common import get_info, get_particle_sizes
+
+    sample = str(make_measurement_sample(tmp_path / "M", images=True))
+    data = get_particle_sizes(sample)
+    frames = be.size_frames(get_info(sample), data)
+    assert [f.frame_id for f in frames][:2] == ["B0F0", "B0F1"] and len(frames) == 12
+    assert all(f.image_path and Path(f.image_path).exists() and f.status == "included" for f in frames)
+    assert len(frames[0].marks) == frames[0].n_particles and frames[0].scan_label.startswith("Band 1")
+    assert "psd" in be._LEDGER_WRITERS  # never runs together with an acquisition or quantification
+
+    # Saved through the job function: frames and particles (frame, index) left out recorded in a new result
+    key = ["B0F0", frames[0].marks[0][3]]
+    assert be._run_particle_stats(sample, {"frame_ids": ["B0F1"], "particles": [key]}) == {"ok": True}
+    ledger = SampleLedger.from_json_file(str(tmp_path / "M" / "ledger.json"))
+    result = ledger.size_result
+    assert result.excluded_frame_ids == ["B0F1"] and [list(k) for k in result.excluded_particles] == [key]
+    assert result.size_stats.n_par_analysed == data.result.size_stats.n_par_analysed - frames[1].n_particles - 1
+    assert len(ledger.size_results) == 2  # the statistics without exclusions are kept
+    assert be.size_frames(get_info(sample), get_particle_sizes(sample))[1].status == "left out"
+    assert not be._run_particle_stats(sample, {"frame_ids": [f.frame_id for f in frames]})["ok"]
+
+    # EDS frames only: statistics computed, then saved
+    eds = str(make_eds_frames_sample(tmp_path / "E", images=True))
+    assert be.can_save_particle_sizes(get_particle_sizes(eds)) and not get_particle_sizes(eds).stored
+    assert be._run_particle_stats(eds, {})["ok"]
+    assert get_particle_sizes(eds).stored
+
+
+def test_size_frames_callback(tmp_path: Path):
+    from _psd_helpers import make_eds_frames_sample, make_measurement_sample
+
+    from autoemx.gui.app import create_app
+
+    sample = str(make_measurement_sample(tmp_path / "M", images=True))
+    eds = str(make_eds_frames_sample(tmp_path / "E", images=True))
+    app = create_app("")
+    client = app.server.test_client()
+    outputs = [("psd-frame-dd", "options"), ("psd-frame-dd", "value"), ("psd-frame-graph", "figure"),
+               ("psd-frame-caption", "children"), ("psd-frame-out", "value"), ("psd-excl", "data"),
+               ("psd-pending", "children"), ("psd-recalc-btn", "disabled"), ("psd-recalc-btn", "children"),
+               ("psd-reset-btn", "disabled")]
+
+    def view(sample_dir, changed, frame=None, out=(), click=None, excl=None):
+        key = next(k for k in app.callback_map if k.startswith("..psd-frame-dd.options"))
+        values = {"sample-dd.value": sample_dir, "data-version.data": 0, "psd-frame-dd.value": frame,
+                  "psd-frame-prev.n_clicks": None, "psd-frame-next.n_clicks": 1 if changed == "psd-frame-next.n_clicks"
+                  else None, "psd-frame-out.value": list(out), "psd-frame-graph.clickData": click,
+                  "psd-reset-btn.n_clicks": None, "psd-result-dd.value": None}
+        body = {"output": key, "outputs": [{"id": i, "property": p} for i, p in outputs],
+                "inputs": [{"id": k.split(".")[0], "property": k.split(".")[1], "value": v} for k, v in values.items()],
+                "state": [{"id": "psd-excl", "property": "data", "value": excl}], "changedPropIds": [changed]}
+        res = client.post("/_dash-update-component", json=body)
+        assert res.status_code == 200, res.data
+        return {f"{i}.{p}": v for i, d in res.get_json()["response"].items() for p, v in d.items()}
+
+    res = view(sample, "sample-dd.value")
+    assert res["psd-frame-dd.value"] == "B0F0" and res["psd-excl.data"]["frames"] == []
+    assert res["psd-recalc-btn.disabled"] is True  # nothing changed, statistics saved
+    excl = res["psd-excl.data"]
+    res = view(sample, "psd-frame-next.n_clicks", frame="B0F0", excl=excl)
+    assert res["psd-frame-dd.value"] == "B0F1"
+    res = view(sample, "psd-frame-out.value", frame="B0F1", out=["out"], excl=excl)
+    assert res["psd-excl.data"]["frames"] == ["B0F1"] and res["psd-recalc-btn.disabled"] is False
+    assert "not saved" in str(res["psd-pending.children"]) and res["psd-reset-btn.disabled"] is False
+    assert "left out" in res["psd-frame-dd.options"][1]["label"]
+    # Clicking a particle leaves it out (frame, index), clicking it again counts it again
+    pid = res["psd-frame-graph.figure"]["data"][0]["customdata"][0]
+    click = {"points": [{"customdata": pid}]}
+    res = view(sample, "psd-frame-graph.clickData", frame="B0F1", out=["out"], click=click, excl=res["psd-excl.data"])
+    assert res["psd-excl.data"]["particles"] == [["B0F1", pid]]
+    res = view(sample, "psd-frame-graph.clickData", frame="B0F1", out=["out"], click=click, excl=res["psd-excl.data"])
+    assert res["psd-excl.data"]["particles"] == []
+
+    # EDS frames: statistics not saved yet; their particles can be left out one by one too
+    res = view(eds, "sample-dd.value")
+    assert res["psd-recalc-btn.disabled"] is False and res["psd-recalc-btn.children"] == "Save statistics"
+    assert {t.get("name") for t in res["psd-frame-graph.figure"]["data"]} == {"Counted (frame searched by EDS)"}
+    res = view(eds, "psd-frame-graph.clickData", frame="EDS-A0", click={"points": [{"customdata": 2}]},
+               excl=res["psd-excl.data"])
+    assert res["psd-excl.data"]["particles"] == [["EDS-A0", 2]]
+    res = view(eds, "psd-frame-graph.clickData", frame="EDS-A0", click={"points": [{"customdata": None}]},
+               excl=res["psd-excl.data"])
+    assert res["psd-excl.data"]["particles"] == [["EDS-A0", 2]]  # no particle clicked
+
+
+def test_acquisition_settings_of_particle_size_statistics():
+    from autoemx.config.runtime_configs import PowderMeasurementConfig
+    from autoemx.gui.tab_acquisition import active_acq_params
+    from autoemx.runners.batch_acquire_and_analyze import batch_acquire_and_analyze
+    from autoemx.runners.collect_particle_statistics import collect_particle_statistics
+
+    defaults = {s.key: s.default for s in be.ACQ_SPECS}
+    values = be.coerce_values(defaults, be.ACQ_SPECS)
+    # Settings of size statistics in their own section, passed with the powder settings (valid for the config)
+    assert {s.name for s in be.ACQ_SPECS if s.section == "asize"} == {
+        "n_par_target", "min_par_diameter_um", "max_par_diameter_um", *be.ACQ_SIZE_FIELDS, *be.ACQ_PSD_POWDER_FIELDS}
+    # ... right below the acquisition settings
+    sections = [key for key, _ in be.ACQ_SECTIONS]
+    assert sections.index("asize") == sections.index("aacq") + 1
+    assert be.SPECS_BY_KEY["asize.par_segmentation_model"].choices == be.SPECS_BY_KEY[
+        "apowder.par_segmentation_model"].choices
+    assert values["asize.size_stats_ci_quantities"] == ["D50"]
+    values["asize.size_stats_ci_quantities"] = ["D90", "D10", "Dx"]  # checkboxes: choices only, in their order
+    values = be.coerce_values(values, be.ACQ_SPECS)
+    assert values["asize.size_stats_ci_quantities"] == ["D10", "D90"]
+    eds = be.acquisition_kwargs(values)
+    PowderMeasurementConfig(**eds["powder_meas_cfg_kwargs"])
+    assert eds["powder_meas_cfg_kwargs"]["size_stats_ci_quantities"] == ["D10", "D90"]
+    assert "size_stats_n_par_target" not in eds and "n_par_target" not in eds["powder_meas_cfg_kwargs"]
+    assert eds["powder_meas_cfg_kwargs"]["max_area_par"] == values["apowder.max_area_par"]  # EDS: powder settings
+
+    # EDS + particle sizes
+    combined = be.acquisition_kwargs({**values, "asize.n_par_target": 300, "asize.size_stats_ci_tolerance": 5.0},
+                                     "eds+sizes")
+    assert set(combined) <= set(inspect.signature(batch_acquire_and_analyze).parameters)
+    assert combined["size_stats_n_par_target"] == 300
+    assert combined["powder_meas_cfg_kwargs"]["size_stats_ci_tolerance"] == 0.05  # entered in %
+    # Particles measured by the size statistics: their own settings, diameters as particle areas
+    size_cfg = combined["size_stats_powder_meas_cfg_kwargs"]
+    assert size_cfg["min_area_par"] == pytest.approx(3.14159 * 0.15**2, rel=1e-4)
+    assert size_cfg["max_area_par"] == pytest.approx(3.14159 * 10**2, rel=1e-4)
+    assert size_cfg["par_segmentation_model"] == values["asize.par_segmentation_model"]
+    PowderMeasurementConfig(**{**combined["powder_meas_cfg_kwargs"], **size_cfg})
+    with pytest.raises(ValueError, match="diameters"):
+        be.acquisition_kwargs({**values, "asize.min_par_diameter_um": 30.0}, "eds+sizes")
+    with pytest.raises(ValueError, match="automatic navigation.*automatic particle selection"):
+        be.acquisition_kwargs({**values, "aacq.is_manual_navigation": True,
+                               "apowder.par_selection_mode": "manual"}, "eds+sizes")
+
+    # Particle sizes only
+    psd = be.psd_acquisition_kwargs({**values, "asize.n_par_target": 150, "apowder.max_area_par": 1.0})
+    assert set(psd) <= set(inspect.signature(collect_particle_statistics).parameters)
+    assert psd["n_par_target"] == 150 and "contrast" not in psd  # automatic brightness/contrast
+    cfg = PowderMeasurementConfig(**psd["powder_meas_cfg_kwargs"])
+    # Particle settings of the size statistics section (particles of 0.3–20 µm by default)
+    assert cfg.par_selection_mode == "auto" and cfg.max_area_par == pytest.approx(3.14159 * 10**2, rel=1e-4)
+    assert cfg.min_area_par == pytest.approx(3.14159 * 0.15**2, rel=1e-3)
+    assert cfg.min_par_pixels == values["asize.min_par_pixels"] and "save_raw_images" not in psd
+    assert "max_spectra_per_par" not in psd["powder_meas_cfg_kwargs"]  # EDS settings left out
+    manual_bc = be.psd_acquisition_kwargs({**values, "aacq.auto_adjust_brightness_contrast": False,
+                                           "aacq.contrast": 4.0, "aacq.brightness": 0.4})
+    assert (manual_bc["contrast"], manual_bc["brightness"]) == (4.0, 0.4)
+
+    samples = be.acquisition_samples([{"ID": "P1", "els": "", "x": 1, "y": 2}], require_elements=False)
+    assert samples[0]["els"] == []
+    with pytest.raises(ValueError, match="no elements"):
+        be.acquisition_samples([{"ID": "P1", "els": "", "x": 1, "y": 2}])
+    for mode, kwargs, runner in (("sizes", psd, "collect_particle_statistics("),
+                                 ("eds+sizes", combined, "comp_analyzer = batch_acquire_and_analyze(")):
+        script = be.acquisition_script([{"ID": "P1", "pos": (1.0, 2.0)}], kwargs, "/data/results", mode)
+        compile(script, "script.py", "exec")
+        assert runner in script and f"from autoemx.runners.{runner.split('= ')[-1][:-1]} import" in script
+
+    # Fields shown for each measurement
+    active = active_acq_params(defaults, "eds")
+    assert active["asize.n_par_target"] == "hidden" and active.get("asize.min_par_pixels", "on") == "on"
+    assert active["asize.max_par_diameter_um"] == "hidden"  # EDS: the powder settings are used
+    assert active["aimg.save_raw_images"] == "off"  # raw copies of annotated images only
+    assert active_acq_params({**defaults, "aimg.annotate_particle_images": ["on"]})["aimg.save_raw_images"] == "on"
+    active = active_acq_params(defaults, "eds+sizes")
+    assert active.get("asize.n_par_target", "on") == "on" and active["asize.size_stats_max_n_frames"] == "off"
+    # Same size settings as for particle sizes only
+    assert all(active.get(f"asize.{s.name}", "on") == "on" for s in be.ACQ_SPECS if s.section == "asize"
+               and not s.name.startswith("size_stats_m") and s.name != "size_stats_ci_quantities")
+    active = active_acq_params({**defaults, "asize.size_stats_ci_tolerance": 0.05}, "sizes")
+    assert active.get("asize.size_stats_max_n_frames", "on") == "on"
+    # Particle sizes only: particle settings in the size statistics section, no EDS settings
+    assert (active["aacq.beam_energy"], active["aquant"], active["abulk"], active["apowder"]) == (
+        "hidden", "hidden", "hidden", "hidden")
+    assert active.get("asize.max_par_diameter_um", "on") == "on" and active["aimg.save_raw_images"] == "hidden"
+    # Brightness threshold: only for the threshold segmentation model
+    other_models = [m for m in be.SPECS_BY_KEY["apowder.par_segmentation_model"].choices if m != "threshold_bright"]
+    assert active_acq_params(defaults)["apowder.par_brightness_thresh"] == "on"
+    for model in other_models:
+        for section in ("apowder", "asize"):
+            assert active_acq_params({**defaults, f"{section}.par_segmentation_model": model}, "sizes")[
+                f"{section}.par_brightness_thresh"] == "off"
+
+    # Progress: spectra, then particles of the size band being measured
+    log = ("Sample 'A'\n🔬 Acquiring spectrum #0...\nSample 'A': particle size statistics\nSize band 1: 2–40 µm\n"
+           "A total of 12 particles have now been analyzed in this size band. 38 more to go.\n"
+           "Size band 2: 0.4–2 µm\nA total of 1 particle has now been analyzed in this size band. 49 more to go.")
+    [p] = be.acquisition_progress(log, ["A"], 100)
+    assert p["done"] == 1 and p["sizes"] == {"band": 2, "done": 1, "total": 50}
+    log = "Sample 'A'\nERROR: Sample 'A': particle stats collection failed: no frame\nSample 'B'\nSize band 1: 2–40 µm"
+    progress = be.acquisition_progress(log, ["A", "B"], 0)
+    assert [(p["state"], p["error"]) for p in progress] == [("failed", "no frame"), ("running", None)]
+    assert progress[1]["sizes"] == {"band": 1, "done": 0, "total": None}
+
+
+def test_size_results_segmentations_and_active(tmp_path: Path):
+    from _psd_helpers import make_eds_frames_sample, make_measurement_sample
+
+    from autoemx.config.ledger_schemas import SampleLedger
+    from autoemx.gui.common import get_info, get_particle_sizes
+
+    sample = str(make_measurement_sample(tmp_path / "M", images=True))
+    info = get_info(sample)
+    assert be.size_result_options(info) == [
+        {"label": "Result 0 · measurement 0 · threshold_bright · 100 · 80 px · active", "value": 0}]
+
+    # Segmented again (another threshold): a new segmentation and result, made the active one; the first kept
+    assert be._run_resegmentation(sample, {"par_brightness_thresh": 200, "par_segmentation_model": "threshold_bright",
+                                           "min_par_pixels": 80}) == {"ok": True}
+    ledger = SampleLedger.from_json_file(str(tmp_path / "M" / "ledger.json"))
+    assert [s.par_brightness_thresh for s in ledger.segmentations] == [100, 200]
+    assert ledger.active_size_result == 1 and ledger.size_result.segmentation_id == 1
+    info = get_info(sample)
+    labels = [o["label"] for o in be.size_result_options(info)]
+    assert labels[0].startswith("Result 1 · measurement 0 · threshold_bright · 200") and labels[0].endswith("active")
+    first = get_particle_sizes(sample, 0)
+    assert first.result.result_id == 0 and first.result.segmentation_id == 0 and first.stored
+    assert get_particle_sizes(sample).result.result_id == 1  # default: the active one
+    assert not be.mixed_segmentations(first)
+
+    # Recalculating a result that is not the active one (frame left out): its segmentation is kept
+    assert be._run_particle_stats(sample, {"frame_ids": ["B0F0"], "result_id": 0}) == {"ok": True}
+    ledger = SampleLedger.from_json_file(str(tmp_path / "M" / "ledger.json"))
+    assert (ledger.size_result.segmentation_id, ledger.size_result.excluded_frame_ids) == (0, ["B0F0"])
+
+    assert be.set_active_size_result(get_info(sample), 1) == "Result 1 is now the active one."
+    assert SampleLedger.from_json_file(str(tmp_path / "M" / "ledger.json")).active_size_result == 1
+    with pytest.raises(ValueError, match="No result 9"):
+        be.set_active_size_result(get_info(sample), 9)
+
+    # Sample measured only by EDS: its frames segmented again
+    eds = str(make_eds_frames_sample(tmp_path / "E", images=True))
+    assert be._run_resegmentation(eds, {"par_brightness_thresh": 150})["ok"]
+    result = get_particle_sizes(eds).result
+    assert (result.measurement_id, result.eds_segmentation_id) == (None, 1) and get_particle_sizes(eds).stored
+
+
+def test_compare_segmentations_and_result_choices(tmp_path: Path):
+    from _psd_helpers import make_measurement_sample
+
+    from autoemx.gui.app import create_app
+
+    sample = str(make_measurement_sample(tmp_path / "M", images=True))
+    be._run_resegmentation(sample, {"par_brightness_thresh": 200})
+    app = create_app("")
+    client = app.server.test_client()
+
+    def post(prefix, outputs, inputs, state=(), changed=()):
+        key = next(k for k in app.callback_map if k.startswith(prefix))
+        outs = [{"id": i, "property": p} for i, p in outputs]
+        body = {"output": key, "outputs": outs if len(outs) > 1 else outs[0],
+                "inputs": [{"id": i, "property": p, "value": v} for i, p, v in inputs],
+                "state": [{"id": i, "property": p, "value": v} for i, p, v in state], "changedPropIds": list(changed)}
+        res = client.post("/_dash-update-component", json=body)
+        assert res.status_code == 200, res.data
+        return res.get_json()["response"]
+
+    res = post("..psd-result-dd.options", [("psd-result-dd", "options"), ("psd-result-dd", "value"),
+                                           ("psd-seg-model", "value"), ("psd-seg-thresh", "value"),
+                                           ("psd-seg-px", "value")],
+               [("sample-dd", "value", sample), ("data-version", "data", 0)], changed=["sample-dd.value"])
+    assert [o["value"] for o in res["psd-result-dd"]["options"]] == [1, 0] and res["psd-result-dd"]["value"] == 1
+    assert (res["psd-seg-model"]["value"], res["psd-seg-thresh"]["value"]) == ("threshold_bright", 200)
+
+    outputs = [("psd-banner", "children"), ("psd-graph", "figure"), ("psd-tables", "children"),
+               ("psd-compare-controls", "hidden"), ("psd-compare-samples", "hidden")]
+    res = post("..psd-banner.children", outputs,
+               [("sample-dd", "value", sample), ("data-version", "data", 0), ("psd-mode", "value", "results"),
+                ("psd-compare", "value", []), ("psd-kind", "value", "cumulative"), ("psd-basis", "value", "number"),
+                ("psd-result-dd", "value", None)], [("sample-dd", "options", [])], ["psd-mode.value"])
+    assert "2 results of this sample compared" in str(res["psd-banner"]["children"])
+    rows = res["psd-tables"]["children"][0]["props"]["children"][1]["props"]["data"]
+    assert [r["Result"].split(" · ")[0] for r in rows] == ["Result 0", "Result 1"]
+    assert res["psd-compare-samples"]["hidden"] is True  # the samples list does not apply
+    assert len([t for t in res["psd-graph"]["figure"]["data"] if t.get("showlegend") is not False]) == 2
+
+    # Shown result: its segmentation named in the banner
+    res = post("..psd-banner.children", outputs,
+               [("sample-dd", "value", sample), ("data-version", "data", 0), ("psd-mode", "value", "sample"),
+                ("psd-compare", "value", []), ("psd-kind", "value", "cumulative"), ("psd-basis", "value", "number"),
+                ("psd-result-dd", "value", 0)], [("sample-dd", "options", [])], ["psd-result-dd.value"])
+    assert "size frames threshold_bright · 100 · 80 px" in str(res["psd-banner"]["children"])

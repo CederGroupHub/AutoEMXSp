@@ -7,7 +7,7 @@ Created on Thu Oct  9 10:14:12 2025
 """
 
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from autoemx.core.composition_analysis import EMXSp_Composition_Analyzer
 from autoemx.utils import print_double_separator
@@ -51,7 +51,8 @@ def collect_particle_statistics(
     output_filename_suffix: str = '',
     development_mode: bool = False,
     verbose: bool = True,
-    results_dir: Optional[str] = None
+    results_dir: Optional[str] = None,
+    on_sample_done: Optional[Callable[[str, Optional[BaseException]], None]] = None,
 ) -> None:
     """
     Particle size statistics of a list of powder samples, measured at the electron microscope.
@@ -129,6 +130,11 @@ def collect_particle_statistics(
     results_dir : str, optional
         Directory where results are saved.
         Default is `None`.
+    on_sample_done : callable, optional
+        Called after each sample with its ID and ``None`` if it was measured successfully, or the exception that
+        made it fail (the batch then continues with the next sample). Signature::
+
+            on_sample_done(sample_id: str, error: Optional[BaseException])
     
             
     Returns
@@ -200,12 +206,18 @@ def collect_particle_statistics(
         )
         
         
+        error: Optional[BaseException] = None
         try:
             if EM_analyzer and EM_analyzer.EM_controller and EM_analyzer.EM_controller.particle_finder:
                 EM_analyzer.EM_controller.particle_finder.get_particle_stats(n_par_target)
         except Exception as e:
             logging.exception(f"Sample '{sample_ID}': particle stats collection failed: {e}")
-            continue
+            error = e
+        if on_sample_done is not None:
+            try:
+                on_sample_done(sample_ID, error)
+            except Exception as e:
+                logging.warning(f"Sample '{sample_ID}': on_sample_done callback failed: {e}")
     
     # Put microscope in standby after completion
     if not development_mode and EM_analyzer and len(samples) > 1:

@@ -57,6 +57,40 @@ def _get_info(sample_dir: str) -> be.SampleInfo:
     return info
 
 
+_sizes_cache: Dict[Tuple[str, Optional[int]], Tuple[float, Optional[be.ParticleSizeData]]] = {}
+
+
+def get_particle_sizes(sample_dir: Optional[str], result_id: Optional[int] = None) -> Optional[be.ParticleSizeData]:
+    """Particle size statistics of a sample: result ``result_id`` (default: the active one), cached (computing them
+    may run a bootstrap)."""
+    if not sample_dir:
+        return None
+    with _load_lock:
+        m = _mtime(os.path.join(sample_dir, be.LEDGER_NAME))
+        cached = _sizes_cache.get((sample_dir, result_id))
+        if cached and cached[0] == m:
+            return cached[1]
+        data = be.load_particle_sizes(_get_info(sample_dir), result_id)
+        if len(_sizes_cache) > 200:
+            _sizes_cache.clear()
+        _sizes_cache[(sample_dir, result_id)] = (m, data)
+        return data
+
+
+_has_sizes_cache: Dict[str, Tuple[float, bool]] = {}
+
+
+def has_sizes(sample_dir: str) -> bool:
+    """Whether a sample has particle size data (cached, from its ledger file)."""
+    m = _mtime(os.path.join(sample_dir, be.LEDGER_NAME))
+    cached = _has_sizes_cache.get(sample_dir)
+    if cached and cached[0] == m:
+        return cached[1]
+    value = be.sample_has_sizes(sample_dir)
+    _has_sizes_cache[sample_dir] = (m, value)
+    return value
+
+
 def get_analysis(sample_dir: Optional[str], key: Optional[str]) -> Tuple[Optional[be.SampleInfo], Optional[be.AnalysisData]]:
     if not sample_dir:
         return None, None
@@ -66,6 +100,8 @@ def get_analysis(sample_dir: Optional[str], key: Optional[str]) -> Tuple[Optiona
 
 def _get_analysis(sample_dir: str, key: Optional[str]) -> Tuple[be.SampleInfo, be.AnalysisData]:
     info = _get_info(sample_dir)
+    if not info.has_eds:  # e.g. samples with only particle size data
+        return info, None
     ref = be.find_analysis(info, key)
     folder = ref.folder if ref else ""
     cache_key = (sample_dir, ref.key if ref else None, _mtime(os.path.join(sample_dir, be.LEDGER_NAME)),
@@ -99,7 +135,7 @@ def _to_ui(spec: be.ParamSpec, value: Any) -> Any:
         return ["on"] if value else []
     if spec.kind == "formulae":
         return "\n".join(value or [])
-    if spec.kind in ("elements", "flags"):
+    if spec.kind in ("elements", "flags", "multi"):
         return list(value or [])
     return value
 
@@ -158,7 +194,7 @@ def ui_value(component_id: Dict[str, str], values: Dict[str, Any]) -> Any:
 def _row_class(spec: be.ParamSpec) -> str:
     if spec.kind == "bool":
         return "param-row param-bool"
-    return "param-row" + (" param-stacked" if spec.kind in ("flags", "formulae", "elements") else "")
+    return "param-row" + (" param-stacked" if spec.kind in ("flags", "multi", "formulae", "elements") else "")
 
 
 def _row_id(key: str) -> Dict[str, str]:
@@ -207,6 +243,9 @@ def _param_control(spec: be.ParamSpec, persist: bool = False) -> html.Div:
             id=pid, value=value, className="flag-list",
             options=[{"label": f"{f} · {m}", "value": f} for f, m in be.QUANT_FLAG_MEANINGS.items()], **keep,
         )
+    elif spec.kind == "multi":
+        ctrl = dcc.Checklist(id=pid, value=value, className="flag-list", inline=True,
+                             options=[{"label": str(c), "value": c} for c in spec.choices], **keep)
     elif spec.kind == "formulae":
         ctrl = dcc.Textarea(id=pid, value=value, placeholder="MgO\nAl2O3\nMgAl2O4", className="param-text",
                             rows=3)

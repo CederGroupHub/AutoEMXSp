@@ -72,14 +72,33 @@ confidence interval of ``size_stats_ci_quantities`` (default ``["D50"]``) is wit
 Output
 ------
 
-``ledger.json`` (particles and ``particle_stats``), ``<sample>_Par_sizes.csv``
-(with each particle's ``Weight``), ``<sample>_Par_size_stats.csv`` (with
+``ledger.json``, ``<sample>_Par_sizes.csv`` (each particle with its frame, its
+number in the frame and its ``Weight``), ``<sample>_Par_size_stats.csv`` (with
 ``*_CI95_low/high``), and a plot of the weighted distribution
-(``size_stats_plot_format``). An interrupted measurement resumes when run again
-with the same settings. Every frame image is saved, without annotations:
-``Annotate_Particle_Images.py`` draws the particles found from the ledger, and
-``Reanalyse_Particle_Stats.py`` segments the frames again with other settings (e.g.
-brightness threshold) and rebuilds the statistics.
+(``size_stats_plot_format``). The ledger records:
+
+- ``frames``: every frame acquired (by a size measurement, or searched by EDS),
+  with the particles found in it by each segmentation;
+- ``segmentations``: the segmentation settings used (model, brightness threshold,
+  ``min_par_pixels``), each with an id;
+- ``size_measurements``: each measurement, with its settings, size bands and frames;
+- ``size_results``: the statistics of the frames of a measurement under a
+  segmentation (with or without the frames searched by EDS, frames and particles
+  left out), and the active one (``active_size_result``).
+
+Nothing is replaced: a new measurement, segmentation or recalculation adds to the
+ledger, so that results can be compared and the most appropriate one chosen (in the
+GUI, Analysis > Particle sizes). Ledgers of earlier versions are converted when
+loaded. An interrupted measurement resumes when run again with the same settings.
+Every frame image is saved, without annotations: ``Annotate_Particle_Images.py``
+draws the particles found from the ledger, and ``Reanalyse_Particle_Stats.py``
+segments the frames again with other settings (e.g. brightness threshold), adding a
+segmentation and its statistics.
+
+After an EDS acquisition, ``batch_acquire_and_analyze(...,
+size_stats_n_par_target=...)`` continues with particle size statistics on the same
+sample, counting the frames searched by EDS: their particles count towards the
+target of each size band, and only more frames are searched.
 
 
 References

@@ -5,7 +5,19 @@ from .acquisition import AcquisitionDetails, Coordinate2D, ParticleInfo, Spectru
 from .clustering import AitchisonParams, ClusteringAnalysis, ClusteringConfig, ClusteringResult, ClusterMergeParams, DBSCANParams, MixtureParams
 from .fitting import FitResult, FittedPeakResult
 from .ledger import LedgerConfigs, LedgerVersionError, SampleLedger
-from .particle_stats import ParticleSelection, ParticleSizeBand, ParticleSizeStats, ParticleStatsFrame, ParticleStatsProgress, ParticleStatsResult
+from .frames import FramePurpose, FrameRecord
+from .particle_stats import (
+    BandSummary,
+    ParticleKey,
+    ParticleSelection,
+    ParticleSizeBand,
+    ParticleSizeStats,
+    ParticleSizeStatsResult,
+    ParticleStatsFrame,
+    SizeBand,
+    SizeMeasurement,
+)
+from .segmentation import FrameSegmentation, SegmentationConfig
 from .quantification import (
     QuantificationConfig,
     QuantificationDiagnostics,
@@ -40,8 +52,15 @@ __all__ = [
     "ParticleSizeBand",
     "ParticleSizeStats",
     "ParticleStatsFrame",
-    "ParticleStatsProgress",
-    "ParticleStatsResult",
+    "BandSummary",
+    "FramePurpose",
+    "FrameRecord",
+    "FrameSegmentation",
+    "ParticleKey",
+    "ParticleSizeStatsResult",
+    "SegmentationConfig",
+    "SizeBand",
+    "SizeMeasurement",
     "QuantificationConfig",
     "QuantificationDiagnostics",
     "QuantificationResult",

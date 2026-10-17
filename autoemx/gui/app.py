@@ -15,6 +15,7 @@ Launch with ``python -m autoemx.gui``.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -25,6 +26,7 @@ from urllib.parse import quote
 
 from flask import Response, abort, send_file
 
+from autoemx.config.runtime_configs import PowderMeasurementConfig
 from autoemx.gui import backend as be
 from autoemx.gui import plots as pl
 from autoemx.gui import tab_acquisition, tab_quantification, tab_single
@@ -46,6 +48,8 @@ from autoemx.gui.common import (
     form_values,
     get_analysis,
     get_info,
+    get_particle_sizes,
+    has_sizes,
     param_sections,
     peak_overlaps_view,
     register_clear_buttons,
@@ -128,6 +132,9 @@ def _header(results_dir: str) -> html.Div:
     )
 
 
+#: Particle segmentation models (the first one uses a brightness threshold)
+PAR_SEGMENTATION_MODELS = list(PowderMeasurementConfig.AVAILABLE_PAR_SEGMENTATION_MODELS)
+
 PAGES = [("acq", "Acquisition"), ("quant", "Quantification"), ("analysis", "Analysis"),
          ("single", "Single spectrum")]
 
@@ -177,6 +184,7 @@ def _sidebar() -> html.Div:
                 className="side-block run-block",
             ),
         ],
+        id="analysis-sidebar",
         className="sidebar",
     )
 
@@ -241,6 +249,7 @@ def _spectrum_panel() -> html.Div:
                 html.Span(id="fit-msg", className="fit-msg"),
             ], className="spectrum-actions"),
         ],
+        id="spectrum-panel",
         className="spectrum-panel",
     )
 
@@ -249,15 +258,15 @@ def _tabs() -> dcc.Tabs:
     return dcc.Tabs(
         id="tabs", value="plot", className="tabs",
         children=[
-            dcc.Tab(label="Clustering", value="plot", children=[
+            dcc.Tab(id="plot-tab", label="Clustering", value="plot", children=[
                 _plot_controls(),
                 # Mouse-wheel zoom: Plotly's in 2D; in 3D and ternary, assets/cluster_zoom.js
                 dcc.Loading(dcc.Graph(id="cluster-graph", config={**_GRAPH_CONFIG, "scrollZoom": "cartesian"},
                                       className="cluster-graph"),
                             type="circle", delay_show=400, parent_className="graph-fill"),
             ]),
-            dcc.Tab(label="Clusters", value="clusters", children=[html.Div(id="clusters-view", className="tab-body")]),
-            dcc.Tab(label="Spectra", value="spectra", children=[html.Div([
+            dcc.Tab(id="clusters-tab", label="Clusters", value="clusters", children=[html.Div(id="clusters-view", className="tab-body")]),
+            dcc.Tab(id="spectra-tab", label="Spectra", value="spectra", children=[html.Div([
                 html.Div("Click a row to show the spectrum. Filter with e.g. “> 5”, “< -3” or text.",
                          className="hint"),
                 dash_table.DataTable(
@@ -268,9 +277,85 @@ def _tabs() -> dcc.Tabs:
                     style_header={"fontWeight": 600, "backgroundColor": "#f3f5f8"},
                 ),
             ], className="tab-body")]),
-            dcc.Tab(label="Distributions", value="dist", children=[html.Div(
+            dcc.Tab(id="dist-tab", label="Distributions", value="dist", children=[html.Div(
                 dcc.Graph(id="dist-graph", config=_GRAPH_CONFIG, className="dist-graph"),
                 className="tab-body graph-fill")]),
+            dcc.Tab(id="psd-tab", label="Particle sizes", value="psd", children=[html.Div([
+                html.Div([
+                    dcc.RadioItems(id="psd-mode", value="sample", inline=True, className="seg",
+                                   options=[{"label": "This sample", "value": "sample"},
+                                            {"label": "Compare samples", "value": "compare"},
+                                            {"label": "Compare segmentations", "value": "results"}]),
+                    html.Div([
+                        dcc.Dropdown(id="psd-result-dd", clearable=False, placeholder="Computed now (not saved)",
+                                     className="psd-result-dd"),
+                        html.Button("Set as active", id="psd-set-active-btn", className="btn btn-small",
+                                    title="Make the shown statistics the active ones of the sample: shown and used "
+                                          "by default (e.g. recalculated when EDS adds frames)"),
+                        html.Details([
+                            html.Summary("Segment again…"),
+                            html.Div([
+                                html.Span("model", className="axis-tag"),
+                                dcc.Dropdown(id="psd-seg-model", clearable=False, className="psd-seg-model",
+                                             options=PAR_SEGMENTATION_MODELS, value=PAR_SEGMENTATION_MODELS[0]),
+                                html.Span("threshold", className="axis-tag"),
+                                dcc.Input(id="psd-seg-thresh", type="number", min=0, max=255, step=1,
+                                          className="param-input psd-seg-input"),
+                                html.Span("min pixels", className="axis-tag"),
+                                dcc.Input(id="psd-seg-px", type="number", min=1, step=1,
+                                          className="param-input psd-seg-input"),
+                                html.Button("Segment again", id="psd-reseg-btn", className="btn btn-small",
+                                            title="Segment the frames again from their saved images with these "
+                                                  "settings: a new segmentation and its statistics (the earlier ones "
+                                                  "are kept)"),
+                            ], className="psd-seg-row"),
+                        ], className="psd-seg-box"),
+                        html.Span(id="psd-result-msg"),
+                    ], id="psd-result-controls", className="psd-result-controls"),
+                    html.Div([
+                        html.Div(dcc.Dropdown(id="psd-compare", multi=True, placeholder="Samples with particle sizes"),
+                                 id="psd-compare-samples", className="psd-compare-dd"),
+                        dcc.RadioItems(id="psd-kind", value="cumulative", inline=True, className="seg",
+                                       options=[{"label": "Cumulative", "value": "cumulative"},
+                                                {"label": "Histogram", "value": "histogram"}]),
+                        dcc.RadioItems(id="psd-basis", value="number", inline=True, className="seg",
+                                       options=[{"label": "Number", "value": "number"},
+                                                {"label": "Volume", "value": "volume"}]),
+                        html.Button("Export CSV", id="psd-export-btn", className="btn btn-small",
+                                    title="Download the statistics of the compared samples"),
+                        dcc.Download(id="psd-download"),
+                    ], id="psd-compare-controls", className="psd-compare-controls", hidden=True),
+                ], className="psd-controls"),
+                html.Div(id="psd-banner", className="psd-banner"),
+                dcc.Graph(id="psd-graph", config=_GRAPH_CONFIG, className="psd-graph", figure=pl.psd_figure(None)),
+                html.Div(id="psd-tables", className="psd-tables"),
+                html.Div([
+                    html.Div("Frames", className="psd-section-title"),
+                    html.Div([
+                        html.Button("◀", id="psd-frame-prev", className="btn btn-small", title="Previous frame"),
+                        dcc.Dropdown(id="psd-frame-dd", clearable=False, placeholder="No frames",
+                                     className="psd-frame-dd"),
+                        html.Button("▶", id="psd-frame-next", className="btn btn-small", title="Next frame"),
+                        dcc.Checklist(id="psd-frame-out", options=[{"label": "Leave this frame out",
+                                                                    "value": "out"}],
+                                      value=[], className="param-check"),
+                        html.Span(id="psd-frame-caption", className="muted"),
+                    ], className="psd-frame-bar"),
+                    html.Div("Click a particle to leave it out of the statistics (or count it again).",
+                             className="hint"),
+                    dcc.Graph(id="psd-frame-graph", className="psd-frame-graph",
+                              config={**_GRAPH_CONFIG, "scrollZoom": True}),
+                    html.Div([
+                        html.Span(id="psd-pending", className="psd-pending"),
+                        html.Button("Recalculate and save", id="psd-recalc-btn", className="btn btn-primary",
+                                    title="Recalculate the statistics without the frames and particles left out, "
+                                          "and save them in the sample ledger"),
+                        html.Button("Reset", id="psd-reset-btn", className="btn",
+                                    title="Back to the frames and particles left out of the saved statistics"),
+                        html.Span(id="psd-recalc-msg"),
+                    ], className="psd-recalc-bar"),
+                ], id="psd-frames-section", className="psd-frames-section"),
+            ], className="tab-body")]),
             dcc.Tab(id="sem-tab", label="SEM images", value="sem", children=[html.Div([
                 html.Div([
                     html.Button("◀", id="sem-prev-btn", className="btn btn-small", title="Previous image"),
@@ -286,8 +371,8 @@ def _tabs() -> dcc.Tabs:
                           config={**_GRAPH_CONFIG, "scrollZoom": True}),
                 html.Div(id="sem-gallery", className="sem-gallery"),
             ], className="tab-body sem-body")]),
-            dcc.Tab(label="Saved figures", value="figures", children=[html.Div(id="figures-view", className="tab-body")]),
-            dcc.Tab(label="Settings used", value="settings", children=[html.Div(id="settings-view", className="tab-body")]),
+            dcc.Tab(id="figures-tab", label="Saved figures", value="figures", children=[html.Div(id="figures-view", className="tab-body")]),
+            dcc.Tab(id="settings-tab", label="Settings used", value="settings", children=[html.Div(id="settings-view", className="tab-body")]),
         ],
     )
 
@@ -357,6 +442,9 @@ def build_layout(results_dir: str) -> html.Div:
             dcc.Store(id="mode-forced", data=False),
             dcc.Store(id="sem-paths"),
             dcc.Interval(id="poll", interval=1000, disabled=True),
+            dcc.Store(id="psd-excl"),
+            dcc.Store(id="psd-job-store"),
+            dcc.Interval(id="psd-poll", interval=1000, disabled=True),
             dcc.Store(id="single-request"),
             dcc.Store(id="pt-elements"),
             # Query string of the page URL: samples to acquire given by an external script (?acq=...)
@@ -509,8 +597,181 @@ def _sample_info_view(info: be.SampleInfo) -> List[Any]:
         html.Div([html.Span("Spectra", className="k"),
                   html.Span(f"{info.n_spectra} ({info.n_quantified} quantified)", className="v")]),
         html.Div([html.Span("Analyses", className="k"), html.Span(str(len(info.analyses)), className="v")]),
+        html.Div([html.Span("Sizes", className="k"),
+                  html.Span("particle size data" if info.has_sizes else "—", className="v")]),
+        None if info.has_eds else html.Div("No EDS spectra: the analysis settings below do not apply.",
+                                           className="hint"),
         peak_overlaps_view(be.sample_peak_overlaps(info)),
     ]
+
+
+# Rows of the particle size statistics table: (label, key in ParticleSizeStats, key of the confidence interval)
+_PSD_STAT_ROWS = [
+    ("Particles", "n_par_analysed", None), ("Mean", "mean", None), ("Std. dev.", "stdev", None),
+    ("Min", "min", None), ("D10", "D10", "D10"), ("D25", "D25", None), ("D50", "median", "D50"),
+    ("D75", "D75", None), ("D90", "D90", "D90"), ("Max", "max", None), ("D[4,3]", "D43", "D43"),
+    ("Dv10", "Dv10", "Dv10"), ("Dv50", "Dv50", "Dv50"), ("Dv90", "Dv90", "Dv90"),
+]
+
+
+# Origin of the particles counted (keys of ParticleStatsResult.n_par_by_selection)
+_PSD_SELECTION_LABELS = {"size_stats": "size measurement", "auto": "measured by EDS",
+                         "eds_frames": "in EDS frames", "manual": "chosen manually", "list": "from list"}
+
+
+def _psd_banner(data: be.ParticleSizeData, info: Optional[be.SampleInfo] = None) -> List[Any]:
+    """Where the statistics come from (frames and segmentations), and what they can miss."""
+    r = data.result
+    n_eds_frames = sum(s.n_frames for s in r.eds_scans)
+    if data.source.startswith("measurement"):
+        text = f"From the particle size measurement ({len(r.bands)} size band{'s' if len(r.bands) != 1 else ''})"
+        if n_eds_frames:
+            text += f" and {n_eds_frames} frames searched by EDS"
+        elif data.source == "measurement+eds":
+            text += " and the particles measured by EDS"
+        text += "."
+    elif data.source == "eds_frames":
+        text = (f"From the {n_eds_frames} frames searched by EDS only. They observe particles from "
+                f"{data.eds_d_min_um:.3g} µm: smaller particles need a particle size measurement.")
+    else:
+        text = ("From the particles measured by EDS only (acquired before EDS frames were recorded): sizes are "
+                "not weighted by the area scanned.")
+    if data.stored:
+        text += f" Statistics of {r.datetime.replace('T', ' ')}."
+    else:
+        text += " Computed now from the sample data, not saved."
+    chips = [_chip("particles", r.size_stats.n_par_analysed)]
+    if r.precision_reached is not None:
+        chips.append(_chip("target precision", "reached" if r.precision_reached else "not reached",
+                           "chip-ok" if r.precision_reached else "chip-warn"))
+    chips += [_chip(_PSD_SELECTION_LABELS.get(sel, sel), n, "chip-muted") for sel, n in r.n_par_by_selection.items()]
+    if r.excluded_frame_ids or r.excluded_particles:
+        chips.append(_chip("left out", f"{len(r.excluded_frame_ids)} frames, {len(r.excluded_particles)} "
+                                       "particles", "chip-warn"))
+    if r.overlapping_frame_ids:
+        chips.append(_chip("overlapping frames", len(r.overlapping_frame_ids), "chip-muted"))
+    out = [html.Div(text, className="psd-source")]
+    if info is not None:
+        segmentation = info.ledger.segmentation(r.segmentation_id)
+        eds = info.ledger.segmentation(r.eds_segmentation_id)
+        names = ([f"size frames {segmentation.label}"] if segmentation is not None else []) + (
+            [f"frames searched by EDS {eds.label}"] if eds is not None else [])
+        if names:
+            out.append(html.Div("Segmentation: " + "; ".join(names) + ".", className="muted"))
+        if be.mixed_segmentations(data):
+            out.append(html.Div("The size frames and the frames searched by EDS are segmented differently: segment "
+                                "them again with the same settings for consistent statistics.", className="warn"))
+    if r.missing_frame_ids:
+        out.append(html.Div(f"{len(r.missing_frame_ids)} frame(s) without result of this segmentation left out "
+                            f"(no saved image): {', '.join(r.missing_frame_ids)}.", className="warn"))
+    return out + [html.Div(chips, className="summary")]
+
+
+def _psd_tables(data: be.ParticleSizeData) -> List[Any]:
+    r = data.result
+    w, u, ci = r.size_stats, r.unweighted_size_stats, r.confidence_intervals_95
+
+    def val(stats, key):
+        v = getattr(stats, key, None) if stats is not None else None
+        return "—" if v is None else (str(v) if key == "n_par_analysed" else f"{v:.3g}")
+
+    rows = [html.Tr([html.Th(""), html.Th("Weighted"), html.Th("95 % CI"), html.Th("Unweighted")])]
+    for label, key, ci_key in _PSD_STAT_ROWS:
+        interval = ci.get(ci_key) if ci_key else None
+        rows.append(html.Tr([html.Td(label), html.Td(val(w, key)),
+                             html.Td(f"{interval[0]:.3g}–{interval[1]:.3g}" if interval else ""),
+                             html.Td(val(u, key))]))
+    stats_table = html.Div([html.Div("Equivalent diameter (µm)", className="psd-table-title"),
+                            html.Table(rows, className="comp-table")])
+
+    def scans_table(title: str, scans) -> Optional[html.Div]:
+        if not scans:
+            return None
+        head = html.Tr([html.Th(h) for h in ("Diameters (µm)", "Frame width (µm)", "Frames", "Area (mm²)",
+                                             "Particles", "Particles/mm²")])
+        body = [html.Tr([
+            html.Td(f"{s.d_min_um:.3g}–{s.d_max_um:.3g}"),
+            html.Td(f"{s.frame_width_um:.3g}" if s.frame_width_um else "—"),
+            html.Td(str(s.n_frames)),
+            html.Td(f"{s.scanned_area_um2 / 1e6:.3g}"),
+            html.Td(str(s.n_particles)),
+            html.Td(f"{s.number_density_per_mm2:.3g}" if s.number_density_per_mm2 is not None else "—"),
+        ]) for s in scans]
+        return html.Div([html.Div(title, className="psd-table-title"),
+                         html.Table([head] + body, className="comp-table")])
+
+    return [stats_table, scans_table("Size bands", r.bands), scans_table("Frames searched by EDS", r.eds_scans)]
+
+
+def _natural_key(text: str) -> List[Any]:
+    """Sort key putting e.g. "S_900C" before "S_1000C"."""
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", text)]
+
+
+def _compared_sizes(sample_dirs, samples) -> Tuple[List[Tuple[str, be.ParticleSizeData]], List[str]]:
+    """Particle sizes of the samples to compare, labelled as in the sample list, and the samples that failed."""
+    labels = {o["value"]: o["label"] for o in samples or []}
+    items, errors = [], []
+    for sample_dir in sorted(sample_dirs or [], key=lambda d: _natural_key(labels.get(d, d))):
+        label = labels.get(sample_dir, os.path.basename(sample_dir))
+        try:
+            data = get_particle_sizes(sample_dir)
+        except Exception as exc:
+            errors.append(f"{label}: {exc}")
+            continue
+        if data is not None:
+            items.append((label, data))
+    return items, errors
+
+
+def _compared_results(sample_dir) -> List[Tuple[str, be.ParticleSizeData]]:
+    """Statistics results of a sample, labelled (oldest first)."""
+    info = get_info(sample_dir) if sample_dir else None
+    if info is None:
+        return []
+    items = []
+    for result in info.ledger.size_results:
+        data = get_particle_sizes(sample_dir, result.result_id)
+        if data is not None:
+            items.append((be.size_result_label(info.ledger, result), data))
+    return items
+
+
+def _comparison_banner(items, errors) -> List[Any]:
+    out = [html.Div(f"{len(items)} sample{'s' if len(items) != 1 else ''} compared. Number distributions count "
+                    "particles; volume distributions weight them by their volume (d³).", className="psd-source")]
+    eds_only = [label for label, data in items if data.source == "eds_frames"]
+    if eds_only:
+        out.append(html.Div("From frames searched by EDS only, missing the particles too small for them: "
+                            + ", ".join(eds_only) + ".", className="hint"))
+    out += [html.Div(f"Cannot compute {e}", className="err") for e in errors]
+    return out
+
+
+def _comparison_table(items, first_column: str = "Sample") -> List[Any]:
+    if not items:
+        return []
+    df = be.size_comparison_table(items).rename(columns={"Sample": first_column})
+    for col, _key, ci_key in be.COMPARISON_STATS:
+        if ci_key:
+            df[f"{col} 95 % CI"] = [f"{lo:.3g}–{hi:.3g}" if pd.notna(lo) and pd.notna(hi) else ""
+                                    for lo, hi in zip(df[f"{col} CI low"], df[f"{col} CI high"])]
+    df["Saved"] = np.where(df["Saved"], "yes", "computed")
+    shown = [first_column, "Source", "Particles", "D10", "D50", "D50 95 % CI", "D90", "Span (D90-D10)/D50",
+             "D[4,3]", "Dv50", "Saved"]
+    numeric = {"D10", "D50", "D90", "Span (D90-D10)/D50", "D[4,3]", "Dv50"}
+    columns = [{"name": c, "id": c, **({"type": "numeric", "format": {"specifier": ".3~g"}} if c in numeric else {})}
+               for c in shown]
+    return [html.Div([
+        html.Div("Equivalent diameter (µm)", className="psd-table-title"),
+        dash_table.DataTable(
+            data=df[shown].to_dict("records"), columns=columns, sort_action="native",
+            style_as_list_view=True, style_table={"overflowX": "auto"},
+            style_cell={"fontSize": 13, "padding": "4px 8px", "textAlign": "right"},
+            style_cell_conditional=[{"if": {"column_id": c}, "textAlign": "left"} for c in (first_column, "Source")],
+            style_header={"fontWeight": 600, "backgroundColor": "#f3f5f8"},
+        ),
+    ], className="psd-compare-table")]
 
 
 def _spectrum_info(data: be.AnalysisData, sid: str, fit: Optional[Dict[str, Any]]) -> List[Any]:
@@ -773,6 +1034,313 @@ def create_app(results_dir: Optional[str] = None) -> Dash:
         els = [{"label": e, "value": e} for e in info.elements]
         return (_sample_info_view(info), options, value, els, els, f"{em_type} images",
                 f"Show in {em_type} image")
+
+    # Sub-tabs showing EDS data: greyed out for samples without spectra (e.g. only particle sizes)
+    eds_tabs = ["plot-tab", "clusters-tab", "spectra-tab", "dist-tab", "figures-tab", "settings-tab"]
+
+    @app.callback(
+        *[Output(t, "disabled") for t in eds_tabs],
+        Output("psd-tab", "disabled"),
+        Output("tabs", "value", allow_duplicate=True),
+        Output("analysis-sidebar", "className"),
+        Output("spectrum-panel", "className"),
+        Output("analysis-dd", "placeholder"),
+        Output("set-active-btn", "disabled"),
+        Input("sample-dd", "value"),
+        Input("data-version", "data"),
+        State("tabs", "value"),
+        prevent_initial_call=True,  # the sample is set by the folder scan
+    )
+    def grey_out_missing_data(sample_dir, _, tab):
+        try:
+            info = get_info(sample_dir)
+        except Exception:
+            info = None
+        has_eds = info is None or info.has_eds
+        has_sizes = info is not None and info.has_sizes
+        disabled = {t.removesuffix("-tab"): not has_eds for t in eds_tabs}
+        disabled["psd"] = not has_sizes
+        if disabled.get(tab):
+            tab = "plot" if has_eds else ("psd" if has_sizes else "sem")
+        return (*[disabled[t.removesuffix("-tab")] for t in eds_tabs], disabled["psd"], tab,
+                "sidebar" + ("" if has_eds else " no-eds"), "spectrum-panel" + ("" if has_eds else " no-eds"),
+                "No analysis yet" if has_eds else "No EDS spectra", not has_eds)
+
+    @app.callback(
+        Output("psd-compare", "options"),
+        Output("psd-compare", "value"),
+        Input("sample-dd", "options"),
+        Input("sample-dd", "value"),
+        Input("data-version", "data"),
+    )
+    def compare_choices(samples, sample_dir, _):
+        # Samples of the results folder with particle sizes; by default those in the folder of the shown sample
+        options = sorted((o for o in samples or [] if has_sizes(o["value"])), key=lambda o: _natural_key(o["label"]))
+        parent = os.path.dirname(sample_dir) if sample_dir else None
+        value = [o["value"] for o in options if os.path.dirname(o["value"]) == parent]
+        return options, value
+
+    @app.callback(
+        Output("psd-banner", "children"),
+        Output("psd-graph", "figure"),
+        Output("psd-tables", "children"),
+        Output("psd-compare-controls", "hidden"),
+        Output("psd-compare-samples", "hidden"),
+        Input("sample-dd", "value"),
+        Input("data-version", "data"),
+        Input("psd-mode", "value"),
+        Input("psd-compare", "value"),
+        Input("psd-kind", "value"),
+        Input("psd-basis", "value"),
+        Input("psd-result-dd", "value"),
+        State("sample-dd", "options"),
+    )
+    def particle_sizes(sample_dir, _, mode, compared, kind, basis, result_id, samples):
+        if mode == "compare":
+            items, errors = _compared_sizes(compared, samples)
+            return (_comparison_banner(items, errors), pl.psd_comparison_figure(items, kind, basis),
+                    _comparison_table(items), False, False)
+        if mode == "results":
+            items = _compared_results(sample_dir)
+            banner = [html.Div(f"{len(items)} result{'s' if len(items) != 1 else ''} of this sample compared: "
+                               "other segmentations, or frames and particles left out.", className="psd-source")]
+            return (banner, pl.psd_comparison_figure(items, kind, basis), _comparison_table(items, "Result"), False,
+                    True)  # the samples list does not apply: hidden
+        try:
+            data = get_particle_sizes(sample_dir, result_id)
+        except Exception as exc:
+            return html.Div(f"Cannot compute the particle size statistics: {exc}", className="err"), \
+                pl.psd_figure(None), [], True, True
+        if data is None:
+            return (html.Div("No particle size data for this sample.", className="hint"), pl.psd_figure(None), [],
+                    True, True)
+        return _psd_banner(data, get_info(sample_dir)), pl.psd_figure(data), _psd_tables(data), True, True
+
+    @app.callback(
+        Output("psd-download", "data"),
+        Input("psd-export-btn", "n_clicks"),
+        State("psd-compare", "value"),
+        State("sample-dd", "options"),
+        State("psd-mode", "value"),
+        State("sample-dd", "value"),
+        prevent_initial_call=True,
+    )
+    def export_comparison(_, compared, samples, mode, sample_dir):
+        if mode == "results":
+            items, name = _compared_results(sample_dir), f"{Path(sample_dir).name}_size_results.csv"
+        else:
+            items, name = _compared_sizes(compared, samples)[0], "Particle_size_comparison.csv"
+        if not items:
+            return no_update
+        return dcc.send_data_frame(be.size_comparison_table(items).to_csv, name, index=False)
+
+    @app.callback(Output("psd-frames-section", "hidden"), Output("psd-result-controls", "hidden"),
+                  Input("psd-mode", "value"))
+    def frames_section_shown(mode):
+        return mode != "sample", mode != "sample"
+
+    @app.callback(
+        Output("psd-result-dd", "options"),
+        Output("psd-result-dd", "value"),
+        Output("psd-seg-model", "value"),
+        Output("psd-seg-thresh", "value"),
+        Output("psd-seg-px", "value"),
+        Input("sample-dd", "value"),
+        Input("data-version", "data"),
+    )
+    def result_choices(sample_dir, _):
+        # Results of the sample (the active one shown); segmentation settings of the active one to start from
+        info = get_info(sample_dir) if sample_dir else None
+        if info is None:
+            return [], None, no_update, no_update, no_update
+        ledger = info.ledger
+        result = ledger.size_result
+        segmentation = ledger.segmentation(result.segmentation_id if result is not None else None) or ledger.segmentation(
+            result.eds_segmentation_id if result is not None else None)
+        if segmentation is None:
+            cfg = ledger.configs.measurement_cfg.powder_meas_cfg or PowderMeasurementConfig()
+            model, threshold, px = cfg.par_segmentation_model, cfg.par_brightness_thresh, cfg.min_par_pixels
+        else:
+            model, threshold, px = (segmentation.par_segmentation_model, segmentation.par_brightness_thresh,
+                                    segmentation.min_par_pixels)
+        return (be.size_result_options(info), ledger.active_size_result,
+                model if model in PAR_SEGMENTATION_MODELS else no_update, threshold, px)
+
+    @app.callback(Output("psd-seg-thresh", "disabled"), Input("psd-seg-model", "value"))
+    def threshold_used(model):
+        return model != PAR_SEGMENTATION_MODELS[0]
+
+    @app.callback(
+        Output("psd-result-msg", "children"),
+        Output("data-version", "data", allow_duplicate=True),
+        Input("psd-set-active-btn", "n_clicks"),
+        State("sample-dd", "value"),
+        State("psd-result-dd", "value"),
+        State("data-version", "data"),
+        prevent_initial_call=True,
+    )
+    def set_active_result(_, sample_dir, result_id, version):
+        info = get_info(sample_dir) if sample_dir else None
+        if info is None:
+            return html.Span("Select a sample first.", className="err"), no_update
+        try:
+            message = be.set_active_size_result(info, result_id)
+        except Exception as exc:
+            return html.Span(str(exc), className="err"), no_update
+        _info_cache.pop(sample_dir, None)
+        return html.Span(message, className="ok"), (version or 0) + 1
+
+    @app.callback(
+        Output("psd-job-store", "data", allow_duplicate=True),
+        Output("psd-poll", "disabled", allow_duplicate=True),
+        Output("psd-recalc-msg", "children", allow_duplicate=True),
+        Input("psd-reseg-btn", "n_clicks"),
+        State("sample-dd", "value"),
+        State("psd-seg-model", "value"),
+        State("psd-seg-thresh", "value"),
+        State("psd-seg-px", "value"),
+        prevent_initial_call=True,
+    )
+    def segment_again(_, sample_dir, model, threshold, min_pixels):
+        if not sample_dir:
+            return no_update, no_update, html.Span("Select a sample first.", className="err")
+        payload = {"par_segmentation_model": model, "par_brightness_thresh": threshold, "min_par_pixels": min_pixels}
+        try:
+            job = JOBS.start("psd_reseg", sample_dir, payload, f"Segmentation of {Path(sample_dir).name}")
+        except RuntimeError as exc:
+            return no_update, no_update, html.Span(str(exc), className="err")
+        return ({"id": job.job_id, "done": False}, False,
+                html.Span("Segmenting the frames again from their saved images…", className="running"))
+
+    @app.callback(
+        Output("psd-frame-dd", "options"),
+        Output("psd-frame-dd", "value"),
+        Output("psd-frame-graph", "figure"),
+        Output("psd-frame-caption", "children"),
+        Output("psd-frame-out", "value"),
+        Output("psd-excl", "data"),
+        Output("psd-pending", "children"),
+        Output("psd-recalc-btn", "disabled"),
+        Output("psd-recalc-btn", "children"),
+        Output("psd-reset-btn", "disabled"),
+        Input("sample-dd", "value"),
+        Input("data-version", "data"),
+        Input("psd-frame-dd", "value"),
+        Input("psd-frame-prev", "n_clicks"),
+        Input("psd-frame-next", "n_clicks"),
+        Input("psd-frame-out", "value"),
+        Input("psd-frame-graph", "clickData"),
+        Input("psd-reset-btn", "n_clicks"),
+        Input("psd-result-dd", "value"),
+        State("psd-excl", "data"),
+    )
+    def size_frames_view(sample_dir, _version, frame_id, _prev, _next, frame_out, click, _reset, result_id, excl):
+        # Frames and particles to leave out ("psd-excl") are edited here, then saved by "Recalculate and save"
+        trigger = ctx.triggered_id
+        try:
+            data = get_particle_sizes(sample_dir, result_id)
+        except Exception:
+            data = None
+        if data is None:
+            return ([], None, pl.size_frame_figure(None, None, []), "", [], None, "", True, "Recalculate and save",
+                    True)
+        frames = be.size_frames(get_info(sample_dir), data)
+        saved = {"frames": sorted(data.result.excluded_frame_ids),
+                 "particles": sorted([str(f), int(i)] for f, i in data.result.excluded_particles)}
+        shown = data.result.result_id if data.stored else None
+        if (trigger in (None, "sample-dd", "data-version", "psd-reset-btn", "psd-result-dd")
+                or (excl or {}).get("sample") != sample_dir or (excl or {}).get("result") != shown):
+            excl = {"sample": sample_dir, "result": shown, **saved}
+        ids = [f.frame_id for f in frames]
+        if frame_id not in ids:
+            frame_id = ids[0] if ids else None
+        if trigger in ("psd-frame-prev", "psd-frame-next") and ids:
+            frame_id = ids[(ids.index(frame_id) + (1 if trigger == "psd-frame-next" else -1)) % len(ids)]
+        frame = next((f for f in frames if f.frame_id == frame_id), None)
+        # Particles are left out one by one, as (frame_id, index in the frame)
+        out_frames, out_particles = set(excl["frames"]), {(str(f), int(i)) for f, i in excl["particles"]}
+        if trigger == "psd-frame-out" and frame is not None:
+            (out_frames.add if "out" in (frame_out or []) else out_frames.discard)(frame.frame_id)
+        if trigger == "psd-frame-graph" and click and click.get("points"):
+            pid = click["points"][0].get("customdata")
+            if frame is not None and pid is not None and 0 <= int(pid) < frame.n_particles:
+                key = (frame.frame_id, int(pid))
+                (out_particles.discard if key in out_particles else out_particles.add)(key)
+        excl = {"sample": sample_dir, "result": shown, "frames": sorted(out_frames),
+                "particles": sorted(map(list, out_particles))}
+
+        def option(f):
+            state = "left out" if f.frame_id in out_frames else ("overlapping" if f.status == "overlapping" else "")
+            label = f"{f.frame_id} · {f.scan_label.split(' (')[0]} · {f.n_particles} particles"
+            return {"label": label + (f" · {state}" if state else ""), "value": f.frame_id}
+
+        if frame is not None and frame.image_path:
+            from PIL import Image
+
+            with Image.open(frame.image_path) as im:
+                size = im.size
+            figure = pl.size_frame_figure(
+                f"/sem-image?max=1600&path={quote(frame.image_path)}", size, frame.marks,
+                {i for f, i in out_particles if f == frame.frame_id}, frame.is_eds,
+                frame.frame_id in out_frames, uirevision=frame.image_path,
+            )
+        else:
+            figure = pl.size_frame_figure(None, None, [])
+        caption = ""
+        if frame is not None:
+            caption = (f"{frame.scan_label} · {frame.n_particles} particles · {frame.area_um2:.4g} µm²"
+                       + (" · overlaps a larger frame: not counted" if frame.status == "overlapping" else ""))
+        changed = excl["frames"] != saved["frames"] or excl["particles"] != saved["particles"]
+        left_out = f"Left out: {len(out_frames)} frame(s), {len(out_particles)} particle(s)"
+        pending = html.Span(left_out + (" — not saved: recalculate to apply" if changed else ""),
+                            className="warn" if changed else "muted")
+        can_save = be.can_save_particle_sizes(data) and (changed or not data.stored)
+        label = "Save statistics" if not data.stored and not changed else "Recalculate and save"
+        return ([option(f) for f in frames], frame_id, figure, caption,
+                ["out"] if frame is not None and frame.frame_id in out_frames else [], excl, pending, not can_save,
+                label, not changed)
+
+    @app.callback(
+        Output("psd-job-store", "data"),
+        Output("psd-poll", "disabled"),
+        Output("psd-recalc-msg", "children"),
+        Input("psd-recalc-btn", "n_clicks"),
+        State("sample-dd", "value"),
+        State("psd-excl", "data"),
+        prevent_initial_call=True,
+    )
+    def recalculate_sizes(_, sample_dir, excl):
+        if not sample_dir or not excl or excl.get("sample") != sample_dir:
+            return no_update, no_update, no_update
+        payload = {"frame_ids": excl["frames"], "particles": excl["particles"], "result_id": excl.get("result")}
+        try:
+            job = JOBS.start("psd", sample_dir, payload, f"Particle size statistics of {Path(sample_dir).name}")
+        except RuntimeError as exc:
+            return no_update, no_update, html.Span(str(exc), className="err")
+        return {"id": job.job_id, "done": False}, False, html.Span("Recalculating…", className="running")
+
+    @app.callback(
+        Output("psd-recalc-msg", "children", allow_duplicate=True),
+        Output("psd-job-store", "data", allow_duplicate=True),
+        Output("psd-poll", "disabled", allow_duplicate=True),
+        Output("data-version", "data", allow_duplicate=True),
+        Input("psd-poll", "n_intervals"),
+        State("psd-job-store", "data"),
+        State("data-version", "data"),
+        prevent_initial_call=True,
+    )
+    def poll_sizes_job(_, job_data, version):
+        job = JOBS.get(job_data["id"]) if job_data else None
+        if job is None or job_data.get("done"):
+            return no_update, no_update, True, no_update
+        res = job.result()
+        if res is None:
+            return html.Span(f"Recalculating… {job.elapsed():.0f} s", className="running"), no_update, False, \
+                no_update
+        _info_cache.pop(job.sample_dir, None)
+        msg = (html.Span(f"Saved in the sample ledger ({job.elapsed():.0f} s).", className="ok") if res.get("ok")
+               else html.Span(f"Not saved: {res.get('error')}", className="err"))
+        return msg, {**job_data, "done": True}, True, (version or 0) + 1
 
     @app.callback(
         Output({"type": "param", "key": ALL}, "value"),

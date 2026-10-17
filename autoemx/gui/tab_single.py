@@ -253,6 +253,8 @@ def register(app) -> None:
             _, data = get_analysis(sample_dir, None)
         except Exception:
             return [], None, source
+        if data is None:  # no spectra
+            return [], None, source
         comps = data.comps
         options = []
         for _i, r in comps.iterrows():

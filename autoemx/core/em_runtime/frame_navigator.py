@@ -377,6 +377,29 @@ class FrameNavigator:
         self._sync_band_frame_descriptors()
         self.reset_frame_cursor()
 
+    def skip_frames_overlapping(self, areas_mm: Iterable[Tuple[Tuple[float, float], Tuple[float, float]]]) -> int:
+        """
+        Remove the planned frames overlapping areas of the sample already searched (centre and half width and
+        height of each, in mm), e.g. frames searched by EDS, and restart from the first remaining frame. Returns the
+        number of frames removed.
+        """
+        from autoemx.core.particle_statistics import frames_overlap
+
+        areas = list(areas_mm)
+        if not areas or not self.frame_pos_mm or self.grid_search_fw_mm is None:
+            return 0
+        fw = float(self.grid_search_fw_mm)
+        half_size = (fw / 2, fw * self.im_height / self.im_width / 2)
+        centers = [center for center, _ in areas]
+        half_sizes = [half for _, half in areas]
+        overlapping = {
+            str(label) for pos, label in zip(self.frame_pos_mm, self.frame_labels)
+            if np.any(frames_overlap(pos, half_size, centers, half_sizes))
+        }
+        if overlapping:
+            self.skip_frames(overlapping)
+        return len(overlapping)
+
     def get_visited_band_frames(self) -> List[FrameDescriptor]:
         """Return frames visited during the current size band (in visit order)."""
         return list(self._visited_band_frames)

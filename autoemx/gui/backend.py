@@ -26,7 +26,7 @@ import traceback
 import types
 import typing
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -346,6 +346,12 @@ class SampleInfo:
     active_quant: Optional[int]
     analyses: List[AnalysisRef]
     ledger: Any = field(repr=False)
+    # Particle size data: a particle size measurement, frames searched by EDS, or particles measured by EDS
+    has_sizes: bool = False
+
+    @property
+    def has_eds(self) -> bool:
+        return self.n_spectra > 0
 
     @property
     def active_analysis(self) -> Optional[AnalysisRef]:
@@ -414,7 +420,244 @@ def load_sample_info(sample_dir: str) -> SampleInfo:
         active_quant=ledger.active_quant,
         analyses=analyses,
         ledger=ledger,
+        has_sizes=has_particle_sizes(ledger),
     )
+
+
+# =============================================================================
+# Particle sizes
+# =============================================================================
+def has_particle_sizes(ledger) -> bool:
+    """Whether a sample has particle size data: statistics, frames with particle sizes (of a measurement, or searched
+    by EDS), or particles measured by EDS with automatic selection (see ``particle_statistics``)."""
+    return (
+        bool(ledger.size_results)
+        or any(f.segmentations for f in ledger.frames)
+        or any(p.area_um is not None and p.selection == "auto" for p in ledger.particles)
+    )
+
+
+@dataclass
+class ParticleSizeData:
+    """Particle size statistics of a sample, with the sizes behind them (for the distribution plot)."""
+
+    result: Any  # ParticleSizeStatsResult
+    diameters_um: np.ndarray
+    weights: np.ndarray
+    #: 'measurement' (particle size measurement only), 'measurement+eds', 'eds_frames' (frames searched by EDS
+    #: only) or 'eds_particles' (only the particles measured by EDS: samples acquired before EDS frames were recorded)
+    source: str
+    #: Smallest diameter the frames searched by EDS can observe (None without EDS frames)
+    eds_d_min_um: Optional[float]
+    #: False if computed now from the ledger (not saved in it)
+    stored: bool
+
+
+def _size_source(result) -> str:
+    if result.bands:
+        with_eds = bool(result.eds_scans) or result.n_par_by_selection.get("auto", 0) > 0
+        return "measurement+eds" if with_eds else "measurement"
+    if result.eds_scans:
+        return "eds_frames"
+    return "measurement" if result.n_par_by_selection.get("size_stats", 0) else "eds_particles"
+
+
+def load_particle_sizes(info: SampleInfo, result_id: Optional[int] = None) -> Optional[ParticleSizeData]:
+    """Particle size statistics of a sample: result ``result_id`` of its ledger (default: the active one), else
+    computed now from its size data (not saved). None if the sample has no particle size data."""
+    from autoemx.core import particle_statistics as ps
+
+    ledger = info.ledger
+    if not info.has_sizes:
+        return None
+    result = next((r for r in ledger.size_results if r.result_id == result_id), None) if result_id is not None else None
+    result, stored = result or ledger.size_result, True
+    if result is None:
+        result, stored = ps.recalculate_particle_stats(ledger), False
+        if result is None:
+            return None
+    diameters, weights = ps.size_distribution(ledger, result)
+    eds_d_min = min((s.d_min_um for s in result.eds_scans), default=None)
+    return ParticleSizeData(result, diameters, weights, _size_source(result), eds_d_min, stored)
+
+
+def size_result_label(ledger, result) -> str:
+    """Readable name of a statistics result: measurement, segmentations, frames and particles left out."""
+    parts = [f"Result {result.result_id}"]
+    if result.measurement_id is not None:
+        parts.append(f"measurement {result.measurement_id}")
+    segmentation = ledger.segmentation(result.segmentation_id)
+    if segmentation is not None:
+        parts.append(segmentation.label)
+    if result.eds_segmentation_id is not None:
+        eds = ledger.segmentation(result.eds_segmentation_id)
+        if result.eds_segmentation_id == result.segmentation_id or eds is None:
+            parts.append("+ EDS frames")
+        else:
+            parts.append(f"{'+ ' if segmentation is not None else ''}EDS frames {eds.label}")
+    n_out = len(result.excluded_frame_ids) + len(result.excluded_particles)
+    if n_out:
+        parts.append(f"{len(result.excluded_frame_ids)} frame(s), {len(result.excluded_particles)} particle(s) left out")
+    if result.result_id == ledger.active_size_result:
+        parts.append("active")
+    return " · ".join(parts)
+
+
+def size_result_options(info: SampleInfo) -> List[Dict[str, Any]]:
+    """Statistics results of a sample for a dropdown (newest first)."""
+    return [{"label": size_result_label(info.ledger, r), "value": r.result_id} for r in reversed(info.ledger.size_results)]
+
+
+def mixed_segmentations(data: Optional[ParticleSizeData]) -> bool:
+    """Whether the size frames and the frames searched by EDS of a result are segmented differently."""
+    r = data.result if data is not None else None
+    return (r is not None and r.segmentation_id is not None and r.eds_segmentation_id is not None
+            and r.segmentation_id != r.eds_segmentation_id)
+
+
+def set_active_size_result(info: SampleInfo, result_id: Optional[int]) -> str:
+    """Make a statistics result the active one of its sample (shown and used by default); returns a message."""
+    if result_id is None:
+        raise ValueError("Select a result first.")
+    path = os.path.join(info.sample_dir, LEDGER_NAME)
+    ledger = load_sample_ledger(path)
+    if not any(r.result_id == result_id for r in ledger.size_results):
+        raise ValueError(f"No result {result_id} in this sample.")
+    if ledger.active_size_result == result_id:
+        return f"Result {result_id} is already the active one."
+    ledger.active_size_result = result_id
+    ledger.to_json_file(path)
+    return f"Result {result_id} is now the active one."
+
+
+SIZE_SOURCE_LABELS = {
+    "measurement": "size measurement",
+    "measurement+eds": "size measurement + EDS",
+    "eds_frames": "EDS frames",
+    "eds_particles": "EDS particles",
+}
+
+
+def sample_has_sizes(sample_dir: str) -> bool:
+    """Whether a sample has particle size data (as :func:`has_particle_sizes`), read from its ledger file without
+    validating nor rewriting it: quick enough to check every sample of a folder."""
+    try:
+        with open(os.path.join(sample_dir, LEDGER_NAME), encoding="utf-8") as fh:
+            ledger = json.load(fh)
+    except (OSError, ValueError):
+        return False
+    return bool(
+        ledger.get("size_results") or ledger.get("frames")
+        # Ledgers saved before frames were recorded (converted when loaded)
+        or ledger.get("particle_stats") or ledger.get("eds_size_scans")
+        or any(p.get("area_um") is not None and p.get("selection") in ("size_stats", "auto")
+               for p in ledger.get("particles") or [])
+    )
+
+
+#: Statistics of the sample comparison table: (column, key in ParticleSizeStats, key of the confidence interval)
+COMPARISON_STATS = [("D10", "D10", "D10"), ("D50", "median", "D50"), ("D90", "D90", "D90"), ("Mean", "mean", None),
+                    ("D[4,3]", "D43", "D43"), ("Dv50", "Dv50", "Dv50")]
+
+
+def size_comparison_table(items: List[Tuple[str, ParticleSizeData]]) -> pd.DataFrame:
+    """Particle size statistics of several samples, one row each (sizes in µm, with the bounds of their 95 %
+    confidence intervals where available)."""
+    rows = []
+    for label, data in items:
+        r = data.result
+        row: Dict[str, Any] = {"Sample": label, "Source": SIZE_SOURCE_LABELS.get(data.source, data.source),
+                               "Particles": r.size_stats.n_par_analysed}
+        for col, key, ci_key in COMPARISON_STATS:
+            row[col] = getattr(r.size_stats, key, None)
+            if ci_key:
+                ci = r.confidence_intervals_95.get(ci_key)
+                row[f"{col} CI low"], row[f"{col} CI high"] = ci if ci else (None, None)
+        row["Span (D90-D10)/D50"] = (r.size_stats.D90 - r.size_stats.D10) / r.size_stats.median
+        row["Saved"] = data.stored
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+@dataclass
+class SizeFrame:
+    """A frame of the particle size statistics of a sample (size band or frames searched by EDS)."""
+
+    frame_id: str
+    scan_label: str
+    is_eds: bool
+    n_particles: int
+    area_um2: float
+    #: Image of the frame (None if not saved)
+    image_path: Optional[str]
+    #: Particles to mark on the image: (x, y, radius) in pixels, and index of the particle in the frame
+    marks: List[Tuple[int, int, int, Optional[int]]]
+    #: 'included', 'left out' or 'overlapping' (left out: a larger frame counts the same particles)
+    status: str
+
+
+def size_frames(info: SampleInfo, data: ParticleSizeData) -> List[SizeFrame]:
+    """Frames of the size bands, then of the frames searched by EDS, of the statistics of a sample, with the
+    particles found by the segmentation of the statistics."""
+    r, ledger = data.result, info.ledger
+    excluded, overlapping = set(r.excluded_frame_ids), set(r.overlapping_frame_ids)
+    images_dir = os.path.join(info.sample_dir, cnst.IMAGES_DIR)
+    scans = [(f"Band {i + 1}", s, False, r.segmentation_id) for i, s in enumerate(r.bands)]
+    scans += [(f"EDS {i + 1}" if len(r.eds_scans) > 1 else "EDS", s, True, r.eds_segmentation_id)
+              for i, s in enumerate(r.eds_scans)]
+    frames = []
+    for name, scan, is_eds, segmentation_id in scans:
+        label = f"{name} ({scan.d_min_um:.3g}–{scan.d_max_um:.3g} µm)"
+        for frame_id in scan.frame_ids:
+            record = ledger.frame(frame_id)
+            result = record.segmentation(segmentation_id) if record is not None else None
+            if result is None:
+                continue
+            path = os.path.join(images_dir, record.image_file) if record.image_file else None
+            status = "left out" if frame_id in excluded else "overlapping" if frame_id in overlapping else "included"
+            marks = [(x, y, rad, i) for i, (x, y, rad) in enumerate(result.particle_marks_px)]
+            frames.append(SizeFrame(frame_id, label, is_eds, result.n_particles, record.area_um2,
+                                    path if path and os.path.exists(path) else None, marks, status))
+    return frames
+
+
+def can_save_particle_sizes(data: Optional[ParticleSizeData]) -> bool:
+    """Whether the statistics can be recalculated and saved from the ledger (not for samples with only the
+    particles measured by EDS, acquired before EDS frames were recorded)."""
+    return data is not None and data.source != "eds_particles"
+
+
+def _run_particle_stats(sample_dir: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Recalculate the particle size statistics of a sample without some particles and frames, and save them in
+    its ledger (and in its '_processed' statistics files)."""
+    from autoemx.runners.process_particle_statistics import process_particle_statistics
+
+    stats = process_particle_statistics(
+        sample_ID=Path(sample_dir).name,
+        results_path=str(Path(sample_dir).parent),
+        particles_to_filter=[tuple(key) for key in payload.get("particles") or []],
+        frame_ids_to_filter=payload.get("frame_ids") or [],
+        result_id=payload.get("result_id"),
+    )
+    if stats is None:
+        return {"ok": False, "error": "No particle left: do not leave out every frame and particle."}
+    return {"ok": True}
+
+
+def _run_resegmentation(sample_dir: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Segment the frames of a sample again from their saved images with other segmentation settings: a new
+    segmentation and its statistics, made the active result (earlier ones kept)."""
+    from autoemx.runners.reanalyze_particle_statistics import reanalyze_particle_statistics
+
+    stats = reanalyze_particle_statistics(
+        Path(sample_dir).name, str(Path(sample_dir).parent),
+        par_brightness_thresh=payload.get("par_brightness_thresh"),
+        par_segmentation_model=payload.get("par_segmentation_model"),
+        min_par_pixels=payload.get("min_par_pixels"),
+    )
+    if stats is None:
+        return {"ok": False, "error": "No particle found with these settings."}
+    return {"ok": True}
 
 
 # =============================================================================
@@ -468,6 +711,7 @@ ACQ_SECTIONS: List[Tuple[str, str]] = [
     ("amicro", "Microscope"),
     ("asample", "Sample & Holder"),
     ("aacq", "Acquisition"),
+    ("asize", "Particle size statistics"),
     ("aimg", "Images"),
     ("apowder", "Powder acquisition params"),
     ("abulk", "Bulk grid acquisition params"),
@@ -713,6 +957,15 @@ ACQ_PARTICLE_TYPES = [cnst.S_POWDER_SAMPLE_TYPE]
 ACQ_GRID_TYPES = [cnst.S_BULK_SAMPLE_TYPE, cnst.S_POWDER_CONTINUOUS_SAMPLE_TYPE, cnst.S_BULK_ROUGH_SAMPLE_TYPE]
 
 
+#: Measurements of the Acquisition tab: EDS, EDS continued by particle size statistics, or size statistics only
+ACQ_MODES = {"eds": "EDS composition", "eds+sizes": "EDS + particle sizes", "sizes": "Particle sizes only"}
+#: Powder settings shown in the "Particle size statistics" section
+ACQ_PSD_POWDER_FIELDS = ("par_segmentation_model", "par_brightness_thresh")
+#: Size statistics settings shown in the "Particle size statistics" section (passed with the powder settings)
+ACQ_SIZE_FIELDS = ("min_par_pixels", "size_stats_ci_tolerance", "size_stats_ci_quantities", "size_stats_max_n_frames",
+                   "size_stats_max_time_min", "size_stats_plot_format", "include_eds_auto_particles")
+
+
 def build_acq_specs() -> List[ParamSpec]:
     """Parameters of the acquisition form, with the defaults of Run_Acquisition.py."""
     from autoemx.config.runtime_configs import BulkMeasurementConfig, MeasurementConfig, PowderMeasurementConfig
@@ -793,6 +1046,8 @@ def build_acq_specs() -> List[ParamSpec]:
         "par_spot_spacing": list(PowderMeasurementConfig.AVAILABLE_SPOT_SPACING_SELECTION),
         "size_stats_plot_format": ["png", "svg", "pdf", "jpg", "tif"],
     }
+    # List settings: checkboxes of their choices
+    multi = {"size_stats_ci_quantities": ["D10", "D50", "D90", "D43", "Dv10", "Dv50", "Dv90"]}
     for key, values in powder_choices.items():
         _CHOICES[f"apowder.{key}"] = values
     # par_spot_selection_mode 'callback' needs a Python callback (scripts only)
@@ -801,6 +1056,8 @@ def build_acq_specs() -> List[ParamSpec]:
     script_defaults = {"max_area_par": 10000.0}  # Run_Acquisition.py defaults that differ from the config model
     for spec in powder:
         spec.default = script_defaults.get(spec.name, spec.default)
+        if spec.name in multi:
+            spec.kind, spec.choices = "multi", multi[spec.name]
         if spec.name == "par_search_frame_width_um":
             spec.placeholder = "auto"
     bulk = _model_specs("abulk", BulkMeasurementConfig)
@@ -826,6 +1083,10 @@ def build_acq_specs() -> List[ParamSpec]:
         "min_par_pixels": ("min particle pixels (size statistics)", "px"),
         "size_stats_plot_format": ("size distribution plot format", ""),
         "include_eds_auto_particles": ("include EDS particles in size statistics", ""),
+        "size_stats_ci_tolerance": ("stop at precision (± fraction)", ""),
+        "size_stats_ci_quantities": ("precision checked on", ""),
+        "size_stats_max_n_frames": ("max frames (precision mode)", ""),
+        "size_stats_max_time_min": ("max time (precision mode)", "min"),
         "grid_spot_spacing_um": ("grid spot spacing", "µm"),
         "min_xsp_spots_distance_um": ("min distance between spectrum spots", "µm"),
         "image_frame_width_um": ("image frame width", "µm"),
@@ -848,6 +1109,10 @@ def build_acq_specs() -> List[ParamSpec]:
         "min_par_pixels": "Particle size statistics: minimum number of pixels of a particle for its area to be measured. Smaller particles are measured in a finer size band.",
         "size_stats_plot_format": "File format of the particle size distribution plot.",
         "include_eds_auto_particles": "Particle size statistics also include the particles counted in the frames searched by EDS (automatic particle selection).",
+        "size_stats_ci_tolerance": "Keep collecting (about 50 % more particles per band per round) until the 95 % confidence interval of each statistic below is within ± this fraction of its value (e.g. 0.05). Empty: stop at the target number of particles.",
+        "size_stats_ci_quantities": "Statistics whose precision is checked when stopping at precision.",
+        "size_stats_max_n_frames": "Maximum number of frames analysed when stopping at precision.",
+        "size_stats_max_time_min": "Maximum duration of a measurement stopping at precision. Empty: no limit.",
         "grid_spot_spacing_um": "Distance between the spots of the acquisition grid.",
         "min_xsp_spots_distance_um": "Offset of the grid when it does not contain enough spots.",
         "image_frame_width_um": "Width of the image frames. Empty = 10 × grid spot spacing.",
@@ -857,7 +1122,29 @@ def build_acq_specs() -> List[ParamSpec]:
     for spec in powder + bulk:
         spec.label, spec.unit = labels.get(spec.name, (spec.label, ""))
         spec.help = spec.help or helps.get(spec.name, "")
-    specs += powder + bulk
+    # Settings of particle size statistics: their own section (passed with the powder settings)
+    size = [ParamSpec("asize", "n_par_target", "particles per size band", "int", 200,
+                      help="Target number of particles per size band. After EDS, the particles counted in the "
+                           "frames searched by EDS count towards it.")]
+    # Particles measured (own settings, the powder ones being for EDS): diameters, as Collect_Particle_Statistics.py
+    size += [
+        ParamSpec("asize", "min_par_diameter_um", "min particle diameter", "float", 0.3, unit="µm",
+                  help="Smallest particles measured (equivalent circular diameter)."),
+        ParamSpec("asize", "max_par_diameter_um", "max particle diameter", "float", 20.0, unit="µm",
+                  help="Largest particles measured (equivalent circular diameter)."),
+    ]
+    size += [replace(spec, section="asize") for name in ACQ_PSD_POWDER_FIELDS for spec in powder if spec.name == name]
+    for spec in powder:
+        if spec.name in ACQ_SIZE_FIELDS:
+            spec.section = "asize"
+            size.append(spec)
+        if spec.name == "size_stats_ci_tolerance":  # entered in %, passed as a fraction
+            spec.label, spec.unit = "stop at precision (±)", "%"
+            spec.help = ("Keep collecting (about 50 % more particles per band per round) until the 95 % confidence "
+                         "interval of each statistic below is within ± this percentage of its value (e.g. 5). "
+                         "Empty: stop at the target number of particles.")
+    powder = [spec for spec in powder if spec.section == "apowder"]
+    specs += powder + size + bulk
     specs += [
         ParamSpec("aquant", "use_project_specific_std_dict", "project-specific standards", "bool", False),
         ParamSpec("aquant", "is_known_phase_mixture", "known phase mixture", "bool", False),
@@ -1042,6 +1329,8 @@ def coerce_values(raw: Dict[str, Any], specs: Optional[List[ParamSpec]] = None) 
                 out[key] = vals
             elif spec.kind == "flags":
                 out[key] = sorted({int(v) for v in (value or [])})
+            elif spec.kind == "multi":
+                out[key] = [c for c in spec.choices if c in (value or [])]
             elif spec.kind == "formulae":
                 out[key] = _formulae_list(value)
             elif spec.kind == "elements":
@@ -1172,8 +1461,9 @@ def quantification_kwargs(values: Dict[str, Any]) -> Dict[str, Any]:
     )
 
 
-def acquisition_samples(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Sample definitions for ``batch_acquire_and_analyze`` from the rows of the samples table.
+def acquisition_samples(rows: List[Dict[str, Any]], require_elements: bool = True) -> List[Dict[str, Any]]:
+    """Sample definitions for ``batch_acquire_and_analyze`` from the rows of the samples table (elements optional
+    without ``require_elements``, e.g. for particle size statistics only).
 
     Raises ``ValueError`` listing every invalid entry.
     """
@@ -1192,7 +1482,7 @@ def acquisition_samples(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         ids.add(sid)
         try:
             els = _elements_list(row.get("els"))
-            if not els:
+            if not els and require_elements:
                 errors.append(f"{name}: no elements")
         except ValueError as exc:
             errors.append(f"{name}: {exc}")
@@ -1216,8 +1506,34 @@ def acquisition_samples(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return samples
 
 
-def acquisition_kwargs(values: Dict[str, Any]) -> Dict[str, Any]:
-    """Keyword arguments for ``batch_acquire_and_analyze`` from coerced acquisition-form values."""
+def _size_stats_kwargs(values: Dict[str, Any]) -> Dict[str, Any]:
+    """PowderMeasurementConfig settings of the size statistics section (precision converted from % to a fraction)."""
+    size = {k: v for k, v in _section_dict(values, "asize").items() if k in ACQ_SIZE_FIELDS}
+    if size.get("size_stats_ci_tolerance") is not None:
+        size["size_stats_ci_tolerance"] = size["size_stats_ci_tolerance"] / 100
+    return size
+
+
+def _size_measurement_kwargs(values: Dict[str, Any]) -> Dict[str, Any]:
+    """PowderMeasurementConfig settings of the particles measured by particle size statistics (diameters converted
+    to particle areas). Raises ``ValueError`` if the diameter range is not valid."""
+    d_min, d_max = values["asize.min_par_diameter_um"], values["asize.max_par_diameter_um"]
+    if not 0 < d_min < d_max:
+        raise ValueError("Particle diameters: the min must be positive and smaller than the max")
+    return {"min_area_par": float(np.pi * d_min**2 / 4), "max_area_par": float(np.pi * d_max**2 / 4),
+            **{name: values[f"asize.{name}"] for name in ACQ_PSD_POWDER_FIELDS}}
+
+
+def _powder_kwargs(values: Dict[str, Any]) -> Dict[str, Any]:
+    """PowderMeasurementConfig settings of EDS acquisitions: the powder section and the size statistics settings."""
+    return {**_section_dict(values, "apowder"), **_size_stats_kwargs(values)}
+
+
+def acquisition_kwargs(values: Dict[str, Any], mode: str = "eds") -> Dict[str, Any]:
+    """Keyword arguments for ``batch_acquire_and_analyze`` from coerced acquisition-form values, for the measurement
+    ``mode`` 'eds' or 'eds+sizes' (EDS continued by particle size statistics, see ``ACQ_MODES``).
+
+    Raises ``ValueError`` if the settings do not allow particle size statistics after EDS."""
     max_time = values["aacq.max_XSp_acquisition_time"]
     if max_time is None:
         max_time = values["aacq.target_Xsp_counts"] / 10000 * 5  # as in Run_Acquisition.py
@@ -1242,7 +1558,7 @@ def acquisition_kwargs(values: Dict[str, Any]) -> Dict[str, Any]:
         saved_images_extension=values["aimg.saved_images_extension"],
         annotate_particle_images=values["aimg.annotate_particle_images"],
         save_raw_images=values["aimg.save_raw_images"],
-        powder_meas_cfg_kwargs=_section_dict(values, "apowder"),
+        powder_meas_cfg_kwargs=_powder_kwargs(values),
         bulk_meas_cfg_kwargs=_section_dict(values, "abulk"),
         quantify_spectra=quantify,
         use_project_specific_std_dict=values["aquant.use_project_specific_std_dict"],
@@ -1254,11 +1570,50 @@ def acquisition_kwargs(values: Dict[str, Any]) -> Dict[str, Any]:
         max_n_clusters=values["aquant.max_n_clusters"],
         show_unused_comps_clust=values["aquant.show_unused_comps_clust"],
     )
+    if mode == "eds+sizes":
+        problems = []
+        if kwargs["sample_type"] != cnst.S_POWDER_SAMPLE_TYPE:
+            problems.append("a powder sample type")
+        if kwargs["is_manual_navigation"]:
+            problems.append("automatic navigation (manual navigation off)")
+        if kwargs["powder_meas_cfg_kwargs"].get("par_selection_mode") != "auto":
+            problems.append("automatic particle selection")
+        if problems:
+            raise ValueError("Particle size statistics after EDS need " + ", ".join(problems))
+        kwargs["size_stats_n_par_target"] = values["asize.n_par_target"]
+        kwargs["size_stats_powder_meas_cfg_kwargs"] = _size_measurement_kwargs(values)
     return kwargs
 
 
-def acquisition_script(samples: List[Dict[str, Any]], kwargs: Dict[str, Any], results_dir: Optional[str]) -> str:
-    """A runnable Python script performing the acquisition with these settings (like Run_Acquisition.py)."""
+def psd_acquisition_kwargs(values: Dict[str, Any]) -> Dict[str, Any]:
+    """Keyword arguments for ``collect_particle_statistics`` (particle size statistics only) from coerced
+    acquisition-form values."""
+    powder = {**_size_measurement_kwargs(values), **_size_stats_kwargs(values)}
+    # All the particles of each frame are counted (as in Collect_Particle_Statistics.py)
+    powder.update(par_selection_mode="auto", max_n_par_per_frame=1000000)
+    kwargs = {name: values[f"asample.{name}"] for name in (
+        "sample_halfwidth", "sample_substrate_type", "sample_substrate_shape", "sample_substrate_width_mm",
+        "is_auto_substrate_detection", "working_distance")}
+    kwargs.update(
+        n_par_target=values["asize.n_par_target"],
+        microscope_ID=values["amicro.microscope_ID"],
+        is_manual_navigation=values["aacq.is_manual_navigation"],
+        auto_adjust_brightness_contrast=values["aacq.auto_adjust_brightness_contrast"],
+        saved_images_extension=values["aimg.saved_images_extension"],
+        powder_meas_cfg_kwargs=powder,
+    )
+    if not kwargs["auto_adjust_brightness_contrast"]:
+        kwargs.update(contrast=values["aacq.contrast"], brightness=values["aacq.brightness"])
+    return kwargs
+
+
+def acquisition_script(samples: List[Dict[str, Any]], kwargs: Dict[str, Any], results_dir: Optional[str],
+                       mode: str = "eds") -> str:
+    """A runnable Python script performing the acquisition with these settings (like Run_Acquisition.py), or the
+    particle size statistics measurement (``mode`` 'sizes', like Collect_Particle_Statistics.py)."""
+    is_psd = mode == "sizes"
+    what = "Particle size statistics" if is_psd else "Automated acquisition of X-ray spectra"
+    runner = "collect_particle_statistics" if is_psd else "batch_acquire_and_analyze"
     import pprint
     from datetime import datetime
 
@@ -1266,7 +1621,7 @@ def acquisition_script(samples: List[Dict[str, Any]], kwargs: Dict[str, Any], re
         "#!/usr/bin/env python3",
         "# -*- coding: utf-8 -*-",
         '"""',
-        f"Automated acquisition of X-ray spectra, exported from the AutoEMX GUI on {datetime.now():%Y-%m-%d %H:%M}.",
+        f"{what}, exported from the AutoEMX GUI on {datetime.now():%Y-%m-%d %H:%M}.",
         "",
         "Run this script on the microscope computer to acquire the samples below with the same settings.",
         '"""',
@@ -1275,9 +1630,9 @@ def acquisition_script(samples: List[Dict[str, Any]], kwargs: Dict[str, Any], re
         "",
         f"results_dir = {results_dir!r} # Folder where a sub-folder is created for each sample",
         "",
-        "from autoemx.runners.batch_acquire_and_analyze import batch_acquire_and_analyze",
+        f"from autoemx.runners.{runner} import {runner}",
         "",
-        "comp_analyzer = batch_acquire_and_analyze(",
+        f"{'' if is_psd else 'comp_analyzer = '}{runner}(",
         "    samples=samples,",
     ]
     for key, value in kwargs.items():
@@ -1288,7 +1643,8 @@ def acquisition_script(samples: List[Dict[str, Any]], kwargs: Dict[str, Any], re
 
 def acquisition_progress(log_text: str, sample_ids: List[str], max_n: int) -> List[Dict[str, Any]]:
     """Progress of each sample of an acquisition (spectra acquired, or why it failed), parsed from its log."""
-    progress = [{"sample": sid, "state": "waiting", "done": 0, "total": max_n, "error": None} for sid in sample_ids]
+    progress = [{"sample": sid, "state": "waiting", "done": 0, "total": max_n, "error": None, "sizes": None}
+                for sid in sample_ids]
     positions = []
     for i, sid in enumerate(sample_ids):
         idx = log_text.find(f"Sample '{sid}'")
@@ -1298,10 +1654,19 @@ def acquisition_progress(log_text: str, sample_ids: List[str], max_n: int) -> Li
     for k, (start, i) in enumerate(positions):
         end = positions[k + 1][0] if k + 1 < len(positions) else len(log_text)
         progress[i]["state"] = "running"
-        progress[i]["done"] = len(re.findall(r"Acquiring spectrum #\d+", log_text[start:end]))
-        # Logged by batch_acquire_and_analyze when a sample fails (the batch goes on with the next one)
-        failed = re.search(rf"Sample '{re.escape(progress[i]['sample'])}': acquisition/quantification failed: (.*)",
-                           log_text[start:end])
+        section = log_text[start:end]
+        progress[i]["done"] = len(re.findall(r"Acquiring spectrum #\d+", section))
+        # Particle size statistics: particles collected in the size band being measured
+        bands = list(re.finditer(r"Size band (\d+):", section))
+        if bands:
+            counts = re.findall(r"A total of (\d+) particles? (?:have|has) now been analyzed in this size band\. "
+                                r"(\d+) more to go", section[bands[-1].start():])
+            n, more = (int(counts[-1][0]), int(counts[-1][1])) if counts else (0, None)
+            progress[i]["sizes"] = {"band": int(bands[-1].group(1)), "done": n,
+                                    "total": n + more if more is not None else None}
+        # Logged by the runners when a sample fails (the batch goes on with the next one)
+        failed = re.search(rf"Sample '{re.escape(progress[i]['sample'])}': "
+                           r"(?:acquisition/quantification|particle stats collection) failed: (.*)", section)
         if failed:
             progress[i]["state"], progress[i]["error"] = "failed", failed.group(1).strip()
     for _start, i in positions[:-1]:
@@ -1621,8 +1986,12 @@ def _run_single(sample_dir: str, payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _run_acquisition(_: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Acquire (and optionally quantify) spectra of the samples (Acquisition tab)."""
+    """Acquire (and optionally quantify) spectra of the samples, possibly followed by particle size statistics, or
+    measure only their particle size statistics (``payload['mode']`` 'sizes') (Acquisition tab)."""
     from autoemx.runners.batch_acquire_and_analyze import batch_acquire_and_analyze
+    from autoemx.runners.collect_particle_statistics import collect_particle_statistics
+
+    runner = collect_particle_statistics if payload.get("mode") == "sizes" else batch_acquire_and_analyze
 
     print(f"Acquiring {len(payload['samples'])} sample(s) into {payload['results_dir']}", flush=True)
     report = payload.get("report")  # run started by an external program: report each sample
@@ -1635,7 +2004,7 @@ def _run_acquisition(_: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             run_report.write_report(report)
 
     try:
-        batch_acquire_and_analyze(
+        runner(
             samples=payload["samples"],
             results_dir=payload["results_dir"],
             development_mode=False,
@@ -1812,9 +2181,11 @@ _JOB_FUNCS = {
     "single": _run_single,
     "acquisition": _run_acquisition,
     "import": _run_import,
+    "psd": _run_particle_stats,
+    "psd_reseg": _run_resegmentation,
 }
 # Jobs writing to sample ledgers: only one at a time
-_LEDGER_WRITERS = {"analysis", "quant", "acquisition", "import"}
+_LEDGER_WRITERS = {"analysis", "quant", "acquisition", "import", "psd", "psd_reseg"}
 
 
 

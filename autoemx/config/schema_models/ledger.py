@@ -24,7 +24,10 @@ from autoemx.config.runtime_configs import (
     SampleSubstrateConfig,
 )
 from .acquisition import ParticleInfo, SpectrumEntry
-from .particle_stats import ParticleSizeBand, ParticleStatsProgress, ParticleStatsResult
+from .frames import FrameRecord
+from .legacy_size_stats import migrate_legacy_size_statistics
+from .particle_stats import ParticleSizeStatsResult, SizeMeasurement
+from .segmentation import FrameSegmentation, SegmentationConfig
 from .quantification import QuantificationConfig, QuantificationResult
 
 
@@ -125,13 +128,23 @@ class SampleLedger(BaseModel):
     configs: LedgerConfigs
     spectra: List[SpectrumEntry]
     particles: List[ParticleInfo] = Field(default_factory=list)
-    particle_stats: Optional[ParticleStatsResult] = None
-    particle_stats_progress: Optional[ParticleStatsProgress] = None
-    eds_size_scans: List[ParticleSizeBand] = Field(default_factory=list)
+    # Particle size statistics: frames acquired (with their segmentation results), segmentations, measurements, and
+    # statistics computed from frames under a segmentation (the active one shown and used by default)
+    frames: List[FrameRecord] = Field(default_factory=list)
+    segmentations: List[SegmentationConfig] = Field(default_factory=list)
+    size_measurements: List[SizeMeasurement] = Field(default_factory=list)
+    size_results: List[ParticleSizeStatsResult] = Field(default_factory=list)
+    active_size_result: Optional[int] = None
     active_quant: Optional[int] = None
     quantifications: List[QuantificationConfig] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def move_legacy_size_statistics(cls, data: Any) -> Any:
+        """Legacy compatibility: particle size statistics saved before frames and segmentations were recorded."""
+        return migrate_legacy_size_statistics(data)
 
     @model_validator(mode="before")
     @classmethod
@@ -186,13 +199,7 @@ class SampleLedger(BaseModel):
         particle_ids = [particle.id for particle in self.particles]
         if len(particle_ids) != len(set(particle_ids)):
             raise ValueError("ParticleInfo.id values must be unique within a ledger")
-        for name, stats in (("particle_stats", self.particle_stats), ("particle_stats_progress", self.particle_stats_progress)):
-            if stats is None:
-                continue
-            band_ids = [pid for band in stats.bands for pid in band.particle_ids]
-            unknown_ids = sorted(set(getattr(stats, "particle_ids", []) + band_ids) - set(particle_ids))
-            if unknown_ids:
-                raise ValueError(f"{name} references particle ids not in the ledger: {unknown_ids}")
+        self._validate_size_statistics()
 
         config_ids = [cfg.quantification_id for cfg in self.quantifications]
         if len(config_ids) != len(set(config_ids)):
@@ -300,6 +307,119 @@ class SampleLedger(BaseModel):
                     continue
                 raise
         raise RuntimeError(f"Failed to load spectrum counts from '{file_path}' after retries")
+
+    # ------------------------------------------------------------------ particle size statistics
+    def _validate_size_statistics(self) -> None:
+        """Unique ids, and references to frames, segmentations, measurements and results that exist."""
+        for name, ids in (
+            ("frame_id", [f.frame_id for f in self.frames]),
+            ("segmentation_id", [s.segmentation_id for s in self.segmentations]),
+            ("measurement_id", [m.measurement_id for m in self.size_measurements]),
+            ("result_id", [r.result_id for r in self.size_results]),
+        ):
+            if len(ids) != len(set(ids)):
+                raise ValueError(f"{name} values must be unique within a ledger")
+        segmentation_ids = {s.segmentation_id for s in self.segmentations}
+        frame_ids = {f.frame_id for f in self.frames}
+        measurement_ids = {m.measurement_id for m in self.size_measurements}
+        for frame in self.frames:
+            unknown = {s.segmentation_id for s in frame.segmentations} - segmentation_ids
+            if unknown:
+                raise ValueError(f"Frame {frame.frame_id} has results of unknown segmentations {sorted(unknown)}")
+            if frame.measurement_id is not None and frame.measurement_id not in measurement_ids:
+                raise ValueError(f"Frame {frame.frame_id} references unknown measurement {frame.measurement_id}")
+        for measurement in self.size_measurements:
+            if measurement.segmentation_id not in segmentation_ids:
+                raise ValueError(f"Size measurement {measurement.measurement_id} references an unknown segmentation")
+            unknown = set(measurement.frame_ids) - frame_ids
+            if unknown:
+                raise ValueError(f"Size measurement {measurement.measurement_id} references unknown frames "
+                                 f"{sorted(unknown)}")
+        for result in self.size_results:
+            for seg in (result.segmentation_id, result.eds_segmentation_id):
+                if seg is not None and seg not in segmentation_ids:
+                    raise ValueError(f"Size result {result.result_id} references unknown segmentation {seg}")
+            if result.measurement_id is not None and result.measurement_id not in measurement_ids:
+                raise ValueError(f"Size result {result.result_id} references unknown measurement")
+        result_ids = [r.result_id for r in self.size_results]
+        if result_ids:
+            if self.active_size_result is None:
+                self.active_size_result = result_ids[-1]
+            if self.active_size_result not in result_ids:
+                raise ValueError("active_size_result must reference an existing result_id")
+        elif self.active_size_result is not None:
+            raise ValueError("active_size_result must be None without size results")
+
+    @property
+    def size_result(self) -> Optional[ParticleSizeStatsResult]:
+        """The active particle size statistics result (None if there is none)."""
+        return next((r for r in self.size_results if r.result_id == self.active_size_result), None)
+
+    def frame(self, frame_id: str) -> Optional[FrameRecord]:
+        return next((f for f in self.frames if f.frame_id == frame_id), None)
+
+    def measurement(self, measurement_id: Optional[int]) -> Optional[SizeMeasurement]:
+        return next((m for m in self.size_measurements if m.measurement_id == measurement_id), None)
+
+    def segmentation(self, segmentation_id: Optional[int]) -> Optional[SegmentationConfig]:
+        return next((s for s in self.segmentations if s.segmentation_id == segmentation_id), None)
+
+    def frames_of(self, purpose: Optional[str] = None, measurement_id: Optional[int] = None) -> List[FrameRecord]:
+        """Frames acquired for a purpose ('eds_search' or 'size_stats'), and/or by a measurement."""
+        return [f for f in self.frames if (purpose is None or f.purpose == purpose)
+                and (measurement_id is None or f.measurement_id == measurement_id)]
+
+    def unique_frame_id(self, frame_id: str) -> str:
+        """``frame_id``, made unique in the ledger with a ``#2``, ``#3``, ... suffix (frame acquired again)."""
+        used = {f.frame_id for f in self.frames}
+        new_id, n = frame_id, 2
+        while new_id in used:
+            new_id, n = f"{frame_id}#{n}", n + 1
+        return new_id
+
+    def add_frame(self, frame: FrameRecord) -> FrameRecord:
+        """Add an acquired frame (its id made unique if needed), returned as recorded."""
+        frame = frame.model_copy(update={"frame_id": self.unique_frame_id(frame.frame_id)})
+        self.frames.append(frame)
+        return frame
+
+    def append_segmentation(self, config: SegmentationConfig) -> int:
+        """Id of the segmentation with these settings: an existing one, or ``config`` added with a new id."""
+        for existing in self.segmentations:
+            if existing.fingerprint() == config.fingerprint():
+                return existing.segmentation_id
+        new_id = max((s.segmentation_id for s in self.segmentations), default=-1) + 1
+        self.segmentations.append(config.model_copy(update={"segmentation_id": new_id}))
+        return new_id
+
+    def add_frame_segmentation(self, frame_id: str, result: FrameSegmentation) -> None:
+        """Add the result of a segmentation of a frame (never replacing one)."""
+        if self.segmentation(result.segmentation_id) is None:
+            raise ValueError(f"Unknown segmentation {result.segmentation_id}")
+        frame = self.frame(frame_id)
+        if frame is None:
+            raise ValueError(f"Unknown frame {frame_id}")
+        frame.add_segmentation(result)
+
+    def next_measurement_id(self) -> int:
+        return max((m.measurement_id for m in self.size_measurements), default=-1) + 1
+
+    def append_size_result(self, result: ParticleSizeStatsResult) -> ParticleSizeStatsResult:
+        """
+        Add a statistics result and make it the active one: it replaces a result computed from the same inputs
+        (measurement, segmentations, frames and particles left out), e.g. recalculated after more EDS frames;
+        otherwise it gets a new id. Returns the result as recorded.
+        """
+        same = next((r for r in self.size_results if r.inputs_key() == result.inputs_key()), None)
+        if same is not None:
+            result = result.model_copy(update={"result_id": same.result_id})
+            self.size_results[self.size_results.index(same)] = result
+        else:
+            result = result.model_copy(update={
+                "result_id": max((r.result_id for r in self.size_results), default=-1) + 1})
+            self.size_results.append(result)
+        self.active_size_result = result.result_id
+        return result
 
     def append_quantification_config(self, quant_config: QuantificationConfig) -> None:
         """Append a quantification config, enforcing unique config identifiers."""

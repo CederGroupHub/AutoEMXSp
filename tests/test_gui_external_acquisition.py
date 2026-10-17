@@ -357,3 +357,29 @@ def test_runner_on_sample_done(tmp_path: Path, monkeypatch):
     runner.batch_acquire_and_analyze(samples, development_mode=True, verbose=False, results_dir=str(tmp_path),
                                      on_sample_done=on_done)
     assert calls == [("A", "None"), ("B_fail", "RuntimeError('no particles found')"), ("C", "None")]
+
+
+def test_particle_size_statistics_job_reports_each_sample(tmp_path: Path, reports_dir: Path, monkeypatch):
+    import autoemx.runners.collect_particle_statistics as psd_runner
+
+    measured = []
+
+    class _FakePsdAnalyzer:
+        def __init__(self, sample_id, **_):
+            def stats(n):
+                if "fail" in sample_id:
+                    raise RuntimeError("no particles found")
+                measured.append((sample_id, n))
+            self.EM_controller = SimpleNamespace(particle_finder=SimpleNamespace(get_particle_stats=stats))
+
+    monkeypatch.setattr(psd_runner, "EMXSp_Composition_Analyzer", _FakePsdAnalyzer)
+    results = str(tmp_path / "res")
+    values = be.coerce_values({s.key: s.default for s in be.ACQ_SPECS}, be.ACQ_SPECS)
+    samples = [{"ID": sid, "pos": (0, 0)} for sid in ("A", "B_fail")]
+    report = rr.new_report("r9", [s["ID"] for s in samples], results)
+    seen = []
+    monkeypatch.setattr(rr, "write_report", lambda rep: seen.append(_states(rep)))
+    be._run_acquisition("", {"samples": samples, "kwargs": be.psd_acquisition_kwargs(values), "mode": "sizes",
+                             "results_dir": results, "report": report})
+    assert measured == [("A", values["asize.n_par_target"])]
+    assert seen[-1] == [("A", "done"), ("B_fail", "failed")] and report["status"] == "finished"

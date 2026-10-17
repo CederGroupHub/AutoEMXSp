@@ -160,6 +160,26 @@ body, .dash-spreadsheet-container .dash-spreadsheet-inner td, .dash-spreadsheet-
 .tabs { flex: 0 0 auto; }
 .tabs .tab { padding: 8px 4px !important; line-height: 18px; white-space: nowrap; font-size: 12.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .tab-body { padding: 12px 14px; }
+.tabs .tab--disabled { color: #b8bec7 !important; cursor: default !important; background: transparent !important; }
+/* Samples without EDS spectra (e.g. only particle sizes): analysis settings and spectrum panel do not apply */
+.sidebar.no-eds .side-params, .sidebar.no-eds .run-block, .spectrum-panel.no-eds { opacity: 0.4; pointer-events: none; }
+
+/* Particle sizes tab */
+.psd-source { margin-bottom: 6px; }
+.psd-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
+.psd-compare-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; flex: 1 1 auto; }
+.psd-compare-controls[hidden] { display: none; }
+.psd-compare-dd { min-width: 320px; flex: 1 1 320px; }
+.psd-compare-table { flex: 1 1 100%; }
+.psd-frames-section { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 10px; }
+.psd-section-title { font-weight: 600; margin-bottom: 6px; }
+.psd-frame-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 4px; }
+.psd-frame-dd { min-width: 300px; flex: 0 1 380px; }
+.psd-frame-graph { height: 520px; }
+.psd-recalc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 6px; }
+.psd-graph { height: 420px; }
+.psd-table-title { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 2px; }
+.psd-tables { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; margin-top: 8px; }
 .hint { color: var(--muted); margin-bottom: 8px; }
 
 .plot-controls {
@@ -390,3 +410,15 @@ body, .dash-spreadsheet-container .dash-spreadsheet-inner td, .dash-spreadsheet-
 /* Peak overlap warnings */
 .overlap-warn { margin-top: 6px; font-size: 0.92em; }
 .overlap-warn .overlap-list { margin: 2px 0 0; padding-left: 18px; }
+.param-section.hidden-param { display: none; }
+.a-mode { flex-wrap: wrap; margin: 4px 0 2px; }
+.a-mode label { padding: 4px 9px; font-size: 12.5px; }
+.a-mode-note:empty { display: none; }
+.psd-result-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1 1 auto; }
+.psd-result-controls[hidden] { display: none; }
+.psd-result-dd { min-width: 360px; flex: 1 1 420px; }
+.psd-seg-box > summary { cursor: pointer; color: var(--muted); }
+.psd-seg-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.psd-seg-model { min-width: 170px; }
+.psd-seg-input { width: 80px; }
+.psd-compare-dd[hidden] { display: none; }

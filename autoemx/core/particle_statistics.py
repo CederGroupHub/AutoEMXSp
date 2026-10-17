@@ -3,11 +3,12 @@
 """
 Particle size statistics: summary statistics of the equivalent diameters of particles, and their export.
 
-The statistics use the particles found by a particle size statistics measurement (selection 'size_stats') and,
-if ``PowderMeasurementConfig.include_eds_auto_particles`` (default), the particles of the same sample measured by
-EDS with automatic particle selection (selection 'auto'), before or after it. The result is stored in the sample
-ledger (``SampleLedger.particle_stats``); a new measurement replaces it, and particles of earlier measurements stay
-in the ledger but are left out of the new statistics.
+The statistics use the frames of a particle size statistics measurement (``SampleLedger.size_measurements``) and,
+if ``PowderMeasurementConfig.include_eds_auto_particles`` (default), the frames searched by EDS on the same sample,
+before or after it, each frame under a segmentation (``SampleLedger.frames``, ``SampleLedger.segmentations``). Each
+result is stored in the sample ledger (``SampleLedger.size_results``): results of other segmentations, frames or
+measurements are kept. For samples measured before frames searched by EDS were recorded, the particles measured by
+EDS with automatic particle selection (selection 'auto') count instead.
 
 Independent of the microscope: used both at the end of a particle statistics measurement
 (``EM_Particle_Finder.get_particle_stats``) and to recalculate statistics from saved particle sizes
@@ -23,7 +24,7 @@ Files saved in the sample folder (``<suffix>`` is optional):
 
 import os
 from collections import Counter
-from typing import Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -32,10 +33,14 @@ import pandas as pd
 import autoemx.utils.constants as cnst
 from autoemx._logging import get_logger
 from autoemx.config.ledger_schemas import (
+    BandSummary,
+    FrameRecord,
     ParticleInfo,
+    ParticleKey,
     ParticleSizeBand,
     ParticleSizeStats,
-    ParticleStatsResult,
+    ParticleSizeStatsResult,
+    ParticleStatsFrame,
     SampleLedger,
 )
 from autoemx.config.runtime_configs import PowderMeasurementConfig
@@ -45,10 +50,17 @@ logger = get_logger(__name__)
 
 __all__ = [
     "SizeObservations",
-    "band_particle_weights",
     "bootstrap_confidence_intervals",
+    "EdsSearchFrame",
     "edge_correction_factor",
-    "build_particle_stats_result",
+    "eds_search_frames",
+    "frames_overlap",
+    "SizeStatsInputs",
+    "build_size_result",
+    "default_result_inputs",
+    "eds_segmentation_for",
+    "size_distribution",
+    "working_frame",
     "compute_particle_size_stats",
     "overlapping_frame_ids",
     "particle_sizes_dataframe",
@@ -56,6 +68,8 @@ __all__ = [
     "save_particle_size_histogram",
     "save_particle_statistics",
     "select_size_stats_particles",
+    "size_stats_inputs",
+    "size_ranges_overlap",
     "size_observations",
     "weighted_size_observations",
 ]
@@ -209,9 +223,11 @@ class SizeObservations(NamedTuple):
     #: Scan of each observation: index in ``scans`` (size bands first, then EDS scans), or -1 for a particle
     #: measured by EDS that only shares the weight of the band of its diameter (no EDS scan recorded).
     scan: np.ndarray
-    #: Frame of each observation, and index of its particle in the particles given (None for EDS frame counts).
+    #: Frame of each observation, index of its particle in the particles given (only for those), and its
+    #: (frame_id, index) in its frame (only for particles of frames).
     frame_ids: List[Optional[str]]
     particle_index: List[Optional[int]]
+    particle_keys: List[Optional[ParticleKey]]
     #: Size bands of the measurement, then EDS scans.
     scans: List[ParticleSizeBand]
     n_bands: int
@@ -222,39 +238,98 @@ def size_observations(
     bands: Sequence[ParticleSizeBand] = (),
     eds_scans: Sequence[ParticleSizeBand] = (),
     excluded_frame_ids: Iterable[str] = (),
+    excluded_particles: Iterable[ParticleKey] = (),
 ) -> SizeObservations:
     """
-    Observations of particle sizes: the particles given (those found by the measurement belong to their size band,
-    the others share the weight of the band of their diameter) and the particles counted in the frames searched by
-    EDS (``eds_scans``, see ``SampleLedger.eds_size_scans``), except in the frames left out: ``excluded_frame_ids``
-    and frames overlapping a larger one (see :func:`overlapping_frame_ids`).
+    Observations of particle sizes: the particles counted in the frames of the size bands and in the frames
+    searched by EDS (``eds_scans``), and the particles given (measured by EDS, sharing the weight of the band of
+    their diameter), except in the frames left out (``excluded_frame_ids`` and frames overlapping a larger one, see
+    :func:`overlapping_frame_ids`) and the particles left out (``excluded_particles``, as (frame_id, index)).
     """
+    excluded_frame_ids = set(excluded_frame_ids)
     excluded = _excluded_frames(list(bands) + list(eds_scans), excluded_frame_ids)
-    measurement_band = {pid: i for i, band in enumerate(bands) for pid in band.particle_ids}
-    kept_index = [k for k, p in enumerate(particles) if not (p.id in measurement_band and p.frame_id in excluded)]
+    excluded_keys = {(str(f), int(i)) for f, i in excluded_particles}
+    kept_index = [k for k, p in enumerate(particles) if p.area_um is not None and p.frame_id not in excluded_frame_ids]
     kept = [particles[k] for k in kept_index]
-    sizes = particle_sizes_dataframe(kept) if kept else None
-    eq_diameters = list(sizes[cnst.PAR_EQ_D_KEY]) if sizes is not None else []
-    areas = list(sizes[cnst.PAR_AREA_UM_KEY]) if sizes is not None else []
+    eq_diameters = [float(p.eq_diameter_um) if p.eq_diameter_um is not None else float(2.0 * np.sqrt(p.area_um / np.pi))
+                    for p in kept]
+    areas = [float(p.area_um) for p in kept]
     corrections = [p.edge_correction or 1.0 for p in kept]
-    scan = [measurement_band.get(p.id, -1) for p in kept]
+    scan = [-1] * len(kept)
     frame_ids: List[Optional[str]] = [p.frame_id for p in kept]
     particle_index: List[Optional[int]] = list(kept_index)
-    for s, eds_scan in enumerate(eds_scans):
-        for frame in eds_scan.frames:
+    particle_keys: List[Optional[ParticleKey]] = [None] * len(kept)
+    for s, frame_scan in enumerate(list(bands) + list(eds_scans)):
+        for frame in frame_scan.frames:
             if frame.frame_id in excluded:
                 continue
-            for area, correction in zip(frame.particle_areas_um2 or [], frame.particle_edge_corrections or []):
+            for i, (area, correction) in enumerate(zip(frame.particle_areas_um2 or [],
+                                                       frame.particle_edge_corrections or [])):
+                if (frame.frame_id, i) in excluded_keys:
+                    continue
                 eq_diameters.append(float(2.0 * np.sqrt(area / np.pi)))
                 areas.append(float(area))
                 corrections.append(float(correction))
-                scan.append(len(bands) + s)
+                scan.append(s)
                 frame_ids.append(frame.frame_id)
                 particle_index.append(None)
+                particle_keys.append((frame.frame_id, i))
     return SizeObservations(
         np.asarray(eq_diameters, dtype=float), np.asarray(areas, dtype=float), np.asarray(corrections, dtype=float),
-        np.asarray(scan, dtype=int), frame_ids, particle_index, list(bands) + list(eds_scans), len(bands),
+        np.asarray(scan, dtype=int), frame_ids, particle_index, particle_keys, list(bands) + list(eds_scans),
+        len(bands),
     )
+
+
+def frames_overlap(center_um, half_size_um, centers_um, half_sizes_um) -> np.ndarray:
+    """
+    Whether a frame (centre and half width and height on the sample, in µm) overlaps each of other frames (arrays
+    of centres and half sizes), beyond a touching edge.
+    """
+    centers_um = np.asarray(centers_um, dtype=float).reshape(-1, 2)
+    half_sizes_um = np.asarray(half_sizes_um, dtype=float).reshape(-1, 2)
+    return np.all(
+        np.abs(centers_um - np.asarray(center_um, dtype=float)) < (half_sizes_um + np.asarray(half_size_um)) * (1 - 1e-3),
+        axis=1,
+    )
+
+
+def size_ranges_overlap(d_ranges_um, d_range_um) -> np.ndarray:
+    """Whether diameter ranges (array of (d_min, d_max)) overlap a diameter range, beyond a common bound."""
+    d_ranges_um = np.asarray(d_ranges_um, dtype=float).reshape(-1, 2)
+    lo, hi = float(d_range_um[0]), float(d_range_um[1])
+    return (d_ranges_um[:, 0] < hi * (1 - 1e-9)) & (lo < d_ranges_um[:, 1] * (1 - 1e-9))
+
+
+class EdsSearchFrame(NamedTuple):
+    """Frame searched by EDS, on the sample: centre and half width and height (µm), and size range of its scan."""
+
+    frame_id: str
+    center_um: Tuple[float, float]
+    half_size_um: Tuple[float, float]
+    d_range_um: Tuple[float, float]
+    frame_width_um: float
+
+
+def eds_search_frames(eds_scans: Sequence[ParticleSizeBand]) -> Tuple[List[EdsSearchFrame], np.ndarray]:
+    """
+    Frames searched by EDS with a known position, except those left out of the statistics as overlapping another
+    (:func:`overlapping_frame_ids`), and the equivalent diameters (µm) of the particles counted in them.
+    """
+    excluded = set(overlapping_frame_ids(eds_scans))
+    frames, diameters = [], []
+    for scan in eds_scans:
+        for f in scan.frames:
+            if f.frame_id in excluded:
+                continue
+            diameters += [float(2.0 * np.sqrt(a / np.pi)) for a in f.particle_areas_um2 or []]
+            if f.center_mm is not None:
+                frames.append(EdsSearchFrame(
+                    f.frame_id, (f.center_mm.x * 1000, f.center_mm.y * 1000),
+                    (f.frame_width_um / 2, f.area_um2 / f.frame_width_um / 2), (scan.d_min_um, scan.d_max_um),
+                    f.frame_width_um,
+                ))
+    return frames, np.asarray(diameters, dtype=float)
 
 
 def overlapping_frame_ids(scans: Sequence[ParticleSizeBand]) -> List[str]:
@@ -274,8 +349,8 @@ def overlapping_frame_ids(scans: Sequence[ParticleSizeBand]) -> List[str]:
     for i in order:
         if kept:
             k = np.array(kept)
-            same_sizes = (d_ranges[k, 0] < d_ranges[i, 1] * (1 - 1e-9)) & (d_ranges[i, 0] < d_ranges[k, 1] * (1 - 1e-9))
-            overlap = np.all(np.abs(centers[k] - centers[i]) < (half_sizes[k] + half_sizes[i]) * (1 - 1e-3), axis=1)
+            same_sizes = size_ranges_overlap(d_ranges[k], d_ranges[i])
+            overlap = frames_overlap(centers[i], half_sizes[i], centers[k], half_sizes[k])
             if np.any(same_sizes & overlap):
                 dropped.append(frames[i][1].frame_id)
                 continue
@@ -342,6 +417,7 @@ def weighted_size_observations(
     bands: Sequence[ParticleSizeBand] = (),
     excluded_frame_ids: Iterable[str] = (),
     eds_scans: Sequence[ParticleSizeBand] = (),
+    excluded_particles: Iterable[ParticleKey] = (),
 ) -> Tuple[SizeObservations, np.ndarray, List[ParticleSizeBand], List[ParticleSizeBand]]:
     """
     Observations of particle sizes (see :func:`size_observations`) and their weights, so that the statistics
@@ -358,7 +434,7 @@ def weighted_size_observations(
         The bands and EDS scans with their ``number_density_per_mm2`` (particles they counted per mm²) and, for
         bands, ``n_eds_particles`` (particles measured by EDS sharing their weight).
     """
-    obs = size_observations(particles, bands, eds_scans, excluded_frame_ids)
+    obs = size_observations(particles, bands, eds_scans, excluded_frame_ids, excluded_particles)
     if not obs.scans:
         return obs, np.ones(len(obs.eq_diameters_um)), [], []
     areas = _scan_areas_um2(obs.scans, _excluded_frames(obs.scans, excluded_frame_ids))
@@ -374,26 +450,6 @@ def weighted_size_observations(
     return obs, weights, weighted_scans[:obs.n_bands], weighted_scans[obs.n_bands:]
 
 
-def band_particle_weights(
-    particles: Sequence[ParticleInfo],
-    bands: Sequence[ParticleSizeBand],
-    excluded_frame_ids: Iterable[str] = (),
-) -> Tuple[np.ndarray, List[ParticleSizeBand]]:
-    """
-    Weights of the particles given, pooled from several size bands (see :func:`weighted_size_observations`, without
-    EDS scans).
-
-    Returns
-    -------
-    weights : numpy.ndarray
-        Weight of each particle (all 1 without bands).
-    bands : list of ParticleSizeBand
-        The bands with their ``number_density_per_mm2`` and ``n_eds_particles``.
-    """
-    _, weights, weighted_bands, _ = weighted_size_observations(particles, bands, excluded_frame_ids)
-    return weights, weighted_bands
-
-
 def bootstrap_confidence_intervals(
     particles: Sequence[ParticleInfo],
     bands: Sequence[ParticleSizeBand] = (),
@@ -402,6 +458,7 @@ def bootstrap_confidence_intervals(
     n_resamples: int = N_BOOTSTRAP_RESAMPLES,
     rng: Optional[np.random.Generator] = None,
     eds_scans: Sequence[ParticleSizeBand] = (),
+    excluded_particles: Iterable[ParticleKey] = (),
 ) -> Dict[str, Tuple[float, float]]:
     """
     Confidence intervals of the size statistics (:data:`CI_QUANTITIES`), by bootstrap.
@@ -428,6 +485,8 @@ def bootstrap_confidence_intervals(
         Random generator (default: a new one).
     eds_scans : sequence of ParticleSizeBand, optional
         Frames searched by EDS included in the statistics.
+    excluded_particles : iterable of (frame_id, index), optional
+        Particles of frames left out of the statistics.
 
     Returns
     -------
@@ -437,7 +496,7 @@ def bootstrap_confidence_intervals(
     """
     rng = np.random.default_rng() if rng is None else rng
     excluded = _excluded_frames(list(bands) + list(eds_scans), excluded_frame_ids)
-    obs = size_observations(particles, bands, eds_scans, excluded)
+    obs = size_observations(particles, bands, eds_scans, excluded, excluded_particles)
     kept = np.flatnonzero(obs.scan == -1)
 
     # Resampling units of each scan: (area, observation indices)
@@ -504,169 +563,335 @@ def ci_relative_half_widths(
 def select_size_stats_particles(
     particles: Sequence[ParticleInfo],
     include_eds_auto_particles: bool = True,
-    size_stats_ids: Optional[Iterable[int]] = None,
 ) -> List[ParticleInfo]:
     """
-    Particles included in the size statistics, in ledger order.
-
-    Particles found by a particle size statistics measurement (selection 'size_stats'), and particles measured by
-    EDS with automatic particle selection (selection 'auto') if ``include_eds_auto_particles``. Particles chosen
-    manually or from a list, without a recorded selection, or without an area are left out.
-
-    Parameters
-    ----------
-    particles : sequence of ParticleInfo
-        Particles of the sample (ledger particles).
-    include_eds_auto_particles : bool, optional
-        Whether to include the particles measured by EDS with automatic particle selection (default: True).
-    size_stats_ids : iterable of int, optional
-        IDs of the particles found by the measurement whose statistics are computed (the particles of its size
-        bands). Particles of earlier particle size statistics measurements of the sample are then left out.
-        Default: all the 'size_stats' particles.
+    Particles of the ledger counted in the size statistics besides those of the frames: the particles measured by
+    EDS with automatic particle selection (selection 'auto', with an area), if ``include_eds_auto_particles``, for
+    samples without frames searched by EDS (measured before these were recorded), in ledger order.
     """
-    run_ids = None if size_stats_ids is None else set(size_stats_ids)
-    return [
-        p for p in particles
-        if p.area_um is not None and (
-            (p.selection == "size_stats" and (run_ids is None or p.id in run_ids))
-            or (include_eds_auto_particles and p.selection == "auto")
-        )
-    ]
+    if not include_eds_auto_particles:
+        return []
+    return [p for p in particles if p.area_um is not None and p.selection == "auto"]
 
 
-def build_particle_stats_result(
-    particles: Sequence[ParticleInfo],
+def build_size_result(
     powder_meas_cfg: PowderMeasurementConfig,
-    n_par_target: Optional[int] = None,
-    bands: Optional[Sequence[ParticleSizeBand]] = None,
-    excluded_particle_ids: Sequence[int] = (),
-    excluded_frame_ids: Sequence[str] = (),
+    bands: Sequence[ParticleSizeBand] = (),
     eds_scans: Sequence[ParticleSizeBand] = (),
-) -> ParticleStatsResult:
+    particles: Sequence[ParticleInfo] = (),
+    n_par_target: Optional[int] = None,
+    measurement_id: Optional[int] = None,
+    segmentation_id: Optional[int] = None,
+    eds_segmentation_id: Optional[int] = None,
+    excluded_frame_ids: Sequence[str] = (),
+    excluded_particles: Sequence[ParticleKey] = (),
+    missing_frame_ids: Sequence[str] = (),
+    precision_reached: Optional[bool] = None,
+) -> ParticleSizeStatsResult:
     """
-    Particle size statistics result of the given particles (already selected), to store in the sample ledger,
-    weighted as in :func:`weighted_size_observations`.
+    Particle size statistics result of frames under a segmentation (see :func:`size_stats_inputs`), weighted as in
+    :func:`weighted_size_observations`, to store in the sample ledger (``SampleLedger.append_size_result``, which
+    gives it its id).
 
     Parameters
     ----------
-    particles : sequence of ParticleInfo
-        Particles included in the statistics (see :func:`select_size_stats_particles`).
     powder_meas_cfg : PowderMeasurementConfig
-        Settings of the measurement.
-    n_par_target : int, optional
-        Target number of particles of the measurement (per size band).
-    bands : sequence of ParticleSizeBand, optional
-        Size bands searched by the measurement.
-    excluded_particle_ids, excluded_frame_ids : sequence, optional
-        Particles and frames left out of the statistics (already removed from ``particles``), recorded in the
-        result; the area of the frames left out is not counted.
-    eds_scans : sequence of ParticleSizeBand, optional
-        Frames searched by EDS included in the statistics (``SampleLedger.eds_size_scans``).
+        Settings of the measurement (of the EDS acquisition, without measurement).
+    bands, eds_scans : sequence of ParticleSizeBand, optional
+        Size bands of the measurement, and frames searched by EDS, with their frames under the segmentation.
+    particles : sequence of ParticleInfo, optional
+        Particles measured by EDS counted (samples without frames searched by EDS, see
+        :func:`select_size_stats_particles`).
+    n_par_target, measurement_id, segmentation_id, eds_segmentation_id, precision_reached : optional
+        Recorded in the result.
+    excluded_frame_ids, excluded_particles : sequence, optional
+        Frames and particles (as (frame_id, index)) left out of the statistics, recorded in the result; the area of
+        the frames left out is not counted.
+    missing_frame_ids : sequence of str, optional
+        Frames left out because they have no result of the segmentation, recorded in the result.
 
     Raises
     ------
     ValueError
         If no observation has a positive weight.
     """
+    bands, eds_scans = list(bands), list(eds_scans)
     obs, weights, weighted_bands, weighted_eds_scans = weighted_size_observations(
-        particles, list(bands or []), excluded_frame_ids, list(eds_scans)
+        particles, bands, excluded_frame_ids, eds_scans, excluded_particles
     )
-    used = [particles[k] for k in obs.particle_index if k is not None]  # those of frames left out excepted
-    n_par_by_selection = dict(Counter(str(p.selection) for p in used))
-    n_eds_frame_particles = int(np.sum(obs.scan >= obs.n_bands))
-    if n_eds_frame_particles:
-        n_par_by_selection["eds_frames"] = n_eds_frame_particles
-    return ParticleStatsResult(
+    n_par_by_selection = {}
+    for key, n in (("size_stats", int(np.sum((obs.scan >= 0) & (obs.scan < obs.n_bands)))),
+                   ("eds_frames", int(np.sum(obs.scan >= obs.n_bands))),
+                   ("auto", int(np.sum(obs.scan == -1)))):
+        if n:
+            n_par_by_selection[key] = n
+
+    def summaries(scans: Sequence[ParticleSizeBand]) -> List[BandSummary]:
+        return [BandSummary(
+            d_min_um=scan.d_min_um, d_max_um=scan.d_max_um, frame_width_um=scan.frame_width_um, n_frames=scan.n_frames,
+            scanned_area_um2=scan.scanned_area_um2, n_particles=scan.n_particles,
+            number_density_per_mm2=scan.number_density_per_mm2, n_eds_particles=scan.n_eds_particles,
+            frame_ids=[frame.frame_id for frame in scan.frames],
+        ) for scan in scans]
+
+    return ParticleSizeStatsResult(
+        result_id=0,
+        measurement_id=measurement_id,
+        segmentation_id=segmentation_id,
+        eds_segmentation_id=eds_segmentation_id,
         n_par_target=n_par_target,
         powder_meas_cfg=powder_meas_cfg.model_copy(deep=True),
-        particle_ids=[p.id for p in used],
         n_par_by_selection=n_par_by_selection,
         size_stats=ParticleSizeStats(**compute_particle_size_stats(obs.eq_diameters_um, weights)),
         unweighted_size_stats=ParticleSizeStats(**compute_particle_size_stats(obs.eq_diameters_um)),
         n_par_without_weight=int(np.sum(weights == 0)),
         confidence_intervals_95=bootstrap_confidence_intervals(
-            particles, list(bands or []), excluded_frame_ids, eds_scans=list(eds_scans)
+            particles, bands, excluded_frame_ids, eds_scans=eds_scans, excluded_particles=excluded_particles
         ),
-        bands=weighted_bands,
-        eds_scans=weighted_eds_scans,
-        excluded_particle_ids=list(excluded_particle_ids),
+        precision_reached=precision_reached,
+        bands=summaries(weighted_bands),
+        eds_scans=summaries(weighted_eds_scans),
         excluded_frame_ids=list(excluded_frame_ids),
-        overlapping_frame_ids=overlapping_frame_ids(list(bands or []) + list(eds_scans)),
+        excluded_particles=[(str(f), int(i)) for f, i in excluded_particles],
+        overlapping_frame_ids=overlapping_frame_ids(bands + eds_scans),
+        missing_frame_ids=list(missing_frame_ids),
     )
+
+
+def working_frame(frame: FrameRecord, segmentation_id: int) -> Optional[ParticleStatsFrame]:
+    """A frame of the ledger with its particles under a segmentation (None if not segmented with it)."""
+    result = frame.segmentation(segmentation_id)
+    if result is None:
+        return None
+    marks = [(int(x), int(y), int(r), i) for i, (x, y, r) in enumerate(result.particle_marks_px)]
+    return ParticleStatsFrame(
+        frame_id=frame.frame_id, center_mm=frame.center_mm, frame_width_um=frame.frame_width_um,
+        pixel_size_um=frame.pixel_size_um, area_um2=frame.area_um2, n_particles=result.n_particles,
+        particle_areas_um2=list(result.particle_areas_um2),
+        particle_edge_corrections=list(result.particle_edge_corrections),
+        image_file=frame.image_file, particle_marks_px=marks,
+    )
+
+
+class SizeStatsInputs(NamedTuple):
+    """What the size statistics of a sample are computed from (see :func:`size_stats_inputs`)."""
+
+    bands: List[ParticleSizeBand]
+    eds_scans: List[ParticleSizeBand]
+    particles: List[ParticleInfo]
+    missing_frame_ids: List[str]
+
+
+def size_stats_inputs(
+    ledger: SampleLedger,
+    measurement_id: Optional[int] = None,
+    segmentation_id: Optional[int] = None,
+    eds_segmentation_id: Optional[int] = None,
+    include_eds_auto_particles: bool = True,
+) -> SizeStatsInputs:
+    """
+    Size bands of measurement ``measurement_id`` with their frames segmented with ``segmentation_id``, and the frames
+    searched by EDS segmented with ``eds_segmentation_id`` (one scan per size range and frame width), from the
+    ledger frames; frames without result of the segmentation are left out (``missing_frame_ids``). Without frames
+    searched by EDS (samples measured before these were recorded), the particles measured by EDS with automatic
+    selection count, if ``include_eds_auto_particles``.
+    """
+    bands: List[ParticleSizeBand] = []
+    missing: List[str] = []
+    measurement = ledger.measurement(measurement_id)
+    if measurement is not None:
+        for band in measurement.bands:
+            frames = []
+            for frame_id in band.frame_ids:
+                frame = ledger.frame(frame_id)
+                working = working_frame(frame, segmentation_id) if frame is not None else None
+                if working is None:
+                    missing.append(frame_id)
+                else:
+                    frames.append((frame, working))
+            # The band starts at its smallest particles with enough pixels under the segmentation
+            d_min = max([band.d_min_um] + [f.segmentation(segmentation_id).d_range_um[0] for f, _ in frames])
+            working_band = ParticleSizeBand(d_min_um=min(d_min, band.d_max_um), d_max_um=band.d_max_um,
+                                            frame_width_um=band.frame_width_um, n_frames=0, scanned_area_um2=0.0)
+            for _, working in frames:
+                working_band.add_frame(working)
+            bands.append(working_band)
+
+    eds_scans: List[ParticleSizeBand] = []
+    eds_frames = ledger.frames_of("eds_search")
+    if eds_segmentation_id is not None:
+        for frame in eds_frames:
+            working = working_frame(frame, eds_segmentation_id)
+            if working is None:
+                missing.append(frame.frame_id)
+                continue
+            d_lo, d_hi = frame.segmentation(eds_segmentation_id).d_range_um
+            scan = next((s for s in eds_scans if np.allclose((s.d_min_um, s.d_max_um, s.frame_width_um),
+                                                             (d_lo, d_hi, frame.frame_width_um))), None)
+            if scan is None:
+                scan = ParticleSizeBand(d_min_um=d_lo, d_max_um=d_hi, frame_width_um=frame.frame_width_um,
+                                        n_frames=0, scanned_area_um2=0.0)
+                eds_scans.append(scan)
+            scan.add_frame(working)
+    particles = [] if eds_frames else select_size_stats_particles(ledger.particles, include_eds_auto_particles)
+    return SizeStatsInputs(bands, eds_scans, particles, missing)
+
+
+def eds_segmentation_for(ledger: SampleLedger, segmentation_id: Optional[int] = None) -> Optional[int]:
+    """Segmentation of the frames searched by EDS counted with the frames of segmentation ``segmentation_id``: the
+    same if they have its results, else the last one they have (None without frames searched by EDS)."""
+    eds_frames = ledger.frames_of("eds_search")
+    if not eds_frames:
+        return None
+    if segmentation_id is not None and any(f.segmentation(segmentation_id) for f in eds_frames):
+        return segmentation_id
+    return max((s.segmentation_id for f in eds_frames for s in f.segmentations), default=None)
+
+
+def default_result_inputs(ledger: SampleLedger, include_eds_auto_particles: Optional[bool] = None) -> dict:
+    """
+    What the size statistics of a sample are computed from by default (keyword arguments of
+    :func:`recalculate_particle_stats`): those of the active result; else the last completed measurement under the
+    segmentation it was acquired with, and the frames searched by EDS (under the same segmentation if they have its
+    results, else under the last one they have) if ``include_eds_auto_particles`` (default: the setting of the
+    measurement, or of the EDS acquisition).
+    """
+    active = ledger.size_result
+    if active is not None:
+        include = (active.powder_meas_cfg.include_eds_auto_particles if include_eds_auto_particles is None
+                   else include_eds_auto_particles)
+        eds_segmentation = active.eds_segmentation_id
+        if eds_segmentation is None and include:  # frames searched by EDS since (e.g. EDS after the measurement)
+            eds_segmentation = eds_segmentation_for(ledger, active.segmentation_id)
+        return {"measurement_id": active.measurement_id, "segmentation_id": active.segmentation_id,
+                "eds_segmentation_id": eds_segmentation,
+                "particles_to_filter": active.excluded_particles, "frame_ids_to_filter": active.excluded_frame_ids,
+                "include_eds_auto_particles": include}
+    measurement = next((m for m in reversed(ledger.size_measurements) if m.status == "completed"), None)
+    cfg = (measurement.powder_meas_cfg if measurement is not None
+           else ledger.configs.measurement_cfg.powder_meas_cfg or PowderMeasurementConfig())
+    include = cfg.include_eds_auto_particles if include_eds_auto_particles is None else include_eds_auto_particles
+    segmentation = measurement.segmentation_id if measurement is not None else None
+    eds_segmentation = eds_segmentation_for(ledger, segmentation) if include else None
+    return {"measurement_id": measurement.measurement_id if measurement is not None else None,
+            "segmentation_id": segmentation, "eds_segmentation_id": eds_segmentation,
+            "particles_to_filter": [], "frame_ids_to_filter": [], "include_eds_auto_particles": include}
+
+
+_UNSET = object()
 
 
 def recalculate_particle_stats(
     ledger: SampleLedger,
-    particle_ids_to_filter: Optional[Iterable[int]] = None,
+    particles_to_filter: Optional[Iterable[ParticleKey]] = None,
     frame_ids_to_filter: Optional[Iterable[str]] = None,
     include_eds_auto_particles: Optional[bool] = None,
-) -> Optional[ParticleStatsResult]:
+    measurement_id: Any = _UNSET,
+    segmentation_id: Any = _UNSET,
+    eds_segmentation_id: Any = _UNSET,
+) -> Optional[ParticleSizeStatsResult]:
     """
-    Particle size statistics of a sample recalculated from its ledger, leaving out some particles or frames.
+    Particle size statistics of a sample recalculated from its ledger frames, leaving out some particles or frames
+    (not stored: see ``SampleLedger.append_size_result``).
 
-    Uses the particles found by the particle size statistics measurement of the sample (the particles of its size
-    bands, or all 'size_stats' particles if it has none) and, if ``include_eds_auto_particles``, what EDS measured
-    on the sample with automatic particle selection, before or after it: the particles counted in the frames
-    searched by EDS (``SampleLedger.eds_size_scans``) or, for samples measured before these were recorded, the
-    particles measured by EDS. A sample measured only by EDS gets statistics from its EDS frames. The settings,
-    target and bands of the measurement are kept.
+    By default (see :func:`default_result_inputs`), from what the active result was computed from (the last
+    completed measurement and the frames searched by EDS, without result): the measurement, its segmentation and
+    the segmentation of the frames searched by EDS can be given instead (``eds_segmentation_id=None``: frames
+    searched by EDS not counted). A sample measured only by EDS gets statistics from its EDS frames (or, measured
+    before these were recorded, from its particles measured by EDS with automatic selection).
 
     Parameters
     ----------
     ledger : SampleLedger
         Ledger of the sample (not modified).
-    particle_ids_to_filter : iterable of int, optional
-        IDs of the particles to leave out.
+    particles_to_filter : iterable of (frame_id, index), optional
+        Particles to leave out. Default (None): those left out of the active result.
     frame_ids_to_filter : iterable of str, optional
-        IDs of the frames whose particles are left out (exact matches; frames searched by EDS are ``EDS-<label>``).
+        IDs of the frames whose particles are left out (exact matches). Default (None): those left out of the active
+        result.
     include_eds_auto_particles : bool, optional
-        Default: the setting of the measurement (of the EDS acquisition, for a sample measured only by EDS).
+        Whether to count what EDS measured. Default: the setting of the active result (of the measurement, or of
+        the EDS acquisition).
+    measurement_id, segmentation_id, eds_segmentation_id : int or None, optional
+        What to compute the statistics from (default: see above).
 
     Returns
     -------
-    ParticleStatsResult or None
+    ParticleSizeStatsResult or None
         The statistics, recording the particles and frames left out (those found), or None if nothing is left.
     """
-    measurement_result = ledger.particle_stats
-    has_measurement = measurement_result is not None and bool(measurement_result.bands)
-    powder_meas_cfg = (
-        measurement_result.powder_meas_cfg if measurement_result is not None
-        else ledger.configs.measurement_cfg.powder_meas_cfg or PowderMeasurementConfig()
-    )
-    if include_eds_auto_particles is None:
-        include_eds_auto_particles = powder_meas_cfg.include_eds_auto_particles
-    bands = measurement_result.bands if measurement_result is not None else []
-    eds_scans = list(ledger.eds_size_scans) if include_eds_auto_particles else []
-    size_stats_ids = [pid for band in bands for pid in band.particle_ids] if bands else None
-    # EDS frames count the particles measured by EDS: these are then left out
-    particles = select_size_stats_particles(
-        ledger.particles, include_eds_auto_particles and not eds_scans, size_stats_ids
-    )
-    if not has_measurement and eds_scans:
-        particles = []  # only EDS: its frames
+    defaults = default_result_inputs(ledger, include_eds_auto_particles)
+    include = defaults["include_eds_auto_particles"]
+    if particles_to_filter is None:
+        particles_to_filter = defaults["particles_to_filter"]
+    if frame_ids_to_filter is None:
+        frame_ids_to_filter = defaults["frame_ids_to_filter"]
+    measurement_id = defaults["measurement_id"] if measurement_id is _UNSET else measurement_id
+    segmentation_id = defaults["segmentation_id"] if segmentation_id is _UNSET else segmentation_id
+    if eds_segmentation_id is _UNSET:
+        eds_segmentation_id = defaults["eds_segmentation_id"] if include else None
+    inputs = size_stats_inputs(ledger, measurement_id, segmentation_id, eds_segmentation_id, include)
 
-    particle_ids_to_filter = [int(pid) for pid in (particle_ids_to_filter or [])]
-    frame_ids_to_filter = [str(frame_id) for frame_id in (frame_ids_to_filter or [])]
-    excluded_particle_ids = [pid for pid in particle_ids_to_filter if pid in {p.id for p in particles}]
-    known_frame_ids = {p.frame_id for p in particles} | {
-        f.frame_id for scan in list(bands) + eds_scans for f in scan.frames
-    }
-    excluded_frame_ids = [fid for fid in frame_ids_to_filter if fid in known_frame_ids]
-    particles = [p for p in particles if p.id not in particle_ids_to_filter and p.frame_id not in frame_ids_to_filter]
-
-    obs, weights, _, _ = weighted_size_observations(particles, bands, excluded_frame_ids, eds_scans)
+    frames = {f.frame_id: f for scan in inputs.bands + inputs.eds_scans for f in scan.frames}
+    frame_ids_to_filter = [str(fid) for fid in (frame_ids_to_filter or [])]
+    # Frames of the scans, or of particles measured by EDS (samples without frames searched by EDS)
+    legacy_frames = {p.frame_id for p in inputs.particles}
+    excluded_frame_ids = [fid for fid in frame_ids_to_filter if fid in frames or fid in legacy_frames]
+    excluded_particles = [(str(f), int(i)) for f, i in (particles_to_filter or [])
+                          if str(f) in frames and 0 <= int(i) < frames[str(f)].n_particles]
+    obs, weights, _, _ = weighted_size_observations(
+        inputs.particles, inputs.bands, excluded_frame_ids, inputs.eds_scans, excluded_particles
+    )
     if not np.any(weights > 0):
         logger.warning("No particle left in the scans of the sample: no statistics.")
         return None
-    return build_particle_stats_result(
-        particles,
-        powder_meas_cfg.model_copy(update={"include_eds_auto_particles": include_eds_auto_particles}),
-        n_par_target=measurement_result.n_par_target if measurement_result is not None else None,
-        bands=bands,
-        excluded_particle_ids=excluded_particle_ids,
-        excluded_frame_ids=excluded_frame_ids,
-        eds_scans=eds_scans,
+    measurement = ledger.measurement(measurement_id)
+    cfg = (measurement.powder_meas_cfg if measurement is not None
+           else ledger.configs.measurement_cfg.powder_meas_cfg or PowderMeasurementConfig())
+    return build_size_result(
+        cfg.model_copy(update={"include_eds_auto_particles": include}), inputs.bands, inputs.eds_scans,
+        inputs.particles, n_par_target=measurement.n_par_target if measurement is not None else None,
+        measurement_id=measurement_id if measurement is not None else None,
+        segmentation_id=segmentation_id if measurement is not None else None,
+        eds_segmentation_id=eds_segmentation_id if inputs.eds_scans else None,
+        excluded_frame_ids=excluded_frame_ids, excluded_particles=excluded_particles,
+        missing_frame_ids=inputs.missing_frame_ids,
+        precision_reached=measurement.precision_reached if measurement is not None else None,
     )
+
+
+def size_distribution(
+    ledger: SampleLedger, result: Optional[ParticleSizeStatsResult] = None
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Equivalent diameters (µm) and weights of the particle sizes behind a statistics result of a sample: what
+    :func:`save_particle_size_histogram` plots.
+
+    Parameters
+    ----------
+    ledger : SampleLedger
+        Ledger of the sample.
+    result : ParticleSizeStatsResult, optional
+        Statistics of the sample (default: the active one, else those computed by default).
+
+    Returns
+    -------
+    eq_diameters_um, weights : numpy.ndarray
+        Diameters with a positive weight, and their weights.
+    """
+    result = result if result is not None else ledger.size_result
+    if result is None:
+        result = recalculate_particle_stats(ledger)
+        if result is None:
+            return np.array([]), np.array([])
+    include = result.powder_meas_cfg.include_eds_auto_particles
+    inputs = size_stats_inputs(ledger, result.measurement_id, result.segmentation_id, result.eds_segmentation_id,
+                               include)
+    obs, weights, _, _ = weighted_size_observations(
+        inputs.particles, inputs.bands, result.excluded_frame_ids, inputs.eds_scans, result.excluded_particles
+    )
+    keep = weights > 0
+    return obs.eq_diameters_um[keep], weights[keep]
 
 
 def particle_sizes_dataframe(particles: Sequence[ParticleInfo]) -> pd.DataFrame:
@@ -774,6 +999,7 @@ def save_particle_statistics(
     image_format: str = "png",
     confidence_intervals: Optional[Dict[str, Tuple[float, float]]] = None,
     eds_scans: Sequence[ParticleSizeBand] = (),
+    excluded_particles: Iterable[ParticleKey] = (),
 ) -> pd.DataFrame:
     """
     Compute the particle size statistics and save the particle sizes, the statistics and the histogram.
@@ -785,7 +1011,8 @@ def save_particle_statistics(
     Parameters
     ----------
     particles : sequence of ParticleInfo
-        Particles included in the statistics (each with ``area_um``).
+        Particles measured by EDS included in the statistics (each with ``area_um``), for samples without frames
+        searched by EDS.
     output_dir : str
         Folder where the files are saved (the sample folder).
     sample_id : str
@@ -804,7 +1031,12 @@ def save_particle_statistics(
         95 % confidence intervals of the statistics (default: computed, see
         :func:`bootstrap_confidence_intervals`), saved as ``<name>_CI95_low`` and ``<name>_CI95_high``.
     eds_scans : sequence of ParticleSizeBand, optional
-        Frames searched by EDS included in the statistics: their particles are listed without particle ID.
+        Frames searched by EDS included in the statistics.
+    excluded_particles : iterable of (frame_id, index), optional
+        Particles of frames left out of the statistics.
+
+    Each particle of a frame is listed with its frame and its index in the frame; particles measured by EDS
+    (``particles``) with their ID.
 
     Returns
     -------
@@ -817,7 +1049,10 @@ def save_particle_statistics(
     ValueError
         If no particle is given, a particle has no area, or no particle has a positive weight.
     """
-    obs, weights, _, _ = weighted_size_observations(particles, list(bands or []), excluded_frame_ids, list(eds_scans))
+    excluded_particles = list(excluded_particles)
+    obs, weights, _, _ = weighted_size_observations(
+        particles, list(bands or []), excluded_frame_ids, list(eds_scans), excluded_particles
+    )
     if len(obs.eq_diameters_um) == 0:
         raise ValueError("No particles available to save statistics from")
     if not (bands or eds_scans):
@@ -833,10 +1068,10 @@ def save_particle_statistics(
             '   of a particle for its area to be measured.'
         )
 
-    # Particles, and particles counted in frames searched by EDS (without particle ID)
+    # Particles of frames (index in their frame), and particles measured by EDS (their ID)
     particle_data = pd.DataFrame({
-        cnst.PAR_ID_DF_KEY: pd.array([particles[k].id if k is not None else None for k in obs.particle_index],
-                                     dtype="Int64"),
+        cnst.PAR_ID_DF_KEY: pd.array([particles[k].id if k is not None else key[1]
+                                      for k, key in zip(obs.particle_index, obs.particle_keys)], dtype="Int64"),
         cnst.FRAME_ID_DF_KEY: np.array([f if f is not None else "" for f in obs.frame_ids], dtype=str),
         cnst.PAR_AREA_UM_KEY: areas_um,
         cnst.PAR_EQ_D_KEY: eq_diam_um,
@@ -859,7 +1094,8 @@ def save_particle_statistics(
     stats = compute_particle_size_stats(eq_diam_um, weights)
     if confidence_intervals is None:
         confidence_intervals = bootstrap_confidence_intervals(
-            particles, list(bands or []), excluded_frame_ids, eds_scans=list(eds_scans)
+            particles, list(bands or []), excluded_frame_ids, eds_scans=list(eds_scans),
+            excluded_particles=excluded_particles,
         )
     for name, (low, high) in confidence_intervals.items():
         stats[f"{name}_CI95_low"], stats[f"{name}_CI95_high"] = low, high

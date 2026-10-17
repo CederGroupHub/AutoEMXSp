@@ -111,6 +111,8 @@ def batch_acquire_and_analyze(
     xsp_spot_selector: Optional[XSpSpotSelectorCallback] = None,
     particle_ids: Optional[Sequence[int]] = None,
     particle_coords_mm: Optional[Sequence[Sequence[float]]] = None,
+    size_stats_n_par_target: Optional[int] = None,
+    size_stats_powder_meas_cfg_kwargs: Optional[Dict[str, Any]] = None,
     on_sample_done: Optional[Callable[[str, Optional[BaseException]], None]] = None,
 ) -> EMXSp_Composition_Analyzer:
     """
@@ -285,6 +287,14 @@ def batch_acquire_and_analyze(
         Global list of absolute stage coordinates in mm to visit when
         ``par_selection_mode='list'``. Mutually exclusive with ``particle_ids``.
         Can be overridden per sample via ``sample['particle_coords_mm']``.
+    size_stats_n_par_target : int, optional
+        If given, the EDS acquisition of each sample continues with a particle size statistics measurement of
+        this number of particles per size band, counting the frames searched by EDS: only more frames are
+        searched to reach it (see ``EMXSp_Composition_Analyzer.collect_particle_stats_after_eds``). Particle
+        samples with automatic navigation and ``par_selection_mode='auto'`` only. Default: None (EDS only).
+    size_stats_powder_meas_cfg_kwargs : dict, optional
+        PowderMeasurementConfig settings of these size statistics, replacing those of the EDS acquisition (e.g. the
+        particle area limits ``min_area_par`` and ``max_area_par``, or ``par_segmentation_model``).
     on_sample_done : callable, optional
         Called after each sample with its ID and ``None`` if it was acquired (and quantified)
         successfully, or the exception that made it fail (the batch then continues with the
@@ -505,6 +515,13 @@ def batch_acquire_and_analyze(
         except Exception as e:
             logging.exception(f"Sample '{sample_ID}': acquisition/quantification failed: {e}")
             error = e
+        if error is None and size_stats_n_par_target is not None:
+            try:
+                comp_analyzer.collect_particle_stats_after_eds(size_stats_n_par_target,
+                                                               size_stats_powder_meas_cfg_kwargs)
+            except Exception as e:
+                logging.exception(f"Sample '{sample_ID}': particle stats collection failed: {e}")
+                error = e
         if on_sample_done is not None:
             try:
                 on_sample_done(sample_ID, error)
