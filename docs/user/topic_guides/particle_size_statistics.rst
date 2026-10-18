@@ -29,19 +29,38 @@ Segmentation models
 Particles are found in each frame by a segmentation model (``par_segmentation_model``):
 
 - ``threshold_bright`` (default): pixels brighter than ``par_brightness_thresh``. Fast, but
-  touching particles are measured as one.
-- ``SAM2`` [Ravi2024]_ and ``microSAM`` [Archit2025]_: segment each particle on its own.
-  Optional, install with ``pip install "autoemx[segmentation]"`` (SAM2) or
+  only suited to samples without particle aggregation: touching particles are always counted as one.
+- ``SAM2`` [Ravi2024]_ and ``microSAM`` [Archit2025]_: segment each particle on its own, also
+  when touching. Optional, install with ``pip install "autoemx[segmentation]"`` (SAM2) or
   ``python -m autoemx.utils.install_segmentation micro-sam`` (microSAM; ignore pip's warnings
-  about PyQt6, segment-anything-py and trackastra). Agglomerates,
-  surface features and particles partly hidden by others are left out. Model options go in
+  about PyQt6, segment-anything-py and trackastra). Agglomerates, surface features and
+  particles partly hidden by others are left out. Model options go in
   ``par_segmentation_params``, e.g. ``{"pred_iou_thresh": 0.7}``.
-- Your own model (see the
-  :ref:`particle size tutorial <particle_size_tutorial>`).
+- Your own model (see the :ref:`particle size tutorial <particle_size_tutorial>`).
 
-Each model gives its own result. Segment the frames again with another model, compare the
-results and choose one (:ref:`gui_particle_size_tutorial`, or ``Reanalyse_Particle_Stats.py``
-and ``Process_Particle_Stats_Files.py``).
+As general advice, SAM2 follows the outline of irregular particles more closely, while
+micro-sam separates rounded particles in agglomerates better. Results vary with the sample,
+so try both: segment the frames again with the other model and compare (in the GUI:
+:ref:`Segment again <gui_segment_again>`; with scripts: ``Reanalyse_Particle_Stats.py`` and
+``Process_Particle_Stats_Files.py``). Each model gives its own result; choose the one that best
+matches the particles in the frames.
+
+.. figure:: /_static/particle_sizes/segmentation_irregular.png
+   :alt: Irregular particles segmented by SAM2 and micro-sam
+   :width: 100%
+   :align: center
+
+   **Irregular particles** (detail of a frame): SAM2 follows their jagged outlines, while
+   micro-sam rounds them and merges some neighbouring particles. Counted particles in green;
+   particles not counted (cut by the frame edge, or outside the size range) dashed in amber.
+
+.. figure:: /_static/particle_sizes/segmentation_agglomerates.png
+   :alt: Agglomerated rounded particles segmented by SAM2 and micro-sam
+   :width: 100%
+   :align: center
+
+   **Agglomerates of rounded particles** (detail of a frame): micro-sam separates nearly every
+   particle (366 counted in the frame), SAM2 only a few (30).
 
 
 Corrections

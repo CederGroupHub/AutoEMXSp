@@ -36,6 +36,8 @@ spectra open directly on it.
 - **Compare segmentations**: the results of this sample (see Step 3).
 
 
+.. _gui_segment_again:
+
 Step 3 - Segment again with another model
 -----------------------------------------
 
