@@ -70,8 +70,11 @@ find more particles.
 Step 4 - Leave out frames and particles
 ---------------------------------------
 
-Below the statistics, the **Frames** browser shows each frame with the outlines of the particles
-found by the shown result: counted (green), left out (red), or not counted because they touch the
-frame edge or are outside the size range (amber, dashed). Click the dot at the centre of a particle
-to leave it out (click again to count it), or tick **Leave this frame out**, then click
-**Recalculate and save**. This saves a new result, made the active one; the earlier ones are kept.
+Leave out what was wrongly segmented, e.g. two particles measured as one, or a frame out of focus.
+In **This sample**, choose the result in the results menu: the **Frames** browser, above the size
+distribution, shows each frame with the outlines of the particles it found: counted (green), left
+out (red), or not counted because they touch the frame edge or are outside the size range (amber,
+dashed). Click the dot at the centre of a particle to leave it out (click again to count it), or
+tick **Leave this frame out**, then click **Recalculate and save**. The statistics of that result
+are recalculated without them, with the same corrections, and saved as a new result made the
+active one; the earlier ones are kept.

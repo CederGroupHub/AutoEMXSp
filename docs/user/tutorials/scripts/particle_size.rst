@@ -160,8 +160,8 @@ Main editable fields in that script are:
   AutoEMX stored particle sizes in the ledger
 
 The same can be done in the GUI (Analysis > Particle sizes): choose the result, then
-click particles in the frame browser, or tick "Leave this frame out", and
-"Recalculate and save".
+click the dot at the centre of a particle in the frame browser, or tick "Leave this
+frame out", and "Recalculate and save" (see :ref:`gui_particle_size_tutorial`).
 
 The script generates processed outputs with suffix ``_processed``.
 
